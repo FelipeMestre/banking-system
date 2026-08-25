@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from gateway.app import create_app
 from gateway.config import Settings
+from gateway.status_registry import StatusRegistry
 
 
 class FakePublisher:
@@ -17,14 +18,15 @@ class FakePublisher:
 
 @pytest.fixture
 def context():
-    publisher = FakePublisher()
-    app = create_app(settings=Settings(fee_flat_cents=25), publisher=publisher)
+    publisher, registry = FakePublisher(), StatusRegistry()
+    settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2)
+    app = create_app(settings=settings, publisher=publisher, registry=registry)
     with TestClient(app) as client:
-        yield client, publisher
+        yield client, publisher, registry
 
 
 def test_transfer_is_accepted_without_waiting_for_the_ledger(context):
-    client, publisher = context
+    client, publisher, _ = context
 
     response = client.post(
         "/transfer",
@@ -39,7 +41,7 @@ def test_transfer_is_accepted_without_waiting_for_the_ledger(context):
 
 
 def test_transfer_is_published_to_account_events_keyed_by_source(context):
-    client, publisher = context
+    client, publisher, _ = context
 
     body = client.post(
         "/transfer",
@@ -60,7 +62,7 @@ def test_transfer_is_published_to_account_events_keyed_by_source(context):
 
 
 def test_each_request_gets_its_own_id(context):
-    client, _ = context
+    client, _, _ = context
     payload = {"source_account": "a", "destination_account": "b", "amount": 100}
     first = client.post("/transfer", json=payload).json()["request_id"]
     second = client.post("/transfer", json=payload).json()["request_id"]
@@ -69,7 +71,7 @@ def test_each_request_gets_its_own_id(context):
 
 @pytest.mark.parametrize("amount", [0, -5])
 def test_non_positive_amounts_are_rejected(context, amount):
-    client, publisher = context
+    client, publisher, _ = context
     response = client.post(
         "/transfer",
         json={"source_account": "a", "destination_account": "b", "amount": amount},
@@ -79,7 +81,7 @@ def test_non_positive_amounts_are_rejected(context, amount):
 
 
 def test_blank_accounts_are_rejected(context):
-    client, publisher = context
+    client, publisher, _ = context
     response = client.post(
         "/transfer",
         json={"source_account": "  ", "destination_account": "b", "amount": 100},
@@ -87,6 +89,38 @@ def test_blank_accounts_are_rejected(context):
     assert response.status_code == 422
     assert publisher.published == []
 
+
+def test_status_is_pending_until_the_ledger_answers(context):
+    client, _, _ = context
+    response = client.get("/transfer/req-unknown/status")
+    assert response.status_code == 200
+    assert response.json() == {"request_id": "req-unknown", "status": "pending"}
+
+
+def test_status_reflects_a_resolved_transfer(context):
+    client, _, registry = context
+    registry.resolve({"request_id": "req-1", "status": "approved", "account_id": "acc-1"})
+
+    assert client.get("/transfer/req-1/status").json()["status"] == "approved"
+
+
+def test_websocket_pushes_an_already_resolved_status_immediately(context):
+    client, _, registry = context
+    registry.resolve({"request_id": "req-1", "status": "declined", "reason": "insufficient_funds"})
+
+    with client.websocket_connect("/ws/transfer/req-1") as ws:
+        message = ws.receive_json()
+
+    assert message["status"] == "declined"
+    assert message["reason"] == "insufficient_funds"
+
+
+def test_websocket_times_out_to_pending_rather_than_hanging_forever(context):
+    client, _, _ = context
+    with client.websocket_connect("/ws/transfer/req-never") as ws:
+        assert ws.receive_json()["status"] == "pending"
+
+
 def test_health_reports_ok(context):
-    client, _ = context
+    client, _, _ = context
     assert client.get("/health").json()["status"] == "ok"

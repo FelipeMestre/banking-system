@@ -1,7 +1,7 @@
 """Request/response models for the gateway HTTP surface (spec §6)."""
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -20,3 +20,10 @@ class TransferAccepted(BaseModel):
     status: str = "pending"
     fee_amount: int
 
+
+class TransferStatus(BaseModel):
+    request_id: str
+    status: str
+    account_id: Optional[str] = None
+    reason: Optional[str] = None
+    ts: Optional[str] = None
