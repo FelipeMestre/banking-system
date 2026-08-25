@@ -1,7 +1,7 @@
-"""Makes the account service importable from the repository root.
+"""Makes both backend components importable from the repository root.
 
-The Flink job ships `domain.py` as a flat module via `--pyFiles`, so it is
-imported by bare name both here and on the cluster.
+`gateway` is a package; the Flink job ships `domain.py` as a flat module via
+`--pyFiles`, so it is imported by bare name both here and on the cluster.
 """
 import os
 import sys

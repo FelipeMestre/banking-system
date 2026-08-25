@@ -103,6 +103,24 @@ services:
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/account_service/submit.sh"]
 
+  gateway:
+    build:
+      context: ./gateway
+    container_name: gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ACCOUNT_EVENTS_TOPIC: account-events
+      TRANSFER_STATUS_TOPIC: transfer-status
+      CORS_ALLOW_ORIGINS: http://localhost:3000
+      FEES_ACCOUNT: acc-fees
+      FEE_FLAT_CENTS: "25"
+      WEBSOCKET_TIMEOUT_SECONDS: "30"
+
   kafka-ui:
     image: tchiotludo/akhq:0.25.1
     container_name: kafka-ui
