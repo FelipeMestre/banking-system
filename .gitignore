@@ -1,0 +1,39 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- Java (account-service/java is built inside Docker, but not always) ---
+target/
+
+# --- Node / Next.js ---
+# The frontend carries its own .gitignore; these are here so the rules still
+# hold if someone runs a build from the repository root.
+node_modules/
+.next/
+*.tsbuildinfo
+
+# --- Secrets and local config ---
+# .env.local.example is intentionally NOT matched: it is the documented template.
+.env
+.env.local
+.env.*.local
+
+# --- Local tooling output ---
+# gentle-ai regenerates this skill registry cache; it is machine state, not source.
+.atl/
+
+# --- Claude Code ---
+# launch.json describes how to run the app and is worth committing; the local
+# settings file is personal.
+.claude/settings.local.json
+
+# --- Editors and OS ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
