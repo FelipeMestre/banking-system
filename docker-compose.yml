@@ -38,6 +38,71 @@ services:
     restart: "no"
     command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
+  flink-jobmanager:
+    build:
+      context: ./account-service
+    image: banking-system/account-service:latest
+    container_name: flink-jobmanager
+    platform: linux/amd64
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        parallelism.default: 3
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ACCOUNT_EVENTS_TOPIC: account-events
+      TRANSFER_STATUS_TOPIC: transfer-status
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+
+  flink-taskmanager:
+    build:
+      context: ./account-service
+    image: banking-system/account-service:latest
+    container_name: flink-taskmanager
+    platform: linux/amd64
+    command: taskmanager
+    depends_on:
+      - flink-jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 6
+        parallelism.default: 3
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ACCOUNT_EVENTS_TOPIC: account-events
+      TRANSFER_STATUS_TOPIC: transfer-status
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+
+  # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
+  flink-job-submitter:
+    build:
+      context: ./account-service
+    image: banking-system/account-service:latest
+    container_name: flink-job-submitter
+    platform: linux/amd64
+    restart: "no"
+    depends_on:
+      - flink-taskmanager
+    environment:
+      FLINK_JOBMANAGER: flink-jobmanager:8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ACCOUNT_EVENTS_TOPIC: account-events
+      TRANSFER_STATUS_TOPIC: transfer-status
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    command: ["/opt/account_service/submit.sh"]
+
   kafka-ui:
     image: tchiotludo/akhq:0.25.1
     container_name: kafka-ui
@@ -56,3 +121,4 @@ services:
 
 volumes:
   kafka-data:
+  flink-checkpoints:
