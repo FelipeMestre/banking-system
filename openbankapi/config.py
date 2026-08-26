@@ -30,7 +30,7 @@ class Settings:
 
     # --- Payments ---
     # The fees account is now a real 16-digit number: 'acc-fees' would fail the
-    # cuentas CHECK constraint, and this value is a Kafka partition key.
+    # accounts CHECK constraint, and this value is a Kafka partition key.
     fees_account: str = "0000000000000001"
     fee_flat_cents: int = 25
 

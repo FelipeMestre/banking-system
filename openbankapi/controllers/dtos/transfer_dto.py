@@ -6,12 +6,12 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, Field, StringConstraints
 
 # Account identifiers are 16-digit numbers from v2 onward (spec §3.5, §5).
-NumeroCuenta = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9]{16}$")]
+NumeroAccount = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9]{16}$")]
 
 
 class TransferRequestDTO(BaseModel):
-    source_account: NumeroCuenta
-    destination_account: NumeroCuenta
+    source_account: NumeroAccount
+    destination_account: NumeroAccount
     # Integer cents. Anything at or below zero is not a transfer.
     amount: int = Field(gt=0, le=10**12)
 

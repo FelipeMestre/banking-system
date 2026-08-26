@@ -19,9 +19,9 @@ account-service/
   submit.sh                 Waits for a task slot, then submits the job
   tests/test_domain.py      Ledger rules, incl. the §9 scenarios
 openbankapi/                Domain-Driven Design layout (v2 §7.1)
-  domain/model/             Entities: cuenta, cliente, sucursal, locacion
+  domain/model/             Entities: account, customer, branch, location
   domain/events/            Domain events, independent of any wire format
-  domain/service/           Use cases: transferencia, cuenta
+  domain/service/           Use cases: transfer, account
   domain/exceptions.py      Errors that carry meaning, not status codes
   controllers/              Routers + DTOs (the API contract)
   infra/database/           ORM, repository ports, Postgres implementations
@@ -29,7 +29,7 @@ openbankapi/                Domain-Driven Design layout (v2 §7.1)
   infra/kafka/              Publisher port, producer, both consumers
   main.py                   Composition root
   tests/                    Every layer, with fakes for every port
-infra/postgres/init.sql     The four tables from v2 §3
+infra/postgres/init.sql     The four tables from v2 §3, in English
 frontend/                   Next.js App Router + TypeScript (§7)
   app/page.tsx              The single page
   components/               Form, outcome view, and the state machine
@@ -214,6 +214,29 @@ redelivery — one leg appears twice on `account-events` — which the
 `(request_id, leg)` guard absorbed: 52 legs were applied to a balance, each
 exactly once. In every run the ledger was reconciled from the event log alone:
 the total across all accounts equalled the seeded total, to the cent.
+
+## Naming
+
+The spec names its tables, columns and endpoints in Spanish (`cuentas`,
+`saldo`, `sucursales`). This implementation keeps **all code in English** — a
+deliberate divergence from the document, applied consistently across the DDL,
+the ORM, the DTOs and the routes:
+
+| Spec | Here |
+|---|---|
+| `locaciones` / `sucursales` | `locations` / `branches` |
+| `clientes` / `cuentas` | `customers` / `accounts` |
+| `saldo` / `moneda` / `estado` | `balance` / `currency` / `status` |
+| `numero_cuenta` | `account_number` |
+| `nombre` / `apellido` | `name` (`first_name` on a customer) / `last_name` |
+| `activa` / `bloqueada` / `cerrada` | `active` / `blocked` / `closed` |
+
+Two tests keep this honest rather than trusting a rename pass:
+`test_schema_alignment.py` parses `init.sql` and asserts the ORM maps exactly
+those columns, and `test_controller_dto_alignment.py` asserts every
+`body.<field>` a controller reads is declared by its DTO. Both were written
+after a global rename passed all 77 tests while the live API returned 500 —
+fakes mirror whatever the code says, so only the real schema can catch drift.
 
 ## Frontend notes
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class AccountCreated:
-    """Raised when a `cuenta` row is created.
+    """Raised when a `account` row is created.
 
     Not published to `account-events`: §5 defines the complete set of record
     types on that topic and this is not one of them, so emitting it would put a
@@ -14,8 +14,8 @@ class AccountCreated:
     audit value and as the seam where a future outbox or CDC feed would attach.
     """
 
-    numero_cuenta: str
-    cliente_id: str
-    sucursal_id: str
-    moneda: str
+    account_number: str
+    customer_id: str
+    branch_id: str
+    currency: str
     ts: str

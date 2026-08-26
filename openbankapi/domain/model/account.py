@@ -9,25 +9,25 @@ from uuid import UUID
 
 # The 16-digit account number is the Kafka partition key for every topic in §4,
 # with no mapping table in between. It has to be well-formed by construction.
-NUMERO_CUENTA_PATTERN = re.compile(r"^[0-9]{16}$")
-NUMERO_CUENTA_LENGTH = 16
+ACCOUNT_NUMBER_PATTERN = re.compile(r"^[0-9]{16}$")
+ACCOUNT_NUMBER_LENGTH = 16
 
 
-def is_valid_numero_cuenta(value: str) -> bool:
-    return bool(NUMERO_CUENTA_PATTERN.match(value))
+def is_valid_account_number(value: str) -> bool:
+    return bool(ACCOUNT_NUMBER_PATTERN.match(value))
 
 
-class EstadoCuenta(str, Enum):
-    ACTIVA = "activa"
-    BLOQUEADA = "bloqueada"
-    CERRADA = "cerrada"
+class AccountStatus(str, Enum):
+    ACTIVE = "active"
+    BLOCKED = "blocked"
+    CLOSED = "closed"
 
 
 @dataclass(frozen=True)
-class Cuenta:
+class Account:
     """An account.
 
-    `saldo` is present but this aggregate does NOT own it. It is a read-model
+    `balance` is present but this aggregate does NOT own it. It is a read-model
     projection kept eventually consistent by the `account-balances` consumer
     (spec §3.6); Flink's keyed state is the source of truth. Nothing in the
     domain or the API may compute a new balance from this value and write it
@@ -37,12 +37,12 @@ class Cuenta:
     """
 
     id: UUID
-    numero_cuenta: str
-    moneda: str
-    cliente_id: UUID
-    sucursal_id: UUID
-    saldo: int
-    estado: EstadoCuenta
+    account_number: str
+    currency: str
+    customer_id: UUID
+    branch_id: UUID
+    balance: int
+    status: AccountStatus
     created_at: datetime
     updated_at: datetime
 
@@ -54,4 +54,4 @@ class Cuenta:
         only Flink can answer, and asking it here would be reading a projection
         that is allowed to be stale.
         """
-        return self.estado is EstadoCuenta.ACTIVA
+        return self.status is AccountStatus.ACTIVE

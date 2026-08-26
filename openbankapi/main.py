@@ -10,15 +10,15 @@ import logging
 
 from .app import create_app
 from .config import Settings
-from .domain.service import CuentaService, TransferenciaService
+from .domain.service import AccountService, TransferService
 from .infra.cache.adapters.null_cache import NullCache
 from .infra.cache.adapters.redis_cache_adapter import RedisCacheAdapter
 from .infra.database.repositories import (
-    PostgresClienteRepository,
-    PostgresCuentaBalanceProjection,
-    PostgresCuentaRepository,
-    PostgresLocacionRepository,
-    PostgresSucursalRepository,
+    PostgresCustomerRepository,
+    PostgresAccountBalanceProjection,
+    PostgresAccountRepository,
+    PostgresLocationRepository,
+    PostgresBranchRepository,
 )
 from .infra.database.session import create_engine, create_sessionmaker
 from .infra.kafka.adapters import KafkaEventPublisher
@@ -32,14 +32,14 @@ settings = Settings.from_env()
 engine = create_engine(settings.database_dsn)
 sessionmaker = create_sessionmaker(engine)
 
-locacion_repository = PostgresLocacionRepository(sessionmaker)
-sucursal_repository = PostgresSucursalRepository(sessionmaker)
-cliente_repository = PostgresClienteRepository(sessionmaker)
-cuenta_repository = PostgresCuentaRepository(sessionmaker)
+location_repository = PostgresLocationRepository(sessionmaker)
+branch_repository = PostgresBranchRepository(sessionmaker)
+customer_repository = PostgresCustomerRepository(sessionmaker)
+account_repository = PostgresAccountRepository(sessionmaker)
 
 # The balance writer is built separately and handed ONLY to the consumer below.
 # Nothing that serves an HTTP request ever holds one (spec §3.5).
-balance_projection = PostgresCuentaBalanceProjection(sessionmaker)
+balance_projection = PostgresAccountBalanceProjection(sessionmaker)
 
 cache = RedisCacheAdapter(settings.redis_url) if settings.redis_url else NullCache()
 
@@ -48,8 +48,8 @@ status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = StatusConsumer(settings, status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
 
-transfer_service = TransferenciaService(settings, publisher)
-cuenta_service = CuentaService(settings, cuenta_repository, publisher)
+transfer_service = TransferService(settings, publisher)
+account_service = AccountService(settings, account_repository, publisher)
 
 
 def _start(loop: asyncio.AbstractEventLoop) -> None:
@@ -71,12 +71,12 @@ async def _stop_async() -> None:
 app = create_app(
     settings=settings,
     transfer_service=transfer_service,
-    cuenta_service=cuenta_service,
+    account_service=account_service,
     status_registry=status_registry,
-    locacion_repository=locacion_repository,
-    sucursal_repository=sucursal_repository,
-    cliente_repository=cliente_repository,
-    cuenta_repository=cuenta_repository,
+    location_repository=location_repository,
+    branch_repository=branch_repository,
+    customer_repository=customer_repository,
+    account_repository=account_repository,
     cache=cache,
     on_start=_start,
     on_stop=_stop,

@@ -8,15 +8,15 @@ from fastapi.testclient import TestClient
 
 from openbankapi.app import create_app
 from openbankapi.config import Settings
-from openbankapi.domain.service import CuentaService, TransferenciaService
+from openbankapi.domain.service import AccountService, TransferService
 from openbankapi.infra.kafka.services import StatusRegistry
 
 from .fakes import (
-    FakeClienteRepository,
-    FakeCuentaRepository,
-    FakeLocacionRepository,
+    FakeCustomerRepository,
+    FakeAccountRepository,
+    FakeLocationRepository,
     FakePublisher,
-    FakeSucursalRepository,
+    FakeBranchRepository,
     FakeCache,
 )
 
@@ -27,35 +27,35 @@ class Harness:
         self.publisher = publisher
         self.cache = cache
         self.registry = registry
-        self.locaciones, self.sucursales, self.clientes, self.cuentas = repos
+        self.locations, self.branches, self.customers, self.accounts = repos
         self.settings = settings
 
 
-def build(*, cache=None, cuentas=None, sucursales=None) -> Harness:
+def build(*, cache=None, accounts=None, branches=None) -> Harness:
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     publisher = FakePublisher()
     cache = cache or FakeCache()
     registry = StatusRegistry()
 
-    locaciones = FakeLocacionRepository()
-    sucursales = sucursales or FakeSucursalRepository()
-    clientes = FakeClienteRepository()
-    cuentas = cuentas or FakeCuentaRepository()
+    locations = FakeLocationRepository()
+    branches = branches or FakeBranchRepository()
+    customers = FakeCustomerRepository()
+    accounts = accounts or FakeAccountRepository()
 
     app = create_app(
         settings=settings,
-        transfer_service=TransferenciaService(settings, publisher),
-        cuenta_service=CuentaService(settings, cuentas, publisher),
+        transfer_service=TransferService(settings, publisher),
+        account_service=AccountService(settings, accounts, publisher),
         status_registry=registry,
-        locacion_repository=locaciones,
-        sucursal_repository=sucursales,
-        cliente_repository=clientes,
-        cuenta_repository=cuentas,
+        location_repository=locations,
+        branch_repository=branches,
+        customer_repository=customers,
+        account_repository=accounts,
         cache=cache,
     )
     client = TestClient(app)
     return Harness(client, publisher, cache, registry,
-                   (locaciones, sucursales, clientes, cuentas), settings)
+                   (locations, branches, customers, accounts), settings)
 
 
 @pytest.fixture
@@ -68,9 +68,9 @@ def harness():
 @pytest.fixture
 def wired():
     """A harness whose reference data already exists, ready for account work."""
-    cliente_id, sucursal_id = uuid.uuid4(), uuid.uuid4()
-    cuentas = FakeCuentaRepository(known_clientes={cliente_id}, known_sucursales={sucursal_id})
-    h = build(cuentas=cuentas)
-    h.cliente_id, h.sucursal_id = cliente_id, sucursal_id
+    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    h = build(accounts=accounts)
+    h.customer_id, h.branch_id = customer_id, branch_id
     with h.client:
         yield h

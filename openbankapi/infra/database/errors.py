@@ -20,19 +20,19 @@ from ...domain.exceptions import (
     DomainError,
     DuplicateAccountNumberError,
     DuplicateError,
-    InvalidNumeroCuentaError,
+    InvalidNumeroAccountError,
     ReferencedEntityNotFoundError,
 )
 
 _FOREIGN_KEYS = {
-    "sucursales_locacion_id_fkey": "locacion_id",
-    "cuentas_cliente_id_fkey": "cliente_id",
-    "cuentas_sucursal_id_fkey": "sucursal_id",
+    "branches_location_id_fkey": "location_id",
+    "accounts_customer_id_fkey": "customer_id",
+    "accounts_branch_id_fkey": "branch_id",
 }
 
 _UNIQUE_KEYS = {
-    "sucursales_codigo_key": "codigo",
-    "clientes_numero_identificacion_key": "numero_identificacion",
+    "branches_code_key": "code",
+    "customers_identification_number_key": "identification_number",
 }
 
 
@@ -72,15 +72,15 @@ def translate(error: IntegrityError, *, values: Optional[dict] = None) -> Domain
         field = _FOREIGN_KEYS[name]
         return ReferencedEntityNotFoundError(field, values.get(field))
 
-    if name == "cuentas_numero_cuenta_key":
-        return DuplicateAccountNumberError(values.get("numero_cuenta"))
+    if name == "accounts_account_number_key":
+        return DuplicateAccountNumberError(values.get("account_number"))
 
     if name in _UNIQUE_KEYS:
         field = _UNIQUE_KEYS[name]
         return DuplicateError(field, values.get(field))
 
-    if name == "cuentas_numero_cuenta_check":
-        return InvalidNumeroCuentaError(values.get("numero_cuenta"))
+    if name == "accounts_account_number_check":
+        return InvalidNumeroAccountError(values.get("account_number"))
 
     # An unrecognised constraint is a real bug, not a client error. Re-raising
     # the original keeps the traceback instead of flattening it into a 4xx.

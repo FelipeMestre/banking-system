@@ -1,6 +1,6 @@
 """Account DTOs — and the single most important rule in this codebase.
 
-`CuentaUpdateDTO` DOES NOT DECLARE `saldo`. Not optional, not excluded, not
+`AccountUpdateDTO` DOES NOT DECLARE `balance`. Not optional, not excluded, not
 validated away: absent (spec §3.5).
 
 Adding it would create a second, uncoordinated write path to the account balance
@@ -9,10 +9,10 @@ Adding it would create a second, uncoordinated write path to the account balance
 architecture exists to avoid. The read model would then disagree with the ledger
 and nothing would be able to say which one was right.
 
-`extra="forbid"` means a client that sends `saldo` anyway gets a 422 instead of
+`extra="forbid"` means a client that sends `balance` anyway gets a 422 instead of
 having it silently dropped, which satisfies spec §11.3 loudly rather than
-quietly. There is no code path from this DTO to `cuentas.saldo`; the only writer
-is `ICuentaBalanceProjection`, and no controller is ever handed one.
+quietly. There is no code path from this DTO to `accounts.balance`; the only writer
+is `IAccountBalanceProjection`, and no controller is ever handed one.
 """
 from __future__ import annotations
 
@@ -21,38 +21,38 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-Moneda = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True,
+Currency = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True,
                                           min_length=3, max_length=3)]
-NumeroCuenta = Annotated[str, StringConstraints(pattern=r"^[0-9]{16}$")]
+NumeroAccount = Annotated[str, StringConstraints(pattern=r"^[0-9]{16}$")]
 
 
-class CuentaCreateDTO(BaseModel):
-    """`numero_cuenta` is absent here too: it is generated server-side because
+class AccountCreateDTO(BaseModel):
+    """`account_number` is absent here too: it is generated server-side because
     it becomes the Kafka partition key (spec §8.2)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    moneda: Moneda
-    cliente_id: UUID
-    sucursal_id: UUID
+    currency: Currency
+    customer_id: UUID
+    branch_id: UUID
 
 
-class CuentaUpdateDTO(BaseModel):
+class AccountUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    moneda: Optional[Moneda] = None
-    sucursal_id: Optional[UUID] = None
-    estado: Optional[str] = Field(default=None, pattern="^(activa|bloqueada|cerrada)$")
+    currency: Optional[Currency] = None
+    branch_id: Optional[UUID] = None
+    status: Optional[str] = Field(default=None, pattern="^(active|blocked|closed)$")
 
 
-class CuentaResponseDTO(BaseModel):
+class AccountResponseDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    numero_cuenta: str
-    moneda: str
-    cliente_id: UUID
-    sucursal_id: UUID
+    account_number: str
+    currency: str
+    customer_id: UUID
+    branch_id: UUID
     # Readable, never writable. Eventually consistent with the ledger (§3.6).
-    saldo: int
-    estado: str
+    balance: int
+    status: str

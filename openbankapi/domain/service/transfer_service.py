@@ -45,7 +45,7 @@ def to_wire(event: TransferRequested) -> Dict[str, Any]:
     }
 
 
-class TransferenciaService:
+class TransferService:
     def __init__(self, settings: Settings, publisher):
         self._settings = settings
         self._publisher = publisher

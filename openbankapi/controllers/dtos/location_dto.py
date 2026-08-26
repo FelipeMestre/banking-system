@@ -6,23 +6,23 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-Nombre = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
 
 
-class LocacionCreateDTO(BaseModel):
+class LocationCreateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nombre: Nombre
+    name: Name
 
 
-class LocacionUpdateDTO(BaseModel):
+class LocationUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nombre: Optional[Nombre] = None
+    name: Optional[Name] = None
 
 
-class LocacionResponseDTO(BaseModel):
+class LocationResponseDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    nombre: str
+    name: str

@@ -44,18 +44,18 @@ def _nested(constraint: str) -> _IntegrityError:
 
 
 def test_the_constraint_name_is_found_through_the_wrapper():
-    assert constraint_name_of(_nested("cuentas_cliente_id_fkey")) == "cuentas_cliente_id_fkey"
+    assert constraint_name_of(_nested("accounts_customer_id_fkey")) == "accounts_customer_id_fkey"
 
 
 def test_a_foreign_key_violation_becomes_a_referenced_entity_error():
-    error = translate(_nested("cuentas_cliente_id_fkey"), values={"cliente_id": "x"})
+    error = translate(_nested("accounts_customer_id_fkey"), values={"customer_id": "x"})
     assert isinstance(error, ReferencedEntityNotFoundError)
-    assert error.field == "cliente_id"
+    assert error.field == "customer_id"
 
 
 @pytest.mark.parametrize("constraint,field", [
-    ("sucursales_locacion_id_fkey", "locacion_id"),
-    ("cuentas_sucursal_id_fkey", "sucursal_id"),
+    ("branches_location_id_fkey", "location_id"),
+    ("accounts_branch_id_fkey", "branch_id"),
 ])
 def test_every_foreign_key_is_mapped(constraint, field):
     error = translate(_nested(constraint), values={field: "x"})
@@ -65,12 +65,12 @@ def test_every_foreign_key_is_mapped(constraint, field):
 
 def test_a_duplicate_account_number_is_its_own_error():
     """The account repository retries on this one and on nothing else."""
-    error = translate(_nested("cuentas_numero_cuenta_key"), values={"numero_cuenta": "1"})
+    error = translate(_nested("accounts_account_number_key"), values={"account_number": "1"})
     assert isinstance(error, DuplicateAccountNumberError)
 
 
 def test_a_duplicate_business_key_is_a_conflict():
-    error = translate(_nested("sucursales_codigo_key"), values={"codigo": "MVD01"})
+    error = translate(_nested("branches_code_key"), values={"code": "MVD01"})
     assert isinstance(error, DuplicateError)
     assert not isinstance(error, DuplicateAccountNumberError)
 

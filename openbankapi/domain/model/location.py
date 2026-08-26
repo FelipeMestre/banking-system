@@ -1,4 +1,4 @@
-"""A location: the geographic grouping a `sucursal` belongs to (spec §3.2)."""
+"""A location: the geographic grouping a `branch` belongs to (spec §3.2)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,8 +7,8 @@ from uuid import UUID
 
 
 @dataclass(frozen=True)
-class Locacion:
+class Location:
     id: UUID
-    nombre: str
+    name: str
     created_at: datetime
     updated_at: datetime

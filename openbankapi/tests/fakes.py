@@ -16,7 +16,7 @@ from openbankapi.domain.exceptions import (
     DuplicateError,
     ReferencedEntityNotFoundError,
 )
-from openbankapi.domain.model import Cliente, Cuenta, EstadoCuenta, Locacion, Sucursal
+from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch
 from openbankapi.infra.database.interfaces.common import Page
 
 
@@ -59,185 +59,185 @@ class FakeCache:
         return None
 
 
-class FakeLocacionRepository:
+class FakeLocationRepository:
     def __init__(self):
-        self.rows: Dict[UUID, Locacion] = {}
+        self.rows: Dict[UUID, Location] = {}
         self.loads = 0
 
-    async def create(self, *, nombre: str) -> Locacion:
-        entity = Locacion(id=uuid.uuid4(), nombre=nombre, created_at=_now(), updated_at=_now())
+    async def create(self, *, name: str) -> Location:
+        entity = Location(id=uuid.uuid4(), name=name, created_at=_now(), updated_at=_now())
         self.rows[entity.id] = entity
         return entity
 
-    async def get(self, locacion_id: UUID) -> Optional[Locacion]:
+    async def get(self, location_id: UUID) -> Optional[Location]:
         self.loads += 1
-        return self.rows.get(locacion_id)
+        return self.rows.get(location_id)
 
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
 
-    async def update(self, locacion_id: UUID, *, nombre: Optional[str]) -> Optional[Locacion]:
-        current = self.rows.get(locacion_id)
+    async def update(self, location_id: UUID, *, name: Optional[str]) -> Optional[Location]:
+        current = self.rows.get(location_id)
         if current is None:
             return None
-        updated = Locacion(id=current.id, nombre=nombre or current.nombre,
+        updated = Location(id=current.id, name=name or current.name,
                            created_at=current.created_at, updated_at=_now())
-        self.rows[locacion_id] = updated
+        self.rows[location_id] = updated
         return updated
 
 
-class FakeSucursalRepository:
-    def __init__(self, *, known_locaciones: Optional[set] = None):
-        self.rows: Dict[UUID, Sucursal] = {}
-        self.known_locaciones = known_locaciones if known_locaciones is not None else set()
-        self.codigos: set = set()
+class FakeBranchRepository:
+    def __init__(self, *, known_locations: Optional[set] = None):
+        self.rows: Dict[UUID, Branch] = {}
+        self.known_locations = known_locations if known_locations is not None else set()
+        self.codes: set = set()
 
-    async def create(self, *, codigo: str, nombre: str, locacion_id: UUID) -> Sucursal:
+    async def create(self, *, code: str, name: str, location_id: UUID) -> Branch:
         # Stands in for the FK: the real repository lets Postgres decide and
         # translates the violation, but the domain error is the same.
-        if locacion_id not in self.known_locaciones:
-            raise ReferencedEntityNotFoundError("locacion_id", locacion_id)
-        if codigo in self.codigos:
-            raise DuplicateError("codigo", codigo)
-        self.codigos.add(codigo)
-        entity = Sucursal(id=uuid.uuid4(), codigo=codigo, nombre=nombre,
-                          locacion_id=locacion_id, activa=True,
+        if location_id not in self.known_locations:
+            raise ReferencedEntityNotFoundError("location_id", location_id)
+        if code in self.codes:
+            raise DuplicateError("code", code)
+        self.codes.add(code)
+        entity = Branch(id=uuid.uuid4(), code=code, name=name,
+                          location_id=location_id, active=True,
                           created_at=_now(), updated_at=_now())
         self.rows[entity.id] = entity
         return entity
 
-    async def get(self, sucursal_id: UUID) -> Optional[Sucursal]:
-        return self.rows.get(sucursal_id)
+    async def get(self, branch_id: UUID) -> Optional[Branch]:
+        return self.rows.get(branch_id)
 
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
 
-    async def update(self, sucursal_id: UUID, **changes) -> Optional[Sucursal]:
-        current = self.rows.get(sucursal_id)
+    async def update(self, branch_id: UUID, **changes) -> Optional[Branch]:
+        current = self.rows.get(branch_id)
         if current is None:
             return None
-        updated = Sucursal(
+        updated = Branch(
             id=current.id,
-            codigo=changes.get("codigo") or current.codigo,
-            nombre=changes.get("nombre") or current.nombre,
-            locacion_id=changes.get("locacion_id") or current.locacion_id,
-            activa=current.activa if changes.get("activa") is None else changes["activa"],
+            code=changes.get("code") or current.code,
+            name=changes.get("name") or current.name,
+            location_id=changes.get("location_id") or current.location_id,
+            active=current.active if changes.get("active") is None else changes["active"],
             created_at=current.created_at, updated_at=_now(),
         )
-        self.rows[sucursal_id] = updated
+        self.rows[branch_id] = updated
         return updated
 
-    async def deactivate(self, sucursal_id: UUID) -> Optional[Sucursal]:
-        return await self.update(sucursal_id, activa=False)
+    async def deactivate(self, branch_id: UUID) -> Optional[Branch]:
+        return await self.update(branch_id, active=False)
 
 
-class FakeClienteRepository:
+class FakeCustomerRepository:
     def __init__(self):
-        self.rows: Dict[UUID, Cliente] = {}
+        self.rows: Dict[UUID, Customer] = {}
 
-    async def create(self, **kwargs) -> Cliente:
-        entity = Cliente(id=uuid.uuid4(), activo=True, created_at=_now(),
+    async def create(self, **kwargs) -> Customer:
+        entity = Customer(id=uuid.uuid4(), active=True, created_at=_now(),
                          updated_at=_now(), **kwargs)
         self.rows[entity.id] = entity
         return entity
 
-    async def get(self, cliente_id: UUID) -> Optional[Cliente]:
-        return self.rows.get(cliente_id)
+    async def get(self, customer_id: UUID) -> Optional[Customer]:
+        return self.rows.get(customer_id)
 
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
 
-    async def update(self, cliente_id: UUID, **changes) -> Optional[Cliente]:
-        current = self.rows.get(cliente_id)
+    async def update(self, customer_id: UUID, **changes) -> Optional[Customer]:
+        current = self.rows.get(customer_id)
         if current is None:
             return None
         supplied = {k: v for k, v in changes.items() if v is not None}
-        updated = Cliente(
+        updated = Customer(
             id=current.id,
-            numero_identificacion=supplied.get("numero_identificacion", current.numero_identificacion),
-            nombre=supplied.get("nombre", current.nombre),
-            apellido=supplied.get("apellido", current.apellido),
-            fecha_nacimiento=supplied.get("fecha_nacimiento", current.fecha_nacimiento),
-            genero=supplied.get("genero", current.genero),
-            activo=supplied.get("activo", current.activo),
+            identification_number=supplied.get("identification_number", current.identification_number),
+            name=supplied.get("name", current.name),
+            last_name=supplied.get("last_name", current.last_name),
+            date_of_birth=supplied.get("date_of_birth", current.date_of_birth),
+            gender=supplied.get("gender", current.gender),
+            active=supplied.get("active", current.active),
             created_at=current.created_at, updated_at=_now(),
         )
-        self.rows[cliente_id] = updated
+        self.rows[customer_id] = updated
         return updated
 
-    async def deactivate(self, cliente_id: UUID) -> Optional[Cliente]:
-        return await self.update(cliente_id, activo=False)
+    async def deactivate(self, customer_id: UUID) -> Optional[Customer]:
+        return await self.update(customer_id, active=False)
 
 
-class FakeCuentaRepository:
+class FakeAccountRepository:
     """Also plays the balance projection, so a test can watch both sides."""
 
-    def __init__(self, *, known_clientes=None, known_sucursales=None, collide_times: int = 0):
-        self.rows: Dict[str, Cuenta] = {}
-        self.known_clientes = known_clientes if known_clientes is not None else set()
-        self.known_sucursales = known_sucursales if known_sucursales is not None else set()
+    def __init__(self, *, known_customers=None, known_branches=None, collide_times: int = 0):
+        self.rows: Dict[str, Account] = {}
+        self.known_customers = known_customers if known_customers is not None else set()
+        self.known_branches = known_branches if known_branches is not None else set()
         self.collide_times = collide_times
         self.attempts = 0
 
-    async def create(self, *, moneda: str, cliente_id: UUID, sucursal_id: UUID) -> Cuenta:
-        if cliente_id not in self.known_clientes:
-            raise ReferencedEntityNotFoundError("cliente_id", cliente_id)
-        if sucursal_id not in self.known_sucursales:
-            raise ReferencedEntityNotFoundError("sucursal_id", sucursal_id)
-        from openbankapi.infra.database.repositories import generate_numero_cuenta
+    async def create(self, *, currency: str, customer_id: UUID, branch_id: UUID) -> Account:
+        if customer_id not in self.known_customers:
+            raise ReferencedEntityNotFoundError("customer_id", customer_id)
+        if branch_id not in self.known_branches:
+            raise ReferencedEntityNotFoundError("branch_id", branch_id)
+        from openbankapi.infra.database.repositories import generate_account_number
 
         for _ in range(5):
             self.attempts += 1
-            numero = generate_numero_cuenta()
+            numero = generate_account_number()
             if self.collide_times > 0:
                 self.collide_times -= 1
                 continue  # simulate the UNIQUE violation the real repo retries
-            entity = Cuenta(id=uuid.uuid4(), numero_cuenta=numero, moneda=moneda,
-                            cliente_id=cliente_id, sucursal_id=sucursal_id, saldo=0,
-                            estado=EstadoCuenta.ACTIVA, created_at=_now(), updated_at=_now())
+            entity = Account(id=uuid.uuid4(), account_number=numero, currency=currency,
+                            customer_id=customer_id, branch_id=branch_id, balance=0,
+                            status=AccountStatus.ACTIVE, created_at=_now(), updated_at=_now())
             self.rows[numero] = entity
             return entity
         raise DuplicateAccountNumberError("exhausted")
 
-    async def get_by_numero(self, numero_cuenta: str) -> Optional[Cuenta]:
-        return self.rows.get(numero_cuenta)
+    async def get_by_numero(self, account_number: str) -> Optional[Account]:
+        return self.rows.get(account_number)
 
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
 
-    async def update(self, numero_cuenta: str, **changes) -> Optional[Cuenta]:
-        assert "saldo" not in changes, "saldo must never reach the repository"
-        current = self.rows.get(numero_cuenta)
+    async def update(self, account_number: str, **changes) -> Optional[Account]:
+        assert "balance" not in changes, "balance must never reach the repository"
+        current = self.rows.get(account_number)
         if current is None:
             return None
         supplied = {k: v for k, v in changes.items() if v is not None}
-        updated = Cuenta(
-            id=current.id, numero_cuenta=current.numero_cuenta,
-            moneda=supplied.get("moneda", current.moneda),
-            cliente_id=current.cliente_id,
-            sucursal_id=supplied.get("sucursal_id", current.sucursal_id),
-            saldo=current.saldo,  # never from the caller
-            estado=EstadoCuenta(supplied.get("estado", current.estado.value)),
+        updated = Account(
+            id=current.id, account_number=current.account_number,
+            currency=supplied.get("currency", current.currency),
+            customer_id=current.customer_id,
+            branch_id=supplied.get("branch_id", current.branch_id),
+            balance=current.balance,  # never from the caller
+            status=AccountStatus(supplied.get("status", current.status.value)),
             created_at=current.created_at, updated_at=_now(),
         )
-        self.rows[numero_cuenta] = updated
+        self.rows[account_number] = updated
         return updated
 
-    async def close(self, numero_cuenta: str) -> Optional[Cuenta]:
-        return await self.update(numero_cuenta, estado="cerrada")
+    async def close(self, account_number: str) -> Optional[Account]:
+        return await self.update(account_number, status="closed")
 
-    async def apply_balance(self, numero_cuenta: str, balance: int) -> bool:
-        current = self.rows.get(numero_cuenta)
+    async def apply_balance(self, account_number: str, balance: int) -> bool:
+        current = self.rows.get(account_number)
         if current is None:
             return False
-        self.rows[numero_cuenta] = Cuenta(
-            id=current.id, numero_cuenta=current.numero_cuenta, moneda=current.moneda,
-            cliente_id=current.cliente_id, sucursal_id=current.sucursal_id,
-            saldo=balance, estado=current.estado,
+        self.rows[account_number] = Account(
+            id=current.id, account_number=current.account_number, currency=current.currency,
+            customer_id=current.customer_id, branch_id=current.branch_id,
+            balance=balance, status=current.status,
             created_at=current.created_at, updated_at=_now(),
         )
         return True

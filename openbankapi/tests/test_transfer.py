@@ -47,12 +47,12 @@ def test_the_event_is_keyed_by_source_and_matches_the_spec_schema(harness):
 
 def test_the_write_path_touches_no_database(harness):
     """The payment path must not depend on reference data being reachable."""
-    before = harness.cuentas.rows.copy()
+    before = harness.accounts.rows.copy()
     harness.client.post(
         "/transfer",
         json={"source_account": SOURCE, "destination_account": DEST, "amount": 500},
     )
-    assert harness.cuentas.rows == before
+    assert harness.accounts.rows == before
 
 
 @pytest.mark.parametrize("account", ["acc-123", "123", "12345678901234567", "abcdefghijklmnop"])

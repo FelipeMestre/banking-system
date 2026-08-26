@@ -17,7 +17,7 @@ from ..domain.exceptions import (
     DomainError,
     DuplicateError,
     InsufficientFundsError,
-    InvalidNumeroCuentaError,
+    InvalidNumeroAccountError,
     NotFoundError,
     ReferencedEntityNotFoundError,
 )
@@ -29,7 +29,7 @@ _STATUS = [
     (ReferencedEntityNotFoundError, 422),
     (DuplicateError, 409),
     (AccountNotOperableError, 409),
-    (InvalidNumeroCuentaError, 400),
+    (InvalidNumeroAccountError, 400),
     (InsufficientFundsError, 409),
 ]
 
@@ -59,7 +59,7 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, error: RequestValidationError):
         # Strip `input`: pydantic echoes the rejected value back, which would
-        # put a fecha_nacimiento in an HTTP response body (spec §3.4).
+        # put a date_of_birth in an HTTP response body (spec §3.4).
         details = [
             {k: v for k, v in item.items() if k != "input"} for item in error.errors()
         ]

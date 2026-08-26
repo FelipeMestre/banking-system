@@ -15,11 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings
 from .controllers import (
-    cliente_controller,
-    cuenta_controller,
+    customer_controller,
+    account_controller,
     error_handlers,
-    locacion_controller,
-    sucursal_controller,
+    location_controller,
+    branch_controller,
     transfer_controller,
 )
 
@@ -28,12 +28,12 @@ def create_app(
     *,
     settings: Settings,
     transfer_service,
-    cuenta_service,
+    account_service,
     status_registry,
-    locacion_repository,
-    sucursal_repository,
-    cliente_repository,
-    cuenta_repository,
+    location_repository,
+    branch_repository,
+    customer_repository,
+    account_repository,
     cache,
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
@@ -76,10 +76,10 @@ def create_app(
             transfer_service, status_registry, settings.websocket_timeout_seconds
         )
     )
-    app.include_router(locacion_controller.build_router(locacion_repository, cache, ttl))
-    app.include_router(sucursal_controller.build_router(sucursal_repository, cache, ttl))
-    app.include_router(cliente_controller.build_router(cliente_repository, cache, ttl))
+    app.include_router(location_controller.build_router(location_repository, cache, ttl))
+    app.include_router(branch_controller.build_router(branch_repository, cache, ttl))
+    app.include_router(customer_controller.build_router(customer_repository, cache, ttl))
     app.include_router(
-        cuenta_controller.build_router(cuenta_service, cuenta_repository, cache, ttl)
+        account_controller.build_router(account_service, account_repository, cache, ttl)
     )
     return app

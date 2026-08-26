@@ -36,72 +36,72 @@ def _created() -> Mapped[dt.datetime]:
     return mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class LocacionORM(Base):
-    __tablename__ = "locaciones"
+class LocationORM(Base):
+    __tablename__ = "locations"
 
     id: Mapped[uuid.UUID] = _pk()
-    nombre: Mapped[str] = mapped_column(String(150), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 
 
-class SucursalORM(Base):
-    __tablename__ = "sucursales"
+class BranchORM(Base):
+    __tablename__ = "branches"
 
     id: Mapped[uuid.UUID] = _pk()
-    codigo: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
-    nombre: Mapped[str] = mapped_column(String(200), nullable=False)
-    locacion_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("locaciones.id"), nullable=False
+    code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("locations.id"), nullable=False
     )
-    activa: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 
 
-class ClienteORM(Base):
+class CustomerORM(Base):
     """No `age` column, by design (spec §3.4) — it is derived on read.
 
-    `fecha_nacimiento` and `genero` are personal data; nothing may log them.
+    `date_of_birth` and `gender` are personal data; nothing may log them.
     """
 
-    __tablename__ = "clientes"
+    __tablename__ = "customers"
 
     id: Mapped[uuid.UUID] = _pk()
-    numero_identificacion: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
-    apellido: Mapped[str] = mapped_column(String(100), nullable=False)
-    fecha_nacimiento: Mapped[dt.date] = mapped_column(Date, nullable=False)
-    genero: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    activo: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    identification_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    date_of_birth: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 
 
-class CuentaORM(Base):
-    """`saldo` is a projection, not state this table owns (spec §3.5).
+class AccountORM(Base):
+    """`balance` is a projection, not state this table owns (spec §3.5).
 
     The only writer is the `account-balances` consumer, reached through
-    `ICuentaBalanceProjection`. No CRUD path can set it.
+    `IAccountBalanceProjection`. No CRUD path can set it.
     """
 
-    __tablename__ = "cuentas"
+    __tablename__ = "accounts"
     __table_args__ = (
-        CheckConstraint(r"numero_cuenta ~ '^[0-9]{16}$'", name="cuentas_numero_cuenta_check"),
+        CheckConstraint(r"account_number ~ '^[0-9]{16}$'", name="accounts_account_number_check"),
     )
 
     id: Mapped[uuid.UUID] = _pk()
     # CHAR(16), not VARCHAR: leading zeros are significant because this value is
     # the Kafka partition key. '0000000000000001' and '1' are different shards.
-    numero_cuenta: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
-    moneda: Mapped[str] = mapped_column(String(3), nullable=False)
-    cliente_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False
+    account_number: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
     )
-    sucursal_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("sucursales.id"), nullable=False
+    branch_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("branches.id"), nullable=False
     )
-    saldo: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
-    estado: Mapped[str] = mapped_column(String(20), nullable=False, server_default="activa")
+    balance: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()

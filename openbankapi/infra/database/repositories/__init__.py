@@ -1,17 +1,17 @@
-from .postgres_cliente_repository import PostgresClienteRepository
-from .postgres_cuenta_repository import (
-    PostgresCuentaBalanceProjection,
-    PostgresCuentaRepository,
-    generate_numero_cuenta,
+from .postgres_customer_repository import PostgresCustomerRepository
+from .postgres_account_repository import (
+    PostgresAccountBalanceProjection,
+    PostgresAccountRepository,
+    generate_account_number,
 )
-from .postgres_locacion_repository import PostgresLocacionRepository
-from .postgres_sucursal_repository import PostgresSucursalRepository
+from .postgres_location_repository import PostgresLocationRepository
+from .postgres_branch_repository import PostgresBranchRepository
 
 __all__ = [
-    "PostgresClienteRepository",
-    "PostgresCuentaBalanceProjection",
-    "PostgresCuentaRepository",
-    "PostgresLocacionRepository",
-    "PostgresSucursalRepository",
-    "generate_numero_cuenta",
+    "PostgresCustomerRepository",
+    "PostgresAccountBalanceProjection",
+    "PostgresAccountRepository",
+    "PostgresLocationRepository",
+    "PostgresBranchRepository",
+    "generate_account_number",
 ]

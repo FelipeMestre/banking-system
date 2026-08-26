@@ -16,9 +16,9 @@ from openbankapi.config import Settings
 from openbankapi.domain.events import BalanceUpdated
 from openbankapi.infra.kafka.services import AccountBalanceConsumer
 
-from .fakes import FakeCache, FakeCuentaRepository
+from .fakes import FakeCache, FakeAccountRepository
 
-NUMERO = "1234567890123456"
+ACCOUNT_NUMBER = "1234567890123456"
 
 
 def _consumer(repo, cache):
@@ -26,25 +26,25 @@ def _consumer(repo, cache):
 
 
 async def _seeded_repo():
-    cliente_id, sucursal_id = uuid.uuid4(), uuid.uuid4()
-    repo = FakeCuentaRepository(known_clientes={cliente_id}, known_sucursales={sucursal_id})
-    cuenta = await repo.create(moneda="USD", cliente_id=cliente_id, sucursal_id=sucursal_id)
-    return repo, cuenta.numero_cuenta
+    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    repo = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    account = await repo.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
+    return repo, account.account_number
 
 
 # --- parsing ----------------------------------------------------------------
 
 
 def test_a_well_formed_record_parses():
-    event = BalanceUpdated.from_payload({"account_id": NUMERO, "balance": 458700, "ts": "t"})
-    assert (event.account_id, event.balance) == (NUMERO, 458700)
+    event = BalanceUpdated.from_payload({"account_id": ACCOUNT_NUMBER, "balance": 458700, "ts": "t"})
+    assert (event.account_id, event.balance) == (ACCOUNT_NUMBER, 458700)
 
 
 @pytest.mark.parametrize("payload", [
-    {"account_id": NUMERO},
+    {"account_id": ACCOUNT_NUMBER},
     {"balance": 10},
     {"account_id": 123, "balance": 10},
-    {"account_id": NUMERO, "balance": "lots"},
+    {"account_id": ACCOUNT_NUMBER, "balance": "lots"},
 ])
 def test_a_malformed_record_is_rejected(payload):
     with pytest.raises((ValueError, KeyError)):
@@ -61,26 +61,26 @@ def test_a_malformed_record_is_dropped_not_fatal():
 # --- projection -------------------------------------------------------------
 
 
-def test_it_updates_saldo_and_invalidates_the_cache():
+def test_it_updates_balance_and_invalidates_the_cache():
     async def scenario():
         repo, numero = await _seeded_repo()
         cache = FakeCache()
-        cache.store[f"cuenta:{numero}"] = {"saldo": 0}
+        cache.store[f"account:{numero}"] = {"balance": 0}
 
         await _consumer(repo, cache)._apply(BalanceUpdated(numero, 458700, "t"))
-        return numero, repo.rows[numero].saldo, cache.deletes, cache.store
+        return numero, repo.rows[numero].balance, cache.deletes, cache.store
 
-    numero, saldo, deletes, store = asyncio.run(scenario())
-    assert saldo == 458700
-    assert deletes == [f"cuenta:{numero}"]
-    assert f"cuenta:{numero}" not in store, "the stale entry must be gone"
+    numero, balance, deletes, store = asyncio.run(scenario())
+    assert balance == 458700
+    assert deletes == [f"account:{numero}"]
+    assert f"account:{numero}" not in store, "the stale entry must be gone"
 
 
 def test_an_unknown_account_is_skipped_without_raising():
     """The ledger runs accounts reference data has never heard of."""
     async def scenario():
         cache = FakeCache()
-        await _consumer(FakeCuentaRepository(), cache)._apply(
+        await _consumer(FakeAccountRepository(), cache)._apply(
             BalanceUpdated("9999999999999999", 100, "t")
         )
         return cache.deletes
@@ -96,17 +96,17 @@ def test_replaying_the_same_record_converges():
         consumer = _consumer(repo, FakeCache())
         for _ in range(3):
             await consumer._apply(BalanceUpdated(numero, 12345, "t"))
-        return repo.rows[numero].saldo
+        return repo.rows[numero].balance
 
     assert asyncio.run(scenario()) == 12345
 
 
-def test_the_projection_is_the_only_thing_that_writes_saldo():
+def test_the_projection_is_the_only_thing_that_writes_balance():
     """A CRUD update must not be able to move the balance, even internally."""
     async def scenario():
         repo, numero = await _seeded_repo()
         await _consumer(repo, FakeCache())._apply(BalanceUpdated(numero, 500, "t"))
-        await repo.update(numero, estado="bloqueada")
-        return repo.rows[numero].saldo
+        await repo.update(numero, status="blocked")
+        return repo.rows[numero].balance
 
     assert asyncio.run(scenario()) == 500

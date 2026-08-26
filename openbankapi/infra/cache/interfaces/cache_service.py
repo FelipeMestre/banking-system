@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Protocol
 
-# Spec §8.2: `{entity}:{id}`, e.g. cuenta:1234567890123456, cliente:{uuid}.
+# Spec §8.2: `{entity}:{id}`, e.g. account:1234567890123456, customer:{uuid}.
 DEFAULT_TTL_SECONDS = 300
 
 

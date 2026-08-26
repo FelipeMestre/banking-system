@@ -1,7 +1,7 @@
-"""Keeps `cuentas.saldo` in sync with the ledger (spec §3.6).
+"""Keeps `accounts.balance` in sync with the ledger (spec §3.6).
 
-This is the ONE component allowed to write `saldo`, and it holds an
-`ICuentaBalanceProjection` rather than a full repository so that stays true by
+This is the ONE component allowed to write `balance`, and it holds an
+`IAccountBalanceProjection` rather than a full repository so that stays true by
 construction.
 
 Two things differ deliberately from the transfer-status consumer:
@@ -32,7 +32,7 @@ from confluent_kafka import Consumer, KafkaError
 from ....config import Settings
 from ....domain.events import BalanceUpdated
 from ...cache.interfaces.cache_service import cache_key
-from ...database.interfaces import ICuentaBalanceProjection
+from ...database.interfaces import IAccountBalanceProjection
 
 LOG = logging.getLogger("openbankapi.kafka.balances")
 
@@ -46,7 +46,7 @@ class AccountBalanceConsumer:
     def __init__(
         self,
         settings: Settings,
-        projection: ICuentaBalanceProjection,
+        projection: IAccountBalanceProjection,
         cache,
     ):
         self._settings = settings
@@ -120,8 +120,8 @@ class AccountBalanceConsumer:
         if not updated:
             # The ledger runs accounts reference data has never heard of. Not an
             # error: there is simply no row to project onto yet.
-            LOG.info("no cuenta row for %s; skipping projection", event.account_id)
+            LOG.info("no account row for %s; skipping projection", event.account_id)
             return
         # Invalidate after the write, never before: invalidating first leaves a
         # window where a concurrent read repopulates the cache with the old value.
-        await self._cache.delete(cache_key("cuenta", event.account_id))
+        await self._cache.delete(cache_key("account", event.account_id))

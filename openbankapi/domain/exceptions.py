@@ -20,24 +20,24 @@ class NotFoundError(DomainError):
         super().__init__(f"{entity} not found: {identifier}")
 
 
-class LocacionNotFoundError(NotFoundError):
+class LocationNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
-        super().__init__("locacion", identifier)
+        super().__init__("location", identifier)
 
 
-class SucursalNotFoundError(NotFoundError):
+class BranchNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
-        super().__init__("sucursal", identifier)
+        super().__init__("branch", identifier)
 
 
-class ClienteNotFoundError(NotFoundError):
+class CustomerNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
-        super().__init__("cliente", identifier)
+        super().__init__("customer", identifier)
 
 
-class CuentaNotFoundError(NotFoundError):
+class AccountNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
-        super().__init__("cuenta", identifier)
+        super().__init__("account", identifier)
 
 
 class ReferencedEntityNotFoundError(DomainError):
@@ -65,24 +65,24 @@ class DuplicateError(DomainError):
 
 class DuplicateAccountNumberError(DuplicateError):
     def __init__(self, value: object):
-        super().__init__("numero_cuenta", value)
+        super().__init__("account_number", value)
 
 
-class InvalidNumeroCuentaError(DomainError):
+class InvalidNumeroAccountError(DomainError):
     """A 16-digit account number was expected. -> 400"""
 
     def __init__(self, value: object):
         self.value = value
-        super().__init__(f"numero_cuenta must be 16 digits: {value!r}")
+        super().__init__(f"account_number must be 16 digits: {value!r}")
 
 
 class AccountNotOperableError(DomainError):
-    """The account exists but its estado forbids the operation. -> 409"""
+    """The account exists but its status forbids the operation. -> 409"""
 
-    def __init__(self, numero_cuenta: str, estado: str):
-        self.numero_cuenta = numero_cuenta
-        self.estado = estado
-        super().__init__(f"account {numero_cuenta} is {estado}")
+    def __init__(self, account_number: str, status: str):
+        self.account_number = account_number
+        self.status = status
+        super().__init__(f"account {account_number} is {status}")
 
 
 class InsufficientFundsError(DomainError):

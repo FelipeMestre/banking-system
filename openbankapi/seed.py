@@ -2,7 +2,7 @@
 
 The ledger has no deposit concept: a balance is whatever the account's event log
 says. Seeding therefore produces an `incoming_payment` rather than touching
-`cuentas.saldo`, which would be a second write path to a fact Flink owns.
+`accounts.balance`, which would be a second write path to a fact Flink owns.
 
     python -m openbankapi.seed 1234567890123456=500000
 """
@@ -11,17 +11,17 @@ from __future__ import annotations
 import sys
 
 from .config import Settings
-from .domain.model import is_valid_numero_cuenta
-from .domain.service import CuentaService
+from .domain.model import is_valid_account_number
+from .domain.service import AccountService
 from .infra.kafka.adapters import KafkaEventPublisher
 
 
 def _parse(pair: str):
     account, _, amount = pair.partition("=")
     if not account or not amount:
-        raise ValueError(f"expected numero_cuenta=cents, got {pair!r}")
-    if not is_valid_numero_cuenta(account):
-        raise ValueError(f"numero_cuenta must be 16 digits, got {account!r}")
+        raise ValueError(f"expected account_number=cents, got {pair!r}")
+    if not is_valid_account_number(account):
+        raise ValueError(f"account_number must be 16 digits, got {account!r}")
     return account, int(amount)
 
 
@@ -37,7 +37,7 @@ def main(argv) -> int:
 
     settings = Settings.from_env()
     publisher = KafkaEventPublisher(settings)
-    service = CuentaService(settings, repository=None, publisher=publisher)
+    service = AccountService(settings, repository=None, publisher=publisher)
 
     for account, cents in openings:
         if cents <= 0:
