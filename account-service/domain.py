@@ -60,12 +60,23 @@ class Decision:
 
     `new_balance` is None when the balance must be left untouched — which is not
     the same as setting it to 0.
+
+    `balance_events` mirrors that write onto the `account-balances` topic (spec
+    §3.6, §4.3). The read model cannot learn a balance any other way: the
+    `transfer-status` feed only ever names the *source* account, so a credit
+    landing on a destination or a fees account would otherwise be invisible to
+    OpenBankAPI. The invariant every branch below upholds is exact — a branch
+    that sets `new_balance` emits exactly one balance event carrying that
+    post-change value, and a branch that leaves the balance alone (a decline, a
+    duplicate, a loopback confirmation) emits none. Re-announcing an unchanged
+    balance would misreport when the account last moved.
     """
 
     new_balance: Optional[int] = None
     dedup_keys: Tuple[str, ...] = ()
     account_events: Tuple[Dict[str, Any], ...] = ()
     status_events: Tuple[Dict[str, Any], ...] = ()
+    balance_events: Tuple[Dict[str, Any], ...] = ()
 
     @staticmethod
     def noop() -> "Decision":
@@ -92,7 +103,7 @@ def decide(account: str, event: Dict[str, Any], state: LedgerState, now: str) ->
     if event_type == TRANSFER_REQUESTED:
         return _on_transfer_requested(account, event, state, now)
     if event_type == INCOMING_PAYMENT:
-        return _on_incoming_payment(event, state)
+        return _on_incoming_payment(account, event, state, now)
     if event_type == OUTGOING_PAYMENT:
         # Loopback confirmation: the debit is now durably in this account's own
         # log. The balance was already reserved when the request was processed,
@@ -139,27 +150,38 @@ def _on_transfer_requested(
             account_events=(_declined(event, account, REASON_INSUFFICIENT_FUNDS, now),),
         )
 
+    # The reservation: the funds leave the source account here, before either
+    # credit has been produced, which is what stops the same balance from being
+    # promised twice.
+    reserved = balance - total
     return Decision(
-        new_balance=balance - total,
+        new_balance=reserved,
         dedup_keys=(debit_key,),
         account_events=(
             _outgoing(event, account, total, now),
             _incoming(event, event["destination_account"], amount, LEG_CREDIT_DESTINATION, now),
             _incoming(event, event["fees_account"], fee_amount, LEG_CREDIT_FEES, now),
         ),
+        balance_events=(_balance_updated(account, reserved, now),),
     )
 
 
-def _on_incoming_payment(event: Dict[str, Any], state: LedgerState) -> Decision:
+def _on_incoming_payment(
+    account: str, event: Dict[str, Any], state: LedgerState, now: str
+) -> Decision:
     leg = event.get("leg", LEG_CREDIT_DESTINATION)
     key = dedup_key(event["request_id"], leg)
 
     if state.is_processed(key):
         return Decision.noop()
 
+    # `account` rather than `event["account_id"]`: the balance record has to name
+    # the account whose keyed state just moved, and that is the operator's key.
+    credited = (state.balance or 0) + event["amount"]
     return Decision(
-        new_balance=(state.balance or 0) + event["amount"],
+        new_balance=credited,
         dedup_keys=(key,),
+        balance_events=(_balance_updated(account, credited, now),),
     )
 
 
@@ -222,3 +244,19 @@ def _status(
     if reason:
         payload["reason"] = reason
     return payload
+
+
+def _balance_updated(account: str, balance: int, now: str) -> Dict[str, Any]:
+    """A record for the `account-balances` topic (spec §3.6, §4.3).
+
+    Deliberately not shaped like the `account-events` payloads: it carries no
+    `request_id` and no `type`. The topic is compacted, so only the newest value
+    per account survives — it is a snapshot of the current balance, not a fact
+    about a transfer. Adding a `request_id` here would suggest the record could
+    be deduplicated or replayed like a ledger event, and it cannot.
+    """
+    return {
+        "account_id": account,
+        "balance": balance,
+        "ts": now,
+    }

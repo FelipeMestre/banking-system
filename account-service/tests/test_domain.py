@@ -264,3 +264,94 @@ def test_non_positive_amounts_are_rejected(bad):
 
 def test_unknown_event_types_are_ignored():
     assert decide("acc-src", {"type": "who_knows", "account_id": "acc-src"}, empty(), now=TS) == Decision.noop()
+
+
+# --- balance events feed the read model (spec §3.6) -------------------------
+
+
+def test_a_reservation_announces_the_post_debit_balance():
+    decision = decide("acc-src", transfer_requested(), empty(balance=5000), now=TS)
+
+    assert [(b["account_id"], b["balance"]) for b in decision.balance_events] == [
+        ("acc-src", 3875)
+    ]
+    assert decision.balance_events[0]["balance"] == decision.new_balance
+
+
+def test_a_credit_announces_the_post_credit_balance():
+    event = {
+        "type": "incoming_payment",
+        "request_id": "req-1",
+        "account_id": "acc-dst",
+        "amount": 1100,
+        "leg": LEG_CREDIT_DESTINATION,
+        "ts": TS,
+    }
+    decision = decide("acc-dst", event, empty(balance=200), now=TS)
+
+    assert [(b["account_id"], b["balance"]) for b in decision.balance_events] == [
+        ("acc-dst", 1300)
+    ]
+
+
+def test_the_balance_event_names_the_operator_key_not_the_payload_account():
+    """A credit is applied to whichever account's state is running, so the
+    announcement has to name that key or the read model updates the wrong row."""
+    event = {
+        "type": "incoming_payment",
+        "request_id": "req-1",
+        "account_id": "acc-dst",
+        "amount": 500,
+        "leg": LEG_CREDIT_DESTINATION,
+        "ts": TS,
+    }
+    decision = decide("acc-dst", event, empty(balance=0), now=TS)
+    assert decision.balance_events[0]["account_id"] == "acc-dst"
+
+
+def test_a_decline_announces_nothing():
+    decision = decide("acc-src", transfer_requested(), empty(balance=10), now=TS)
+    assert decision.balance_events == ()
+
+
+def test_a_duplicate_announces_nothing():
+    state = empty(balance=5000)
+    state = apply(decide("acc-src", transfer_requested(), state, now=TS), state)
+    assert decide("acc-src", transfer_requested(), state, now=TS).balance_events == ()
+
+
+def test_a_loopback_confirmation_announces_nothing():
+    """outgoing_payment does not move the balance, so re-announcing it would
+    misreport when the account last actually changed."""
+    event = {
+        "type": "outgoing_payment",
+        "request_id": "req-1",
+        "account_id": "acc-src",
+        "amount": 1125,
+        "ts": TS,
+    }
+    assert decide("acc-src", event, empty(balance=3875), now=TS).balance_events == ()
+
+
+def test_balance_records_carry_no_request_id():
+    """The topic is compacted: a record is a snapshot, not a replayable fact."""
+    decision = decide("acc-src", transfer_requested(), empty(balance=5000), now=TS)
+    assert set(decision.balance_events[0]) == {"account_id", "balance", "ts"}
+
+
+def test_every_balance_change_is_announced_exactly_once():
+    """The invariant the read model depends on, checked across every branch."""
+    cases = [
+        ("acc-src", transfer_requested(), empty(balance=5000)),
+        ("acc-src", transfer_requested(), empty(balance=1)),
+        ("acc-dst", {"type": "incoming_payment", "request_id": "r", "account_id": "acc-dst",
+                     "amount": 10, "leg": LEG_CREDIT_DESTINATION, "ts": TS}, empty(balance=0)),
+        ("acc-src", {"type": "outgoing_payment", "request_id": "r", "account_id": "acc-src",
+                     "amount": 10, "ts": TS}, empty(balance=0)),
+        ("acc-src", {"type": "declined_payment", "request_id": "r", "account_id": "acc-src",
+                     "reason": "insufficient_funds", "ts": TS}, empty(balance=0)),
+    ]
+    for account, event, state in cases:
+        decision = decide(account, event, state, now=TS)
+        expected = 0 if decision.new_balance is None else 1
+        assert len(decision.balance_events) == expected, (account, event["type"])

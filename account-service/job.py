@@ -51,6 +51,7 @@ LOG = logging.getLogger("account-service")
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:19092")
 ACCOUNT_EVENTS_TOPIC = os.getenv("ACCOUNT_EVENTS_TOPIC", "account-events")
 TRANSFER_STATUS_TOPIC = os.getenv("TRANSFER_STATUS_TOPIC", "transfer-status")
+ACCOUNT_BALANCES_TOPIC = os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances")
 CONSUMER_GROUP = os.getenv("ACCOUNT_SERVICE_GROUP_ID", "account-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -61,6 +62,11 @@ JOB_NAME = "account-service"
 # key is what routes the record to its account's shard on the way out — see §5.4.
 RECORD_TYPE = Types.ROW_NAMED(["kafka_key", "payload"], [Types.STRING(), Types.STRING()])
 STATUS_TAG = OutputTag("status-events", RECORD_TYPE)
+
+# The read model cannot learn a balance from `transfer-status`: that feed only
+# ever names the source account, so a credit landing on a destination or fees
+# account would be invisible to OpenBankAPI (spec §3.6).
+BALANCES_TAG = OutputTag("balance-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -139,6 +145,8 @@ class AccountProcessor(KeyedProcessFunction):
             yield Row(shard_key_of(produced), json.dumps(produced))
         for status in decision.status_events:
             yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
+        for balance in decision.balance_events:
+            yield BALANCES_TAG, Row(balance["account_id"], json.dumps(balance))
 
 
 def _row_field_schema(field_index: int) -> SerializationSchema:
@@ -210,6 +218,11 @@ def build_job():
     processed.get_side_output(STATUS_TAG).sink_to(
         _kafka_sink(TRANSFER_STATUS_TOPIC)
     ).name("transfer-status-sink")
+    # Keyed by account_id so the compacted topic retains the latest balance per
+    # account, which is exactly what the read-model consumer needs (spec §4.3).
+    processed.get_side_output(BALANCES_TAG).sink_to(
+        _kafka_sink(ACCOUNT_BALANCES_TOPIC)
+    ).name("account-balances-sink")
 
     env.execute(JOB_NAME)
 
