@@ -1,7 +1,9 @@
-# Banking Payment System — Backend
+# OpenBankAPI — Backend
 
-Implementation of [`system_spec.md`](system_spec.md): a multishard payment flow
-built on event logs and stream processing, with no distributed transaction.
+Implementation of [`openbankapi-spec-v2.md`](openbankapi-spec-v2.md) (which
+supersedes [`system_spec.md`](system_spec.md)): a multishard payment flow built
+on event logs and stream processing, with no distributed transaction, plus the
+relational reference data and read model that v2 adds.
 
 Backend and frontend. The Next.js app runs on the host, outside Compose, and
 talks to the gateway directly (§7, §8).
@@ -16,14 +18,18 @@ account-service/
   java/                     One class: the field-extracting serialization schema
   submit.sh                 Waits for a task slot, then submits the job
   tests/test_domain.py      Ledger rules, incl. the §9 scenarios
-gateway/
-  app.py                    FastAPI routes (§6), built by a factory
-  transfers.py              Fee + request construction (pure)
-  status_registry.py        Fan-out from one Kafka consumer to many waiters
-  kafka_adapter.py          confluent-kafka producer + status consumer thread
-  seed.py                   Seeds opening balances out-of-band
+openbankapi/                Domain-Driven Design layout (v2 §7.1)
+  domain/model/             Entities: cuenta, cliente, sucursal, locacion
+  domain/events/            Domain events, independent of any wire format
+  domain/service/           Use cases: transferencia, cuenta
+  domain/exceptions.py      Errors that carry meaning, not status codes
+  controllers/              Routers + DTOs (the API contract)
+  infra/database/           ORM, repository ports, Postgres implementations
+  infra/cache/              ICacheService port + Redis adapter
+  infra/kafka/              Publisher port, producer, both consumers
   main.py                   Composition root
-  tests/                    HTTP, WebSocket, registry, fee rules
+  tests/                    Every layer, with fakes for every port
+infra/postgres/init.sql     The four tables from v2 §3
 frontend/                   Next.js App Router + TypeScript (§7)
   app/page.tsx              The single page
   components/               Form, outcome view, and the state machine
@@ -41,7 +47,7 @@ Seed some balances (the ledger has no deposit concept — a balance is whatever
 the account's event log says):
 
 ```bash
-docker compose exec gateway python -m gateway.seed acc-123=500000 acc-456=0 acc-fees=0
+docker compose exec gateway python -m openbankapi.seed 1234567890123456=500000
 ```
 
 Send a transfer:
