@@ -65,12 +65,12 @@ def test_the_update_dto_has_no_balance_field_at_all():
 
 
 def test_sending_balance_in_an_update_is_rejected(wired):
-    numero = _create(wired).json()["account_number"]
+    account_number = _create(wired).json()["account_number"]
 
-    response = wired.client.put(f"/accounts/{numero}", json={"balance": 999999})
+    response = wired.client.put(f"/accounts/{account_number}", json={"balance": 999999})
 
     assert response.status_code == 422
-    assert wired.client.get(f"/accounts/{numero}").json()["balance"] == 0
+    assert wired.client.get(f"/accounts/{account_number}").json()["balance"] == 0
 
 
 def test_a_legitimate_update_still_leaves_the_balance_alone(wired):

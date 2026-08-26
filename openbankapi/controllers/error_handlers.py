@@ -17,7 +17,7 @@ from ..domain.exceptions import (
     DomainError,
     DuplicateError,
     InsufficientFundsError,
-    InvalidNumeroAccountError,
+    InvalidAccountNumberError,
     NotFoundError,
     ReferencedEntityNotFoundError,
 )
@@ -29,7 +29,7 @@ _STATUS = [
     (ReferencedEntityNotFoundError, 422),
     (DuplicateError, 409),
     (AccountNotOperableError, 409),
-    (InvalidNumeroAccountError, 400),
+    (InvalidAccountNumberError, 400),
     (InsufficientFundsError, 409),
 ]
 

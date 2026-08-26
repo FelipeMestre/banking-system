@@ -70,9 +70,9 @@ class PostgresAccountRepository(PostgresRepository):
         """
         last: Optional[DuplicateAccountNumberError] = None
         for attempt in range(_GENERATION_ATTEMPTS):
-            numero = generate_account_number()
+            account_number = generate_account_number()
             values = {
-                "account_number": numero,
+                "account_number": account_number,
                 "currency": currency,
                 "customer_id": customer_id,
                 "branch_id": branch_id,
@@ -92,7 +92,7 @@ class PostgresAccountRepository(PostgresRepository):
                 LOG.warning("account_number collision on attempt %d; retrying", attempt + 1)
         raise last if last else RuntimeError("account creation failed without a cause")
 
-    async def get_by_numero(self, account_number: str) -> Optional[Account]:
+    async def get_by_account_number(self, account_number: str) -> Optional[Account]:
         row = await self._fetch_one(AccountORM, AccountORM.account_number == account_number)
         return _to_domain(row) if row else None
 

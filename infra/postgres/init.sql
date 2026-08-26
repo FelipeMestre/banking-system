@@ -1,9 +1,4 @@
--- OpenBankAPI relational schema.
---
--- The spec (§3) names these tables and columns in Spanish; this project keeps
--- all code, including DDL, in English. The mapping is one-to-one:
---   locaciones -> locations   sucursales -> branches
---   clientes   -> customers   cuentas    -> accounts
+-- OpenBankAPI relational schema (spec §3).
 --
 -- This script is the ONLY thing that creates these tables. There is no Alembic
 -- and no `Base.metadata.create_all` (spec §10): the ORM mappings in

@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 Currency = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True,
                                           min_length=3, max_length=3)]
-NumeroAccount = Annotated[str, StringConstraints(pattern=r"^[0-9]{16}$")]
+AccountNumber = Annotated[str, StringConstraints(pattern=r"^[0-9]{16}$")]
 
 
 class AccountCreateDTO(BaseModel):

@@ -49,7 +49,7 @@ def build_router(service, repository, cache, ttl_seconds: int) -> APIRouter:
         hundred milliseconds. Stale is acceptable; wrong is not."""
         found = await read_through(
             cache, cache_key(ENTITY, account_number),
-            lambda: repository.get_by_numero(account_number), _dto, ttl_seconds,
+            lambda: repository.get_by_account_number(account_number), _dto, ttl_seconds,
         )
         if found is None:
             raise AccountNotFoundError(account_number)

@@ -165,7 +165,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL_SECONDS: "300"
       CORS_ALLOW_ORIGINS: http://localhost:3000
-      # A 16-digit number now: 'acc-fees' would fail the cuentas CHECK, and this
+      # A 16-digit number now: 'acc-fees' would fail the accounts CHECK, and this
       # value is a Kafka partition key.
       FEES_ACCOUNT: "0000000000000001"
       FEE_FLAT_CENTS: "25"

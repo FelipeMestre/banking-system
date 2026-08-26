@@ -191,18 +191,18 @@ class FakeAccountRepository:
 
         for _ in range(5):
             self.attempts += 1
-            numero = generate_account_number()
+            account_number = generate_account_number()
             if self.collide_times > 0:
                 self.collide_times -= 1
                 continue  # simulate the UNIQUE violation the real repo retries
-            entity = Account(id=uuid.uuid4(), account_number=numero, currency=currency,
+            entity = Account(id=uuid.uuid4(), account_number=account_number, currency=currency,
                             customer_id=customer_id, branch_id=branch_id, balance=0,
                             status=AccountStatus.ACTIVE, created_at=_now(), updated_at=_now())
-            self.rows[numero] = entity
+            self.rows[account_number] = entity
             return entity
         raise DuplicateAccountNumberError("exhausted")
 
-    async def get_by_numero(self, account_number: str) -> Optional[Account]:
+    async def get_by_account_number(self, account_number: str) -> Optional[Account]:
         return self.rows.get(account_number)
 
     async def list(self, *, limit: int, offset: int) -> Page:

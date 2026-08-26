@@ -36,7 +36,7 @@ security hardening, real money.
 
 ```mermaid
 flowchart TB
-    subgraph Host["Tu máquina (host, fuera de Docker)"]
+    subgraph Host["Your machine (host, outside Docker)"]
         FE["Frontend<br/>Next.js + TypeScript"]
     end
     subgraph Compose["docker-compose.yml"]
@@ -46,12 +46,12 @@ flowchart TB
         UI["Kafka UI<br/>AKHQ"]
     end
     FE -- "POST /transfer" --> GW
-    GW -- "WebSocket: estado final" --> FE
+    GW -- "WebSocket: final status" --> FE
     GW -- "produce: transfer_requested" --> KAFKA
     KAFKA -- "consume: transfer-status" --> GW
     KAFKA <-- "consume account-events" --> FLINK
     FLINK -- "produce account-events + transfer-status" --> KAFKA
-    KAFKA -.monitoreo, solo lectura.-> UI
+    KAFKA -.monitoring, read-only.-> UI
 ```
 
 | Componente | Tecnología | Lenguaje |
@@ -446,8 +446,8 @@ The coding agent should implement and pass these before calling it done:
 
 ---
 
-## 10. Cosas a tener en cuenta
+## 10. Things to keep in mind
 
-- El esqueleto de código de §5.7 es una guía de diseño, no algo que vaya a
-  compilar tal cual — las firmas exactas de PyFlink cambian entre versiones,
-  así que hay que ajustarlo contra la versión que se instale.
+- The code skeleton in §5.7 is a design guide, not something that will compile
+  as-is — PyFlink's exact signatures change between versions, so it has to be
+  adjusted against whichever version gets installed.

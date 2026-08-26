@@ -7,15 +7,20 @@ architecture (Kafka + PyFlink for the event-sourced ledger, per *Designing
 Data-Intensive Applications* Ch. 13), with these changes:
 
 - Project renamed **OpenBankAPI**.
-- Full relational data model: `cuentas`, `sucursales`, `locaciones`,
-  `clientes` (§3).
+- Full relational data model: `accounts`, `branches`, `locations`,
+  `customers` (§3).
 - A new Kafka topic, `account-balances`, and a new consumer — required to
-  keep `cuentas.saldo` in sync without breaking the event-sourced design
+  keep `accounts.balance` in sync without breaking the event-sourced design
   (§3.5, §4.3, §6).
 - A Domain-Driven Design folder structure for the OpenBankAPI codebase (§7).
 
 Hand this whole file to a coding agent as the spec to implement against —
 it does not assume the agent has also read v1.
+
+**Naming:** this revision states every table, column, endpoint and identifier in
+English. Earlier drafts used Spanish domain terms (`cuentas`, `saldo`,
+`sucursales`); the implementation is English throughout, and this document was
+brought in line so there is exactly one vocabulary to reason about.
 
 ---
 
@@ -41,28 +46,28 @@ security hardening, real money.
 
 ```mermaid
 flowchart TB
-    subgraph Host["Tu máquina (host, fuera de Docker)"]
+    subgraph Host["Your machine (host, outside Docker)"]
         FE["Frontend<br/>Next.js + TypeScript"]
     end
     subgraph Compose["docker-compose.yml"]
-        API["OpenBankAPI<br/>FastAPI (Python)<br/>pagos + ABM"]
+        API["OpenBankAPI<br/>FastAPI (Python)<br/>payments + CRUD"]
         KAFKA[("Kafka broker<br/>KRaft mode, 1 nodo")]
         FLINK["Account Service<br/>PyFlink job"]
         UI["Kafka UI<br/>AKHQ"]
-        PG[("Postgres<br/>cuentas, clientes,<br/>sucursales, locaciones")]
+        PG[("Postgres<br/>accounts, customers,<br/>branches, locations")]
         REDIS[("Redis<br/>cache")]
     end
-    FE -- "POST /transfer, /cuentas, /clientes..." --> API
-    API -- "WebSocket: estado final" --> FE
+    FE -- "POST /transfer, /accounts, /customers..." --> API
+    API -- "WebSocket: final status" --> FE
     API -- "produce: transfer_requested" --> KAFKA
     KAFKA -- "consume: transfer-status" --> API
     KAFKA -- "consume: account-balances" --> API
     KAFKA <-- "consume account-events" --> FLINK
     FLINK -- "produce account-events, transfer-status, account-balances" --> KAFKA
-    KAFKA -.monitoreo, solo lectura.-> UI
+    KAFKA -.monitoring, read-only.-> UI
     API -- "cache-aside" --> REDIS
     API -- "CRUD (metadata only)" --> PG
-    PG -.CDC, futuro.-> KAFKA
+    PG -.CDC, future.-> KAFKA
 ```
 
 | Componente | Tecnología | Lenguaje |
@@ -86,75 +91,75 @@ on purpose for local-prototype simplicity — see §12 for the trade-off.
 ### 3.1 Entity relationships
 
 ```
-locaciones (1) ──< sucursales (1) ──< cuentas >── (1) clientes
+locations (1) ──< branches (1) ──< accounts >── (1) customers
 ```
 
-- One `locacion` has many `sucursales`.
-- One `sucursal` has many `cuentas`.
-- One `cliente` can have many `cuentas`.
+- One `location` has many `branches`.
+- One `branch` has many `accounts`.
+- One `customer` can have many `accounts`.
 
-### 3.2 `locaciones`
+### 3.2 `locations`
 
-The user's spec was "a table with `nombre` and `id`" — kept minimal, with
+The user's spec was "a table with `name` and `id`" — kept minimal, with
 timestamps added for the same audit reasons as every other table here.
 
 ```sql
-CREATE TABLE locaciones (
+CREATE TABLE locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nombre VARCHAR(150) NOT NULL,
+    name VARCHAR(150) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-### 3.3 `sucursales`
+### 3.3 `branches`
 
 **Changed from v1:** dropped the free-text `direccion`/`region` columns in
-favor of the `locaciones` FK, since that's what the new schema specifies.
+favor of the `locations` FK, since that's what the new schema specifies.
 
 ```sql
-CREATE TABLE sucursales (
+CREATE TABLE branches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    codigo VARCHAR(10) UNIQUE NOT NULL,
-    nombre VARCHAR(200) NOT NULL,
-    locacion_id UUID NOT NULL REFERENCES locaciones(id),
-    activa BOOLEAN NOT NULL DEFAULT true,
+    code VARCHAR(10) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    location_id UUID NOT NULL REFERENCES locations(id),
+    active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-### 3.4 `clientes`
+### 3.4 `customers`
 
 **Gaps filled (flagged explicitly, verify these match intent):**
-- No `age` column — computed from `fecha_nacimiento` at read time, never
+- No `age` column — computed from `date_of_birth` at read time, never
   stored (a stored age goes stale the moment it's written).
 - "id number" interpreted as a real-world identification number (DNI/
   cédula-equivalent) — a *business* identifier, distinct from the internal
   UUID primary key every other table in this system uses. Rename it if this
   guess is wrong.
-- Added `activo` + timestamps for the same reasons as every other entity.
+- Added `active` + timestamps for the same reasons as every other entity.
 
 ```sql
-CREATE TABLE clientes (
+CREATE TABLE customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    numero_identificacion VARCHAR(20) UNIQUE NOT NULL,
-    nombre VARCHAR(100) NOT NULL,
-    apellido VARCHAR(100) NOT NULL,
-    fecha_nacimiento DATE NOT NULL,
-    genero VARCHAR(20),
-    activo BOOLEAN NOT NULL DEFAULT true,
+    identification_number VARCHAR(20) UNIQUE NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    date_of_birth DATE NOT NULL,
+    gender VARCHAR(20),
+    active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-`fecha_nacimiento` and `genero` are personal data. Not adding access
+`date_of_birth` and `gender` are personal data. Not adding access
 control or encryption-at-rest for this prototype (out of scope per §1), but
 don't log these fields in application logs — cheap to get right now, ugly
 to retrofit later.
 
-### 3.5 `cuentas` — and the critical part: `saldo` is not a normal column
+### 3.5 `accounts` — and the critical part: `balance` is not a normal column
 
 **Changed from v1:** account identifiers are now real 16-digit account
 numbers instead of placeholder strings like `"acc-123"`. This value is
@@ -163,51 +168,51 @@ topic from §4 — no separate mapping, no lookup table. The 16-digit number
 *is* the shard key.
 
 ```sql
-CREATE TABLE cuentas (
+CREATE TABLE accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    numero_cuenta CHAR(16) UNIQUE NOT NULL
-        CHECK (numero_cuenta ~ '^[0-9]{16}$'),
-    moneda CHAR(3) NOT NULL,                    -- ISO 4217: USD, ARS, UYU...
-    cliente_id UUID NOT NULL REFERENCES clientes(id),
-    sucursal_id UUID NOT NULL REFERENCES sucursales(id),
-    saldo BIGINT NOT NULL DEFAULT 0,             -- cents. READ-ONLY. See below.
-    estado VARCHAR(20) NOT NULL DEFAULT 'activa',-- activa | bloqueada | cerrada
+    account_number CHAR(16) UNIQUE NOT NULL
+        CHECK (account_number ~ '^[0-9]{16}$'),
+    currency CHAR(3) NOT NULL,                    -- ISO 4217: USD, ARS, UYU...
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    branch_id UUID NOT NULL REFERENCES branches(id),
+    balance BIGINT NOT NULL DEFAULT 0,             -- cents. READ-ONLY. See below.
+    status VARCHAR(20) NOT NULL DEFAULT 'active',-- active | blocked | closed
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-**`saldo` must never be written by any CRUD endpoint.** This is the single
+**`balance` must never be written by any CRUD endpoint.** This is the single
 most important rule in this whole document. If a coding agent adds
-`saldo` to the `PUT /cuentas/{numero_cuenta}` request DTO, it has broken
+`balance` to the `PUT /accounts/{account_number}` request DTO, it has broken
 the entire architecture — it would create a second, uncoordinated write
 path to the same fact (account balance) that Kafka + Flink already own,
 which is exactly the "distributed transaction across heterogeneous
 systems" problem this whole design exists to avoid.
 
-`saldo` in this table is a **read-model / CQRS query-side projection**,
+`balance` in this table is a **read-model / CQRS query-side projection**,
 kept eventually consistent with Flink's true state by a dedicated
-mechanism (§3.6). The `controllers/dtos` DTO for updating a `cuenta`
-(§7) must not include a `saldo` field at all — make it structurally
+mechanism (§3.6). The `controllers/dtos` DTO for updating a `account`
+(§7) must not include a `balance` field at all — make it structurally
 impossible to set, not just validated-away.
 
 **Why this doesn't cause a chicken-and-egg problem at account creation:**
 Flink lazily initializes an account's `balance` state to `0` the first time
 it sees *any* event for that key (already specified in v1's processing
-logic). Postgres also defaults `saldo` to `0`. Both sides agree at t=0 with
+logic). Postgres also defaults `balance` to `0`. Both sides agree at t=0 with
 no synchronization event required. If an account needs a non-zero opening
 balance, don't write it directly to Postgres — have OpenBankAPI produce an
 `incoming_payment` event (system-generated `request_id`) onto
 `account-events`, the same event-sourced path every other credit takes.
 
-### 3.6 Keeping `cuentas.saldo` in sync — the missing piece
+### 3.6 Keeping `accounts.balance` in sync — the missing piece
 
 `transfer-status` (v1) only carries the *source* account's `account_id` —
 not enough to update the destination or fees account's balance in the read
 model. This needs a **new Kafka topic**:
 
 **`account-balances`**
-- **Key:** `account_id` (the 16-digit `numero_cuenta`).
+- **Key:** `account_id` (the 16-digit `account_number`).
 - **Cleanup policy:** `compact` — only the latest balance per account
   matters, unlike `account-events` which keeps full history.
 - **Value:**
@@ -218,14 +223,14 @@ model. This needs a **new Kafka topic**:
   time `balance` state changes for any account (in the `transfer_requested`
   reservation and in every `incoming_payment` credit).
 - **Consumed by:** a new background consumer in OpenBankAPI (§8.1) that
-  upserts `UPDATE cuentas SET saldo = ?, updated_at = now() WHERE
-  numero_cuenta = ?` for each message, and invalidates that account's Redis
+  upserts `UPDATE accounts SET balance = ?, updated_at = now() WHERE
+  account_number = ?` for each message, and invalidates that account's Redis
   cache entry if present.
 
-`GET /cuentas/{numero_cuenta}` therefore returns an **eventually
+`GET /accounts/{account_number}` therefore returns an **eventually
 consistent** view of the balance — same timeliness-vs-integrity trade-off
 discussed for the credit card statement example: a few hundred
-milliseconds of staleness on `saldo` is fine, a wrong `saldo` is not. If a
+milliseconds of staleness on `balance` is fine, a wrong `balance` is not. If a
 caller needs the authoritative up-to-the-instant balance, that's a
 different, harder feature (not in scope here — it would mean querying
 Flink's state directly, which runs into the same Queryable-State
@@ -236,7 +241,7 @@ limitations already discussed).
 ## 4. Kafka topics
 
 ### 4.1 `account-events`
-- **Key:** `account_id` = 16-digit `numero_cuenta` (string).
+- **Key:** `account_id` = 16-digit `account_number` (string).
 - **Partitions:** 6. **Replication factor:** 1. **Cleanup:** `delete`, 7-day
   retention. **Value:** JSON (see §5).
 
@@ -246,11 +251,11 @@ limitations already discussed).
   subscribes to.
 
 ### 4.3 `account-balances` (new in v2)
-- **Key:** `account_id` = 16-digit `numero_cuenta`. **Partitions:** 6
+- **Key:** `account_id` = 16-digit `account_number`. **Partitions:** 6
   (match `account-events` so the same key always lands on a comparable
   partition count — not a hard requirement, just tidy).
 - **Cleanup policy:** `compact` (not `delete` — see §3.6).
-- Feeds the `cuentas.saldo` read-model sync consumer in OpenBankAPI.
+- Feeds the `accounts.balance` read-model sync consumer in OpenBankAPI.
 
 ---
 
@@ -334,40 +339,40 @@ openbankapi/
 │                                  # into the controllers
 ├── domain/
 │   ├── model/
-│   │   ├── cuenta.py             # Account — aggregate root (balance invariants)
-│   │   ├── cliente.py            # Customer entity
-│   │   ├── sucursal.py           # Branch entity
-│   │   └── locacion.py           # Location entity/value object
+│   │   ├── account.py             # Account — aggregate root (balance invariants)
+│   │   ├── customer.py            # Customer entity
+│   │   ├── branch.py           # Branch entity
+│   │   └── location.py           # Location entity/value object
 │   ├── events/
 │   │   ├── transfer_requested.py
 │   │   ├── account_created.py
 │   │   └── balance_updated.py
 │   ├── service/
-│   │   └── transferencia_service.py   # use-case logic: validate transfer, compute
+│   │   └── transfer_service.py   # use-case logic: validate transfer, compute
 │   │                                   # fees, call repositories from infra
 │   └── exceptions.py             # InsufficientFundsError, AccountNotFoundError, ...
 ├── controllers/
 │   ├── dtos/                     # Pydantic request/response DTOs (the API contract)
 │   │   ├── transfer_dto.py
-│   │   ├── cuenta_dto.py         # CuentaUpdateDTO has NO saldo field — see §3.5
-│   │   ├── cliente_dto.py
-│   │   └── sucursal_dto.py
+│   │   ├── account_dto.py         # AccountUpdateDTO has NO balance field — see §3.5
+│   │   ├── customer_dto.py
+│   │   └── branch_dto.py
 │   ├── transfer_controller.py
-│   ├── cuenta_controller.py
-│   ├── cliente_controller.py
-│   └── sucursal_controller.py
+│   ├── account_controller.py
+│   ├── customer_controller.py
+│   └── branch_controller.py
 └── infra/
     ├── database/
     │   ├── models.py              # ORM table definitions (matches §3 schemas)
     │   ├── interfaces/            # repository contracts
-    │   │   ├── cuenta_repository.py       # ICuentaRepository
-    │   │   ├── cliente_repository.py
-    │   │   ├── sucursal_repository.py
-    │   │   └── locacion_repository.py
+    │   │   ├── account_repository.py       # IAccountRepository
+    │   │   ├── customer_repository.py
+    │   │   ├── branch_repository.py
+    │   │   └── location_repository.py
     │   └── repositories/          # concrete Postgres implementations
-    │       ├── postgres_cuenta_repository.py
-    │       ├── postgres_cliente_repository.py
-    │       └── postgres_sucursal_repository.py
+    │       ├── postgres_account_repository.py
+    │       ├── postgres_customer_repository.py
+    │       └── postgres_branch_repository.py
     ├── cache/
     │   ├── interfaces/
     │   │   └── cache_service.py  # ICacheService port
@@ -380,7 +385,7 @@ openbankapi/
         │   └── kafka_producer_adapter.py  # confluent-kafka wrapper, implements the port
         └── services/
             ├── transfer_status_consumer.py  # WS fan-out (v1 §8.1 behavior)
-            └── account_balance_consumer.py  # NEW — syncs cuentas.saldo, §3.6
+            └── account_balance_consumer.py  # NEW — syncs accounts.balance, §3.6
 ```
 
 ### 7.2 Notes on this structure
@@ -409,11 +414,11 @@ openbankapi/
 - **`controllers/dtos/`** (not `controllers/interfaces/`) for Pydantic
   request/response models, distinct from `domain/model` entities. Don't
   return domain entities directly from an endpoint — map them to a DTO.
-  This is what makes it structurally impossible to leak a `saldo` field
+  This is what makes it structurally impossible to leak a `balance` field
   into a `PUT` request body (§3.5): the DTO simply doesn't declare one.
 - **No separate `application`/use-case layer.** `domain/service` absorbs
   use-case orchestration for now. Worth splitting out later only if
-  `transferencia_service.py` (or similar) grows unwieldy — not needed at
+  `transfer_service.py` (or similar) grows unwieldy — not needed at
   this project's current size.
 
 ---
@@ -429,21 +434,21 @@ controller's background Kafka consumer set now includes
 `account_balance_consumer.py` (§7.1, §3.6) alongside the existing
 `transfer_status_consumer.py`.
 
-### 8.2 Reference data (ABM) endpoints — Postgres + Redis, cache-aside
+### 8.2 Reference data (CRUD) endpoints — Postgres + Redis, cache-aside
 
 Same CRUD + cache-aside + soft-delete pattern as v1 for **all four**
-entities (`locaciones`, `sucursales`, `clientes`, `cuentas`). Cache key
-convention: `{entity}:{id}` (e.g. `cuenta:1234567890123456`,
-`cliente:{uuid}`), 5-minute TTL, explicit invalidation on write.
+entities (`locations`, `branches`, `customers`, `accounts`). Cache key
+convention: `{entity}:{id}` (e.g. `account:1234567890123456`,
+`customer:{uuid}`), 5-minute TTL, explicit invalidation on write.
 
 | Entity | Create | Read | List | Update | Delete |
 |---|---|---|---|---|---|
-| `locaciones` | `POST /locaciones` | `GET /locaciones/{id}` | `GET /locaciones` | `PUT /locaciones/{id}` | — (no delete; referenced by `sucursales`) |
-| `sucursales` | `POST /sucursales` | `GET /sucursales/{id}` | `GET /sucursales` | `PUT /sucursales/{id}` | Soft (`activa=false`) |
-| `clientes` | `POST /clientes` | `GET /clientes/{id}` | `GET /clientes` | `PUT /clientes/{id}` | Soft (`activo=false`) |
-| `cuentas` | `POST /cuentas` | `GET /cuentas/{numero_cuenta}` | `GET /cuentas` | `PUT /cuentas/{numero_cuenta}` — **never `saldo`** | Soft (`estado='cerrada'`) |
+| `locations` | `POST /locations` | `GET /locations/{id}` | `GET /locations` | `PUT /locations/{id}` | — (no delete; referenced by `branches`) |
+| `branches` | `POST /branches` | `GET /branches/{id}` | `GET /branches` | `PUT /branches/{id}` | Soft (`active=false`) |
+| `customers` | `POST /customers` | `GET /customers/{id}` | `GET /customers` | `PUT /customers/{id}` | Soft (`active=false`) |
+| `accounts` | `POST /accounts` | `GET /accounts/{account_number}` | `GET /accounts` | `PUT /accounts/{account_number}` — **never `balance`** | Soft (`status='closed'`) |
 
-`POST /cuentas` generates `numero_cuenta` server-side (16 random digits,
+`POST /accounts` generates `account_number` server-side (16 random digits,
 retry on the `UNIQUE` constraint violation) rather than accepting it from
 the client — this is the value that becomes the Kafka partition key, so it
 has to be correct by construction, not by request validation.
@@ -455,8 +460,8 @@ has to be correct by construction, not by request validation.
 Same as v1: single page, Next.js (App Router) + TypeScript, calls
 OpenBankAPI directly (`fetch` for HTTP, native `WebSocket` for
 confirmation), CORS enabled on OpenBankAPI for the Next.js origin. Add
-simple forms for the new ABM entities (`cuentas`, `clientes`,
-`sucursales`, `locaciones`) following the same submit → confirm pattern as
+simple forms for the new CRUD entities (`accounts`, `customers`,
+`branches`, `locations`) following the same submit → confirm pattern as
 the transfer form — no new architectural ground here, just more forms.
 
 ---
@@ -476,44 +481,43 @@ all four tables from §3), `redis`, `gateway` (OpenBankAPI, `depends_on:
 
 All of v1's scenarios still apply (happy path, insufficient funds,
 duplicate request, crash-recovery, concurrent requests, sharding sanity
-check, ABM cache correctness, ABM soft delete — generalized to whichever
+check, CRUD cache correctness, CRUD soft delete — generalized to whichever
 entity is under test). New for v2:
 
-1. **Account creation** — `POST /cuentas` with a valid `cliente_id` and
-   `sucursal_id` returns a 16-digit `numero_cuenta` and `saldo: 0`.
+1. **Account creation** — `POST /accounts` with a valid `customer_id` and
+   `branch_id` returns a 16-digit `account_number` and `balance: 0`.
    Retrying with a colliding generated number (force it in a test) doesn't
    surface a `500` — the retry-on-`UNIQUE`-violation logic kicks in
    transparently.
 2. **Balance read-model sync** — perform a transfer between two existing
-   accounts; poll `GET /cuentas/{numero_cuenta}` for both source and
-   destination until `saldo` reflects the transfer (bounded wait, e.g. 5s);
+   accounts; poll `GET /accounts/{account_number}` for both source and
+   destination until `balance` reflects the transfer (bounded wait, e.g. 5s);
    confirm it matches what Flink's state produced.
-3. **`saldo` is not writable** — attempt `PUT /cuentas/{numero_cuenta}`
-   with a `saldo` field in the body; confirm it's rejected at the DTO
+3. **`balance` is not writable** — attempt `PUT /accounts/{account_number}`
+   with a `balance` field in the body; confirm it's rejected at the DTO
    validation layer (422) or silently ignored — either is acceptable, a
    changed balance is not.
-4. **Referential integrity** — attempt to create a `sucursal` with a
-   nonexistent `locacion_id`, or a `cuenta` with a nonexistent
-   `cliente_id`/`sucursal_id`; confirm a clean `4xx`, not a raw DB
+4. **Referential integrity** — attempt to create a `branch` with a
+   nonexistent `location_id`, or a `account` with a nonexistent
+   `customer_id`/`branch_id`; confirm a clean `4xx`, not a raw DB
    constraint error leaking to the client.
 
 ---
 
-## 12. Cosas a tener en cuenta
+## 12. Things to keep in mind
 
-- El esqueleto de código del job de PyFlink (v1 §5.7) es una guía de
-  diseño, no algo que vaya a compilar tal cual — las firmas exactas de
-  PyFlink cambian entre versiones, así que hay que ajustarlo contra la
-  versión que se instale.
-- OpenBankAPI fusiona pagos y ABM en un solo proceso FastAPI a propósito —
-  es una decisión de simplicidad para un prototipo local, no la forma
-  "correcta" para producción. El patrón más realista sería un edge API
-  Gateway (por ejemplo Traefik) enrutando por path hacia servicios
-  separados. Revisar esto si el proyecto crece más allá del prototipo.
-- `saldo` en `cuentas` es una proyección, no la fuente de verdad — si en
-  algún momento algo se siente "raro" con los balances (delay visible,
-  inconsistencias transitorias), lo primero a revisar es el consumer de
-  `account-balances` (§3.6), no la lógica de Flink.
-- `fecha_nacimiento` y `genero` en `clientes` son datos personales — no
-  loguearlos, aunque el resto de los controles de seguridad estén fuera de
-  alcance para este prototipo.
+- The PyFlink job's code skeleton (v1 §5.7) is a design guide, not something
+  that will compile as-is — PyFlink's exact signatures change between versions,
+  so it has to be adjusted against whichever version gets installed.
+- OpenBankAPI merges payments and reference-data CRUD into a single FastAPI
+  process on purpose — a simplicity decision for a local prototype, not the
+  "correct" shape for production. The more realistic pattern would be an edge
+  API gateway (Traefik, say) routing by path to separate services. Revisit this
+  if the project grows beyond a prototype.
+- `balance` on `accounts` is a projection, not the source of truth — if
+  balances ever feel "off" (visible delay, transient inconsistencies), the
+  first thing to check is the `account-balances` consumer (§3.6), not Flink's
+  logic.
+- `date_of_birth` and `gender` on `customers` are personal data — do not log
+  them, even though the rest of the security controls are out of scope for this
+  prototype.

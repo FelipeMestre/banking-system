@@ -217,26 +217,23 @@ the total across all accounts equalled the seeded total, to the cent.
 
 ## Naming
 
-The spec names its tables, columns and endpoints in Spanish (`cuentas`,
-`saldo`, `sucursales`). This implementation keeps **all code in English** — a
-deliberate divergence from the document, applied consistently across the DDL,
-the ORM, the DTOs and the routes:
+Everything — schema, ORM, DTOs, routes, and the spec itself — uses English.
+Earlier drafts of the spec named the domain in Spanish (`cuentas`, `saldo`,
+`sucursales`); both were brought in line so there is one vocabulary, not a
+mapping to hold in your head.
 
-| Spec | Here |
-|---|---|
-| `locaciones` / `sucursales` | `locations` / `branches` |
-| `clientes` / `cuentas` | `customers` / `accounts` |
-| `saldo` / `moneda` / `estado` | `balance` / `currency` / `status` |
-| `numero_cuenta` | `account_number` |
-| `nombre` / `apellido` | `name` (`first_name` on a customer) / `last_name` |
-| `activa` / `bloqueada` / `cerrada` | `active` / `blocked` / `closed` |
+Two tests keep that honest rather than trusting a rename pass:
 
-Two tests keep this honest rather than trusting a rename pass:
-`test_schema_alignment.py` parses `init.sql` and asserts the ORM maps exactly
-those columns, and `test_controller_dto_alignment.py` asserts every
-`body.<field>` a controller reads is declared by its DTO. Both were written
-after a global rename passed all 77 tests while the live API returned 500 —
-fakes mirror whatever the code says, so only the real schema can catch drift.
+- `test_schema_alignment.py` parses `init.sql` and asserts the ORM maps exactly
+  the columns the schema declares.
+- `test_controller_dto_alignment.py` asserts every `body.<field>` a controller
+  reads is declared by its DTO.
+
+Both were written after a global rename passed all 77 tests while the live API
+returned 500 twice. Fakes mirror whatever the code says, so only the real schema
+can catch a mapping that drifted. The same rename also turned `deactivate` into
+`deactivete` in eight places — `activa` is a substring of de-activa-te — and
+every test still passed, because it was corrupted consistently.
 
 ## Frontend notes
 

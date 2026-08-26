@@ -68,7 +68,7 @@ class DuplicateAccountNumberError(DuplicateError):
         super().__init__("account_number", value)
 
 
-class InvalidNumeroAccountError(DomainError):
+class InvalidAccountNumberError(DomainError):
     """A 16-digit account number was expected. -> 400"""
 
     def __init__(self, value: object):

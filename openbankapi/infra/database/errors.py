@@ -20,7 +20,7 @@ from ...domain.exceptions import (
     DomainError,
     DuplicateAccountNumberError,
     DuplicateError,
-    InvalidNumeroAccountError,
+    InvalidAccountNumberError,
     ReferencedEntityNotFoundError,
 )
 
@@ -80,7 +80,7 @@ def translate(error: IntegrityError, *, values: Optional[dict] = None) -> Domain
         return DuplicateError(field, values.get(field))
 
     if name == "accounts_account_number_check":
-        return InvalidNumeroAccountError(values.get("account_number"))
+        return InvalidAccountNumberError(values.get("account_number"))
 
     # An unrecognised constraint is a real bug, not a client error. Re-raising
     # the original keeps the traceback instead of flattening it into a 4xx.
