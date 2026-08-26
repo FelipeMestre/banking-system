@@ -1,6 +1,6 @@
 """Makes both backend components importable from the repository root.
 
-`gateway` is a package; the Flink job ships `domain.py` as a flat module via
+`openbankapi` is a package; the Flink job ships `domain.py` as a flat module via
 `--pyFiles`, so it is imported by bare name both here and on the cluster.
 """
 import os

@@ -1,0 +1,69 @@
+"""Domain error -> HTTP status. This translation lives here and nowhere else.
+
+The domain raises meaning; the transport decides what that means over HTTP
+(spec §7.2). Keeping the mapping in one table is what stops a status code from
+being invented independently in five controllers.
+"""
+from __future__ import annotations
+
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from ..domain.exceptions import (
+    AccountNotOperableError,
+    DomainError,
+    DuplicateError,
+    InsufficientFundsError,
+    InvalidNumeroCuentaError,
+    NotFoundError,
+    ReferencedEntityNotFoundError,
+)
+
+LOG = logging.getLogger("openbankapi.errors")
+
+_STATUS = [
+    (NotFoundError, 404),
+    (ReferencedEntityNotFoundError, 422),
+    (DuplicateError, 409),
+    (AccountNotOperableError, 409),
+    (InvalidNumeroCuentaError, 400),
+    (InsufficientFundsError, 409),
+]
+
+
+def status_for(error: DomainError) -> int:
+    for kind, status in _STATUS:
+        if isinstance(error, kind):
+            return status
+    return 500
+
+
+def error_body(code: str, message: str, details=None) -> dict:
+    return {"error": {"code": code, "message": message, "details": details}}
+
+
+def install(app: FastAPI) -> None:
+    @app.exception_handler(DomainError)
+    async def _domain(_: Request, error: DomainError):
+        status = status_for(error)
+        if status >= 500:
+            LOG.exception("unmapped domain error", exc_info=error)
+        return JSONResponse(
+            status_code=status,
+            content=error_body(type(error).__name__, str(error)),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation(_: Request, error: RequestValidationError):
+        # Strip `input`: pydantic echoes the rejected value back, which would
+        # put a fecha_nacimiento in an HTTP response body (spec §3.4).
+        details = [
+            {k: v for k, v in item.items() if k != "input"} for item in error.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content=error_body("ValidationError", "request validation failed", details),
+        )
