@@ -36,7 +36,7 @@ services:
       kafka:
         condition: service_healthy
     restart: "no"
-    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
+    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
   flink-jobmanager:
     build:
@@ -57,6 +57,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
+      ACCOUNT_BALANCES_TOPIC: account-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -79,6 +80,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
+      ACCOUNT_BALANCES_TOPIC: account-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -99,25 +101,73 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
+      ACCOUNT_BALANCES_TOPIC: account-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/account_service/submit.sh"]
 
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: openbank
+      POSTGRES_PASSWORD: openbank
+      POSTGRES_DB: openbank
+    # wal_level=logical so a future CDC feed (spec §2) can attach without a
+    # restart. It costs a little WAL volume and nothing else here.
+    command: ["postgres", "-c", "wal_level=logical"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Replayed exactly once, when the volume is empty. `down -v` re-runs it.
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbank -d openbank"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Still named `gateway` per spec §10, though the package is now openbankapi.
   gateway:
     build:
-      context: ./gateway
+      context: ./openbankapi
     container_name: gateway
     ports:
       - "8000:8000"
     depends_on:
       kafka-init:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
+      ACCOUNT_BALANCES_TOPIC: account-balances
+      BALANCE_CONSUMER_GROUP: openbankapi-balances
+      DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL_SECONDS: "300"
       CORS_ALLOW_ORIGINS: http://localhost:3000
-      FEES_ACCOUNT: acc-fees
+      # A 16-digit number now: 'acc-fees' would fail the cuentas CHECK, and this
+      # value is a Kafka partition key.
+      FEES_ACCOUNT: "0000000000000001"
       FEE_FLAT_CENTS: "25"
       WEBSOCKET_TIMEOUT_SECONDS: "30"
 
@@ -139,4 +189,6 @@ services:
 
 volumes:
   kafka-data:
+  postgres-data:
+  redis-data:
   flink-checkpoints:
