@@ -1,1 +1,1 @@
-"""Caching. Redis is an adapter behind ICacheService, never imported directly."""
+"""Caching. Redis is an fachade behind ICacheService, never imported directly."""

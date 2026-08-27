@@ -1,4 +1,8 @@
-"""The cache port (spec §8.2, cache-aside)."""
+"""The cache port (spec §8.2, cache-aside).
+
+Routers and services depend on `ICacheService`, never on a concrete adapter —
+same split as `infra/database/interfaces`.
+"""
 from __future__ import annotations
 
 from typing import Any, Optional, Protocol
