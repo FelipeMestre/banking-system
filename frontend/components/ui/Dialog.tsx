@@ -36,7 +36,19 @@ export function Dialog({
   children,
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const acceptRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+
+  useEffect(() => {
+    // If nothing inside grabbed focus on mount (a form field's own autoFocus
+    // wins when there is one), fall back to the Accept button — otherwise
+    // focus never enters the dialog at all, and Enter has nothing to do:
+    // it just re-activates whatever triggered the popup, outside it.
+    const node = dialogRef.current;
+    if (node && !node.contains(document.activeElement)) {
+      acceptRef.current?.focus();
+    }
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -48,12 +60,13 @@ export function Dialog({
 
       const target = event.target as HTMLElement;
 
-      // A button already does its own thing on Enter (activates itself,
-      // whichever one has focus) — only hijack Enter when it isn't that, and
-      // never inside a textarea, where Enter has to stay a newline.
-      if (event.key === "Enter" && target.tagName !== "TEXTAREA" && target.tagName !== "BUTTON") {
+      // Enter always means Accept, everywhere in the dialog — except inside a
+      // textarea, where Enter has to stay a newline. Handled explicitly here
+      // rather than left to a focused button's native activation, since that
+      // depends on how faithfully the keyboard event was generated.
+      if (event.key === "Enter" && target.tagName !== "TEXTAREA") {
         event.preventDefault();
-        onAccept();
+        if (!acceptDisabled) onAccept();
         return;
       }
 
@@ -76,7 +89,7 @@ export function Dialog({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, onAccept]);
+  }, [onClose, onAccept, acceptDisabled]);
 
   return (
     <div
@@ -103,7 +116,13 @@ export function Dialog({
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             {cancelLabel}
           </button>
-          <button type="button" className="btn btn-primary" onClick={onAccept} disabled={acceptDisabled}>
+          <button
+            type="button"
+            ref={acceptRef}
+            className="btn btn-primary"
+            onClick={onAccept}
+            disabled={acceptDisabled}
+          >
             {acceptLabel}
           </button>
         </div>
