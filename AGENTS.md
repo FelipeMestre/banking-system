@@ -1,4 +1,4 @@
-# Python Fastapi backend projects
+# Python Fastapi backend project
 **Cross-domain imports**: always use the explicit module name. Never `from src.auth import *`.
 
 ```python
@@ -472,11 +472,370 @@ def read_user(user_id: int, repo: UserRepositoryInterface = Depends(get_user_rep
 ```
 
 <!-- BEGIN:nextjs-agent-rules -->
- 
+
+# NextJS 16 frontend project 
+Next.js 16 is strictly the frontend and all business logic and data access live in a separate backend, I use a feature-oriented architecture with a thin routing layer. The main goal is to make the codebase easy to navigate by business domain, prevent shared folders from becoming dumping grounds, and keep dependencies predictable as the number of features grows.
+
+For example:
+
+```
+src/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   └── forgot-password/
+│   │       └── page.tsx
+│   │
+│   ├── (dashboard)/
+│   │   ├── layout.tsx
+│   │   ├── dashboard/
+│   │   │   └── page.tsx
+│   │   ├── customers/
+│   │   │   └── page.tsx
+│   │   ├── accounts/
+│   │   │   └── page.tsx
+│   │   ├── transactions/
+│   │   │   └── page.tsx
+│   │   └── reports/
+│   │       └── page.tsx
+│   │
+│   ├── layout.tsx
+│   ├── error.tsx
+│   ├── loading.tsx
+│   └── globals.css
+│
+├── features/
+│   ├── customers/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── api/
+│   │   ├── schemas/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   │
+│   ├── accounts/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── api/
+│   │   ├── schemas/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   │
+│   ├── transactions/
+│   ├── reports/
+│   ├── users/
+│   └── ...
+│
+├── components/
+│   ├── ui/
+│   ├── layout/
+│   └── shared/
+│
+├── lib/
+│   ├── api/
+│   ├── auth/
+│   ├── permissions/
+│   ├── formatting/
+│   ├── validation/
+│   └── utils/
+│
+├── providers/
+├── config/
+└── types/
+```
+The philosophy
+
+The most important decision is that app is responsible for routing, not business functionality. A page.tsx should mostly compose a screen from the appropriate feature components. You don't want 500-line pages containing API calls, state management, validation, and business-specific UI logic. Next.js route groups such as (dashboard) are particularly useful here because they let you organize the application without affecting the URL structure.
+
+The features directory is the heart of the application. For a banking system, for example, every significant banking capability gets its own boundary: customers, accounts, transactions, loans, payments, reports, and so on. Everything that primarily belongs to that capability lives together. For example, features/accounts can contain the account table, account details, account filters, hooks, API client functions, validation schemas, and types. This is much more maintainable than having one global components, hooks, and services directory containing hundreds of unrelated files.
+
+The api directory inside a feature should contain frontend API clients, not backend business logic:
+
+```
+features/accounts/api/
+├── get-accounts.ts
+├── get-account.ts
+├── create-account.ts
+└── update-account.ts
+```
+
+These functions know how to communicate with your backend. They should not implement banking rules. The backend remains the source of truth for authorization, business rules, transactions, calculations, and persistence.
+
+For example:
+
+```
+features/accounts/components/account-table.tsx
+        ↓
+features/accounts/api/get-accounts.ts
+        ↓
+Backend API
+        ↓
+Database
+```
+
+The global components directory should stay small. ui contains genuinely generic components such as buttons, dialogs, inputs, tables, dropdowns, and similar primitives. layout contains application-wide structural components such as the sidebar and header. shared contains reusable components that don't belong to a particular domain, such as an empty state or confirmation dialog.
+
+A useful rule is:
+
+If something belongs to one feature, keep it inside that feature. If it is genuinely reusable across features, promote it to components.
+
+Don't prematurely put everything into shared folders.
+
+Similarly, lib is for application infrastructure, not business features. Your HTTP client, authentication integration, permission helpers, date/number formatting, and common utilities belong there. For example:
+
+```
+lib/api/client.ts
+lib/auth/session.ts
+lib/permissions/can.ts
+lib/formatting/currency.ts
+```
+
+I would also keep dependencies flowing in one direction:
+
+```
+app
+ ↓
+features
+ ↓
+lib
+```
+
+A customer component can use the customer API and shared UI. The customer feature can use lib/api. But lib should never import something from features/customers. This prevents circular dependencies and keeps the architecture understandable.
+
+Finally, I'd treat each feature as a potential bounded boundary. If accounts eventually becomes enormous, you can internally split it further without changing the rest of the application:
+
+```
+features/accounts/
+├── account-list/
+├── account-details/
+├── account-creation/
+├── account-transactions/
+├── api/
+└── types.ts
+```
+
+This gives you an architecture that can start relatively simple but evolve with the product.
+
+The key principle I'd follow throughout the project is locality: when an engineer is asked to modify "customer onboarding," they should be able to go to features/customers and find almost everything relevant there. In a banking system with dozens or hundreds of features, that property is far more valuable than having a theoretically perfect folder hierarchy.
+
 # This is NOT the Next.js you know
  
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `/frontend/node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
  
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
  
+
+## For tests
+tests/
+├── unit/
+│   ├── features/
+│   │   ├── customers/
+│   │   ├── accounts/
+│   │   └── transactions/
+│   └── lib/
+│
+├── integration/
+│   ├── customers/
+│   ├── accounts/
+│   └── transactions/
+│
+└── e2e/
+    ├── authentication/
+    ├── customers/
+    ├── accounts/
+    └── transactions/
+
+The distinction I'd make is:
+
+unit/
+
+Tests an isolated piece of frontend behavior.
+
+For example:
+
+tests/unit/features/accounts/
+├── account-table.test.tsx
+├── account-filters.test.tsx
+└── account-validation.test.ts
+
+These should be fast and shouldn't require the real backend.
+
+integration/
+
+Tests how multiple frontend pieces work together.
+
+For example:
+
+tests/integration/accounts/
+└── account-list.test.tsx
+
+You might render the account page, mock the backend API, interact with filters, pagination, loading states, errors, etc.
+
+The important point is that you don't test the backend through these tests. The backend should have its own integration and unit test suite in its own project.
 <!-- END:nextjs-agent-rules -->
+
+
+# CODE QUALITY STANDARDS
+- A file must not go above 400 lines, in case facing this situation, the classes or the class of the file must be splitted in to different files with their or responsibility, and if needed, they must interact with themselves to get the business case right.
+- **Clean Code Principles**: Evaluate adherence to clean code tenets including single responsibility, meaningful names, small functions, and clear intent
+- **Import Organization**: Prefer top-level imports and flag inline imports unless they are for heavy dependencies with clear performance justification and documentation
+- **Naming Excellence**: Scrutinize variable, function, class, and module names for clarity, precision, and intent revelation - names should match actual behavior and distinguish between observed vs. theoretical data
+- **Fail-Fast Philosophy**: Assess defensive programming practices, assertion usage, input validation, and early error detection - prefer stopping execution over silently handling errors
+- **Type Safety Over Strings**: Flag "stringly typed" code where enums, Literal types, or constants would catch errors at compile/type-check time rather than runtime (e.g., `phase: Literal["pre_cycle", "post_cycle"]` instead of `phase: str`)
+- **DRY Violations**: Identify and suggest solutions for code duplication, repeated logic patterns, and opportunities for abstraction
+- **Architectural Clarity**: Assess whether classes handle single responsibilities or inappropriately mix multiple concerns
+- Functions should do one thing well and have clear, descriptive names that match their actual behavior
+- Variables should reveal intent without requiring comments - names should clearly indicate what they represent
+- Code should fail fast with meaningful error messages and appropriate assertions - better to stop than silently proceed with bad data
+- Classes should have single responsibilities rather than mixing multiple concerns or data formats
+- Complex systems need central documentation with examples and clear architectural explanations
+- Duplication should be eliminated through proper abstraction
+- Code should be self-documenting with strategic module-level documentation for complex systems
+
+
+**TEST QUALITY ANTIPATTERNS:**
+
+Flag these testing smells with high priority:
+
+- **Mock Abuse**: Creating fake implementations instead of using real data/fixtures. Flag any `Mock()` or `@patch` usage — mocking should be a last resort, not a default
+- **Trivial Mocks**: Mocking return values instead of testing real behavior (e.g., `mock_model.predict.return_value = [1, 2, 3]`)
+- **Fake Test Data**: Using `{"dummy": "values"}` instead of real fixtures. Check for `conftest.py` or test fixtures that should be used instead
+- **Unjustified Test Skips**: Any `@pytest.mark.skip`, `@unittest.skip`, or `pytest.skip()` without clear justification. Skipped tests often indicate incomplete functionality that should be addressed, not deferred
+- **Missing Integration Tests**: Tests that never exercise real system components, only mocked versions
+
+
+## CODE SMELL CATEGORIES
+Take into account this cases, these are examples of bad quality code
+### 1. Logic Structure Hints
+**Deep Nesting (>3 levels)**
+```python
+# DETECT: Logic that could be expressed as higher-level concepts
+def process_sequences(sequences):
+    for seq in sequences:
+        if seq.is_valid():
+            if seq.length > MIN_LENGTH:
+                if seq.has_required_features():
+                    # deeply nested logic here
+```
+*Suggestion: "Consider expressing this logic in terms of higher-level concepts (helper functions)"*
+
+**Complex Conditionals**
+```python
+# DETECT: Multi-condition logic that obscures intent
+if (model.is_trained() and data.is_validated() and
+    config.get("use_cache", False) and not force_retrain):
+    # complex condition logic
+```
+*Suggestion: "This condition might be clearer as a named predicate method"*
+
+### 2. Method Design Smells
+**Flags Extending Behavior**
+```python
+# DETECT: String/enum flags that determine core behavior or data handling
+def process_data(sequences, data_type="protein"):
+    if data_type == "protein":
+        return process_protein_sequences(sequences)
+    elif data_type == "dna":
+        return process_dna_sequences(sequences)
+    # core behavior determined by string flag
+
+def run_analysis(data, analysis_mode="standard"):
+    if analysis_mode == "phylogenetic":
+        # completely different algorithm
+    elif analysis_mode == "comparative":
+        # different algorithm again
+```
+*Suggestion: "Consider separate methods or classes when flags determine fundamentally different behaviors or data handling"*
+
+**Methods Doing Multiple Operations**
+```python
+# DETECT: Method names with "and" suggesting multiple responsibilities
+def load_and_validate_and_process_data(file_path):
+    # loading, validation, and processing all in one method
+```
+*Suggestion: "Methods with 'and' in their names often handle multiple concerns"*
+
+**Long Parameter Lists (>5 parameters)**
+```python
+# DETECT: Many parameters suggesting grouping opportunities
+def train_model(data, epochs, learning_rate, batch_size, optimizer, scheduler, callbacks):
+    # many related parameters
+```
+*Suggestion: "Consider grouping related parameters into configuration objects"*
+
+### 3. Clarity and Intent Issues
+**Comments Explaining Confusing Code**
+```python
+# DETECT: Comments that explain what code is doing rather than why
+# Convert to one-hot encoding and reshape for the model
+encoded = np.eye(vocab_size)[token_ids].reshape(-1, vocab_size * seq_len)
+```
+*Suggestion: "This logic might benefit from clearer naming or extraction to a well-named helper function"*
+
+**Magic Numbers in Domain Logic**
+```python
+# DETECT: Unexplained numeric constants
+if accuracy > 0.95:  # Why 0.95?
+    return "excellent"
+elif accuracy > 0.8:  # Why 0.8?
+    return "good"
+```
+*Suggestion: "Consider extracting these thresholds as named constants to clarify their significance"*
+
+**Primitive Obsession**
+```python
+# DETECT: Using primitives where domain objects would clarify
+def analyze_sequence(sequence_string, sequence_type, sequence_id, sequence_metadata):
+    # multiple primitives that could be a Sequence object
+```
+*Suggestion: "These related primitives might benefit from being grouped into a domain object"*
+
+### 4. Type and Interface Hints
+**Complex Return Types**
+```python
+# DETECT: Functions returning multiple unrelated types
+def get_model_info(model_path) -> Union[Dict[str, Any], List[str], None]:
+    # returning different types based on conditions
+```
+*Suggestion: "Multiple return types may indicate this function has multiple responsibilities"*
+
+**Data Clumps**
+```python
+# DETECT: Same group of parameters appearing together repeatedly
+def method_a(file_path, format_type, encoding):
+    pass
+
+def method_b(file_path, format_type, encoding):
+    pass
+
+def method_c(file_path, format_type, encoding):
+    pass
+```
+*Suggestion: "These parameters often appear together; consider grouping them into a FileSpec object"*
+
+### 5. Maintainability Signals
+**Inconsistent Naming Patterns**
+```python
+# DETECT: Similar concepts using different styles
+def get_sequences():     # verb_noun
+    pass
+
+def sequence_count():    # noun_verb
+    pass
+
+def numProteins():       # differentCase
+    pass
+```
+*Suggestion: "Similar concepts use different naming styles; consistency aids comprehension"*
+
+**Feature Envy**
+```python
+# DETECT: Methods obsessed with another object's data
+def calculate_stats(self, sequence):
+    length = sequence.get_length()
+    composition = sequence.get_composition()
+    gc_content = sequence.get_gc_content()
+    # method mostly uses sequence's data
+    return length * composition + gc_content
+```
