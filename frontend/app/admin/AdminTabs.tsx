@@ -1,20 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { AccountsList } from "@/features/accounts";
 import { BranchesList } from "@/features/branches";
 
 const TABS = ["Accounts", "Branches", "Customers", "Locations"] as const;
 type Tab = (typeof TABS)[number];
 
+const PANELS: Partial<Record<Tab, React.ComponentType>> = {
+  Accounts: AccountsList,
+  Branches: BranchesList,
+};
+
 /**
  * Page-level composition, colocated with the route it belongs to (per the
  * feature-oriented architecture: app composes screens from feature
- * components, it doesn't own business logic itself). Branches is wired to
- * the real API via the branches feature; the other three panels are still
- * placeholders until their own features are built. Styled as Modernist's
- * `.seg` segmented control, but driven by button + aria-selected state
- * instead of radio inputs — `.seg-opt`'s `:has(input:checked)` styling has
- * nothing to key off of without them.
+ * components, it doesn't own business logic itself). Accounts and Branches
+ * are wired to their real APIs; Customers and Locations are still
+ * placeholders until their own features exist. Styled as Modernist's `.seg`
+ * segmented control, but driven by button + aria-selected state instead of
+ * radio inputs — `.seg-opt`'s `:has(input:checked)` styling has nothing to
+ * key off of without them.
  */
 export function AdminTabs() {
   const [active, setActive] = useState<Tab>("Accounts");
@@ -39,16 +45,15 @@ export function AdminTabs() {
         ))}
       </div>
 
-      {TABS.map((tab) => (
-        <div key={tab} role="tabpanel" hidden={active !== tab}>
-          <h2>{tab}</h2>
-          {tab === "Branches" ? (
-            <BranchesList />
-          ) : (
-            <p className="subtitle">{tab} management is coming soon.</p>
-          )}
-        </div>
-      ))}
+      {TABS.map((tab) => {
+        const Panel = PANELS[tab];
+        return (
+          <div key={tab} role="tabpanel" hidden={active !== tab}>
+            <h2>{tab}</h2>
+            {Panel ? <Panel /> : <p className="subtitle">{tab} management is coming soon.</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }
