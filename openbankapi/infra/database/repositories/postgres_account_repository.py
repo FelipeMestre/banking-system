@@ -15,12 +15,13 @@ from uuid import UUID
 
 from sqlalchemy import select, update as sql_update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ....domain.exceptions import DuplicateAccountNumberError
 from ....domain.model import ACCOUNT_NUMBER_LENGTH, Account, AccountStatus
 from ..errors import translate
 from ..interfaces.common import Page
-from ..models import AccountORM
+from ..schemas.models import AccountORM
 from ._base import PostgresRepository, page_of
 
 LOG = logging.getLogger("openbankapi.accounts")
@@ -67,6 +68,13 @@ class PostgresAccountRepository(PostgresRepository):
         as a 500. A violation on customer_id/branch_id is a different thing
         entirely — that is the caller's bad input, so it is translated and
         raised immediately rather than retried.
+
+        Each attempt runs inside its own SAVEPOINT (`begin_nested`), not a new
+        transaction: this session is shared for the whole request (see
+        `_base.py`), so a colliding attempt must only undo that one insert, not
+        abort whatever else the request has already done, or block the next
+        retry — a plain `flush()` failure would otherwise leave the entire
+        session's transaction unusable for anything that follows.
         """
         last: Optional[DuplicateAccountNumberError] = None
         for attempt in range(_GENERATION_ATTEMPTS):
@@ -78,12 +86,12 @@ class PostgresAccountRepository(PostgresRepository):
                 "branch_id": branch_id,
             }
             try:
-                async with self._sessionmaker.begin() as session:
+                async with self._session.begin_nested():
                     row = AccountORM(**values)
-                    session.add(row)
-                    await session.flush()
-                    await session.refresh(row)
-                    return _to_domain(row)
+                    self._session.add(row)
+                    await self._session.flush()
+                await self._session.refresh(row)
+                return _to_domain(row)
             except IntegrityError as error:
                 translated = translate(error, values=values)
                 if not isinstance(translated, DuplicateAccountNumberError):
@@ -124,12 +132,21 @@ class PostgresAccountRepository(PostgresRepository):
         return _to_domain(row) if row else None
 
 
-class PostgresAccountBalanceProjection(PostgresRepository):
+class PostgresAccountBalanceProjection:
     """The only writer of `accounts.balance` (spec §3.6).
 
-    Kept as a separate class so the capability travels separately: `main.py`
-    hands one of these to the `account-balances` consumer and to nothing else.
+    Deliberately NOT a `PostgresRepository`: that base class now expects an
+    already-open, request-scoped `AsyncSession` handed out by
+    `infra/database/session.get_db_session` (see `_base.py`) — but this class
+    is driven by the `account-balances` Kafka consumer thread, not an HTTP
+    request, so there is no request to scope a session to. It keeps its own
+    `sessionmaker` and opens one session per call instead. Constructed once in
+    `main.py` and handed only to that consumer — nothing that serves an HTTP
+    request may ever hold one.
     """
+
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]):
+        self._sessionmaker = sessionmaker
 
     async def apply_balance(self, account_number: str, balance: int) -> bool:
         async with self._sessionmaker.begin() as session:

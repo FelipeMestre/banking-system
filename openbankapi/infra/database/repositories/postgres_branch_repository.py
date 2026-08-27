@@ -6,7 +6,7 @@ from uuid import UUID
 
 from ....domain.model import Branch
 from ..interfaces.common import Page
-from ..models import BranchORM
+from ..schemas.models import BranchORM
 from ._base import PostgresRepository, page_of
 
 

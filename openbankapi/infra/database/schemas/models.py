@@ -1,9 +1,8 @@
-"""SQLAlchemy mappings for the schema in `infra/postgres/init.sql` (spec §3).
+"""SQLAlchemy mappings for the schema `infra/database/migrations` creates (spec §3).
 
-These classes DESCRIBE tables they do not own. `init.sql` is the only thing that
-creates them (spec §10): there is no Alembic here and nothing ever calls
-`Base.metadata.create_all`. Two sources of DDL is how a schema and its mapping
-drift apart without anyone noticing.
+Alembic owns the DDL (spec §10): nothing ever calls `Base.metadata.create_all`.
+These classes describe the tables the baseline migration creates — they must
+stay in lockstep with it, the same way they used to have to match `init.sql`.
 """
 from __future__ import annotations
 

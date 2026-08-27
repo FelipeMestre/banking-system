@@ -6,7 +6,7 @@ from uuid import UUID
 
 from ....domain.model import Location
 from ..interfaces.common import Page
-from ..models import LocationORM
+from ..schemas.models import LocationORM
 from ._base import PostgresRepository, page_of
 
 

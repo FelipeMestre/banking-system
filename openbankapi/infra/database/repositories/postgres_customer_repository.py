@@ -11,7 +11,7 @@ from uuid import UUID
 
 from ....domain.model import Customer
 from ..interfaces.common import Page
-from ..models import CustomerORM
+from ..schemas.models import CustomerORM
 from ._base import PostgresRepository, page_of
 
 
