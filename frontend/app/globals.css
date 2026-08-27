@@ -1,152 +1,569 @@
-:root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --border: #dfe3e8;
-  --text: #1b1f24;
-  --muted: #61697a;
-  --accent: #2f6feb;
-  --approved: #12813f;
-  --declined: #b3261e;
+/* Modernist design system — foundations only.
+ *
+ * This file ports the token sheet and component layer from
+ * design_handoff_openbank_home/_ds/modernist-.../styles.css into Tailwind v4's
+ * @theme. Values are copied verbatim from that file; if a value here ever
+ * disagrees with the source sheet, the source sheet is wrong and should be
+ * re-copied, not the other way around.
+ *
+ * Modernist is light-only by design (no dark variants exist in the source
+ * sheet), so the app's previous prefers-color-scheme dark block is dropped
+ * rather than inventing an unapproved dark ground.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  /* — color: base roles — */
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #ec3013;
+  --color-accent-2: #e15b47;
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+
+  /* — color: tonal ramps (OKLCH-derived; same step = same visual weight
+     across roles). Note the base --color-accent above is its own value,
+     distinct from the ramp's 500 step — that split is authored in the
+     source sheet, not an inconsistency to "fix". */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #fff2ef;
+  --color-accent-200: #ffe0d9;
+  --color-accent-300: #ffc4b8;
+  --color-accent-400: #ff9783;
+  --color-accent-500: #ff563c;
+  --color-accent-600: #dd2b0f;
+  --color-accent-700: #ae1800;
+  --color-accent-800: #7c1405;
+  --color-accent-900: #4d170e;
+
+  --color-accent-2-100: #fff2ef;
+  --color-accent-2-200: #ffe0da;
+  --color-accent-2-300: #ffc4b9;
+  --color-accent-2-400: #ff9784;
+  --color-accent-2-500: #ef6853;
+  --color-accent-2-600: #c94b39;
+  --color-accent-2-700: #9e3526;
+  --color-accent-2-800: #71261b;
+  --color-accent-2-900: #471d16;
+
+  /* — type — */
+  --font-heading: "Archivo", system-ui, sans-serif;
+  --font-heading-weight: 800;
+  --font-body: "Archivo", system-ui, sans-serif;
+
+  /* — spacing: namespaced as ds-* rather than overriding Tailwind's default
+     numeric scale. Modernist defines fixed px steps (1/2/3/4/6/8 -> 4/8/12/
+     16/24/32px, deliberately skipping 5 and 7); the default scale stays
+     available for anything outside that vocabulary. Utilities: p-ds-4,
+     gap-ds-2, w-ds-8, etc. */
+  --spacing-ds-1: 4px;
+  --spacing-ds-2: 8px;
+  --spacing-ds-3: 12px;
+  --spacing-ds-4: 16px;
+  --spacing-ds-6: 24px;
+  --spacing-ds-8: 32px;
+
+  /* — radius: zero, on purpose. Only the three keys Modernist defines are
+     overridden; Tailwind's own `rounded-full` etc. are untouched, since a
+     genuine circle (e.g. the system's own .radio dot) is drawn with a literal
+     50%, not through this scale — the source sheet does the same. */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  /* — elevation: tuned to this ground. Nothing on the Home screen uses these
+     (it is organised by 2px rules, not shadows), but other components do. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171c;
-    --surface: #1c2027;
-    --border: #2f3540;
-    --text: #e9ecf1;
-    --muted: #99a2b3;
-    --accent: #6497ff;
-    --approved: #4ec97e;
-    --declined: #ff8a80;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0 0 var(--spacing-ds-2);
+  }
+  h1 {
+    font-size: 42px;
+  }
+  h2 {
+    font-size: 32px;
+  }
+  h3 {
+    font-size: 25px;
+  }
+  h4 {
+    font-size: 20px;
+  }
+  h5 {
+    font-size: 16px;
+  }
+  h6 {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  p {
+    margin: 0 0 var(--spacing-ds-3);
+  }
+
+  a {
+    color: var(--color-accent);
+    text-underline-offset: 3px;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+  figure {
+    margin: 0;
+  }
+  figcaption {
+    font-size: 11px;
+    margin-top: var(--spacing-ds-1);
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
   }
 }
 
-* {
-  box-sizing: border-box;
+@layer utilities {
+  .text-muted {
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+  .grayscale {
+    filter: grayscale(1) contrast(1.08);
+  }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+@layer components {
+  /* — rules — */
+  .hr {
+    height: 2px;
+    border: 0;
+    margin: var(--spacing-ds-4) 0;
+    background: var(--color-divider);
+  }
+
+  /* — buttons — */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 14px;
+    line-height: 1.2;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    padding: var(--spacing-ds-2) calc(var(--spacing-ds-3) * 1.2);
+    border-radius: var(--radius-md);
+  }
+  .btn svg {
+    display: block;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--color-accent);
+    color: var(--color-bg);
+  }
+  .btn-primary:hover {
+    background: var(--color-accent-600);
+  }
+  .btn-primary:active {
+    background: var(--color-accent-700);
+  }
+  .btn-secondary {
+    border-color: var(--color-divider);
+  }
+  .btn-secondary:hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .btn-secondary:active {
+    background: color-mix(in srgb, var(--color-text) 14%, transparent);
+  }
+  .btn-ghost {
+    color: var(--color-accent);
+    padding-inline: var(--spacing-ds-1);
+  }
+  .btn-ghost:hover {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+  .btn-ghost:active {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+  .btn-block {
+    width: 100%;
+    margin-top: var(--spacing-ds-2);
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* — forms — */
+  .field > label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 5px;
+    color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  }
+  .input {
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--color-text);
+    caret-color: var(--color-accent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+  .input:hover {
+    border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+  }
+  .input:focus-visible {
+    border-color: var(--color-accent);
+    outline-offset: 0;
+  }
+  textarea.input {
+    min-height: 90px;
+    resize: vertical;
+  }
+  .radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .radio input,
+  .seg-opt input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .radio .dot {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-divider);
+  }
+  .radio:hover .dot {
+    border-color: var(--color-accent);
+  }
+  .radio input:checked + .dot {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    box-shadow: inset 0 0 0 4px var(--color-bg);
+  }
+  .radio input:focus-visible + .dot {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  .seg {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+  .seg-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .seg-opt + .seg-opt {
+    border-left: 1px solid var(--color-divider);
+  }
+  .seg-opt:has(input:checked) {
+    background: var(--color-accent);
+    color: var(--color-bg);
+  }
+  .seg-opt:not(:has(input:checked)):hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .seg-opt:has(input:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  /* — cards — */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-ds-2);
+    padding: var(--spacing-ds-3);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+  .card-kicker {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+  .card-title {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 17px;
+    line-height: 1.2;
+  }
+  .card-body {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.8;
+    flex: 1;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  }
+  .elev-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .elev-md {
+    box-shadow: var(--shadow-md);
+  }
+  .elev-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* — tags — */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    padding: 3px 10px;
+    border-radius: calc(var(--radius-md) * 0.75);
+  }
+  .tag-accent {
+    background: var(--color-accent-100);
+    color: var(--color-accent-800);
+  }
+  .tag-accent-2 {
+    background: var(--color-accent-2-100);
+    color: var(--color-accent-2-800);
+  }
+  .tag-neutral {
+    background: var(--color-neutral-100);
+    color: var(--color-neutral-800);
+  }
+  .tag-outline {
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* — navigation — */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-ds-4);
+    padding: var(--spacing-ds-3) var(--spacing-ds-4);
+    border-bottom: 2px solid var(--color-divider);
+  }
+  .nav-brand {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 18px;
+    margin-right: auto;
+  }
+  .nav a {
+    color: inherit;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .nav a:hover,
+  .nav a[aria-current="page"] {
+    color: var(--color-accent);
+  }
+
+  /* — tables — */
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .table th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-text) 60%, transparent);
+    padding: var(--spacing-ds-2);
+    border-bottom: 2px solid var(--color-divider);
+  }
+  .table td {
+    padding: var(--spacing-ds-2);
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .table tbody tr:hover {
+    background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  }
+
+  /* — dialog — */
+  .dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--spacing-ds-4);
+    background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  }
+  .dialog {
+    width: min(440px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-ds-3);
+    padding: var(--spacing-ds-4);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg);
+  }
+  .dialog-title {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 20px;
+  }
+  .dialog-body {
+    font-size: 14px;
+    opacity: 0.85;
+  }
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-ds-2);
+    margin-top: var(--spacing-ds-2);
+  }
 }
 
-main {
-  max-width: 32rem;
-  margin: 0 auto;
-  padding: 3rem 1.25rem 4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
+/* ══════════════════════════════════════════════════════════════════════
+ * App-level extensions — NOT part of Modernist, kept separate on purpose.
+ *
+ * These classes predate the Modernist handoff (transfer flow status text,
+ * the placeholder account badge) and aren't in the source token sheet. They
+ * are remapped onto Modernist's tokens so existing pages don't render
+ * unstyled while the components themselves are rebuilt on the system's own
+ * .card/.btn/.field patterns in a follow-up step — that rebuild is
+ * out of scope for "foundations".
+ *
+ * Modernist has no semantic success color (its own credit/debit convention
+ * uses --color-neutral-900 for credit and --color-accent-700 for debit, not
+ * green/red). "Declined" honestly maps onto that debit convention;
+ * "approved" does not have an equivalent, so its pre-existing green is kept
+ * as this app's own exception rather than invented as a new system token.
+ * ══════════════════════════════════════════════════════════════════════ */
+@layer components {
+  .subtitle {
+    margin: 0;
+    color: var(--color-neutral-600);
+    font-size: 0.9rem;
+  }
 
-h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.6rem;
-}
+  .hint {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-neutral-600);
+  }
 
-.subtitle {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
+  .outcome {
+    gap: 0.6rem;
+  }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
+  .status {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
+  .status-pending {
+    color: var(--color-neutral-600);
+  }
 
-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--muted);
-}
+  .status-approved {
+    /* Exception: Modernist defines no success color. Kept from the app's
+       pre-existing palette rather than invented as a new system token. */
+    color: #12813f;
+  }
 
-input {
-  padding: 0.6rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-}
+  .status-declined {
+    color: var(--color-accent-700);
+  }
 
-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
+  .detail {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-neutral-600);
+  }
 
-input:disabled {
-  opacity: 0.6;
-}
-
-.hint {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-button {
-  align-self: flex-start;
-  padding: 0.6rem 1.1rem;
-  border: 0;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.outcome {
-  gap: 0.6rem;
-}
-
-.status {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.status-pending {
-  color: var(--muted);
-}
-
-.status-approved {
-  color: var(--approved);
-}
-
-.status-declined {
-  color: var(--declined);
-}
-
-.detail {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
-  word-break: break-all;
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+  }
 }
