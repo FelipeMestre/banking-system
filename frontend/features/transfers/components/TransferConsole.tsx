@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { TransferForm } from "./TransferForm";
 import { TransferOutcome } from "./TransferOutcome";
-import { fetchTransferStatus, requestTransfer, watchTransferStatus } from "@/lib/gateway";
-import type { Phase, TransferRequestBody, TransferStatus } from "@/lib/types";
+import { getTransferStatus } from "../api/get-transfer-status";
+import { requestTransfer } from "../api/request-transfer";
+import { watchTransferStatus } from "../api/watch-transfer-status";
+import type { Phase, TransferRequestBody, TransferStatus } from "../types";
 
 export function TransferConsole() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -31,7 +33,7 @@ export function TransferConsole() {
       onUnavailable: () => {
         // The socket never delivered anything. Fall back to the pull endpoint
         // the gateway offers for exactly this case (§6).
-        void fetchTransferStatus(watchedRequestId)
+        void getTransferStatus(watchedRequestId)
           .then((status) => applyStatus(watchedRequestId, status))
           .catch((error: unknown) =>
             setPhase({ kind: "error", message: describe(error) }),
@@ -56,7 +58,7 @@ export function TransferConsole() {
 
   const recheck = useCallback(
     (requestId: string) => {
-      void fetchTransferStatus(requestId)
+      void getTransferStatus(requestId)
         .then((status) => {
           if (status.status === "pending") return;
           setPhase(

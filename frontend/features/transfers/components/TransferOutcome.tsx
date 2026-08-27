@@ -1,7 +1,7 @@
 "use client";
 
 import { formatCents } from "@/lib/money";
-import type { Phase } from "@/lib/types";
+import type { Phase } from "../types";
 
 interface Props {
   phase: Phase;
@@ -64,7 +64,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
             The gateway stopped waiting before the ledger answered. The transfer may still settle.
           </p>
           <RequestId value={phase.requestId} />
-          <button type="button" onClick={() => onRecheck(phase.requestId)}>
+          <button type="button" className="btn btn-secondary" onClick={() => onRecheck(phase.requestId)}>
             Check again
           </button>
         </>
@@ -91,7 +91,7 @@ function RequestId({ value }: { value: string }) {
 
 function RestartButton({ onReset }: { onReset: () => void }) {
   return (
-    <button type="button" onClick={onReset}>
+    <button type="button" className="btn btn-secondary" onClick={onReset}>
       New transfer
     </button>
   );

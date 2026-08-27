@@ -18,3 +18,9 @@ export async function describeFailure(response: Response): Promise<string> {
   }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
 }
+
+/** Turns the gateway's http(s) origin into the matching ws(s) origin. */
+export function toWebSocketUrl(origin: string, path: string): string {
+  const scheme = origin.startsWith("https://") ? "wss://" : "ws://";
+  return `${scheme}${origin.replace(/^https?:\/\//, "")}${path}`;
+}

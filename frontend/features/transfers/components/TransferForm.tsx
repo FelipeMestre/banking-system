@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatCents, parseCentsInput } from "@/lib/money";
-import type { TransferRequestBody } from "@/lib/types";
+import type { TransferRequestBody } from "../types";
 
 interface Props {
   disabled: boolean;
@@ -34,6 +34,7 @@ export function TransferForm({ disabled, onSubmit }: Props) {
         <label htmlFor="source">From account</label>
         <input
           id="source"
+          className="input"
           value={sourceAccount}
           onChange={(event) => setSourceAccount(event.target.value)}
           disabled={disabled}
@@ -45,6 +46,7 @@ export function TransferForm({ disabled, onSubmit }: Props) {
         <label htmlFor="destination">To account</label>
         <input
           id="destination"
+          className="input"
           value={destinationAccount}
           onChange={(event) => setDestinationAccount(event.target.value)}
           disabled={disabled}
@@ -56,6 +58,7 @@ export function TransferForm({ disabled, onSubmit }: Props) {
         <label htmlFor="amount">Amount in cents</label>
         <input
           id="amount"
+          className="input"
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
           disabled={disabled}
@@ -70,7 +73,7 @@ export function TransferForm({ disabled, onSubmit }: Props) {
         </p>
       </div>
 
-      <button type="submit" disabled={!canSubmit}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={!canSubmit}>
         {disabled ? "Working…" : "Send transfer"}
       </button>
     </form>

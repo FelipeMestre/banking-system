@@ -1,16 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTransferStatus, toWebSocketUrl } from "../gateway";
-
-describe("toWebSocketUrl", () => {
-  it("maps http to ws and https to wss", () => {
-    expect(toWebSocketUrl("http://localhost:8000", "/ws/transfer/abc")).toBe(
-      "ws://localhost:8000/ws/transfer/abc",
-    );
-    expect(toWebSocketUrl("https://gw.example", "/ws/transfer/abc")).toBe(
-      "wss://gw.example/ws/transfer/abc",
-    );
-  });
-});
+import { parseTransferStatus } from "../../../../features/transfers/api/parse-transfer-status";
 
 describe("parseTransferStatus", () => {
   it("reads an approved verdict", () => {
