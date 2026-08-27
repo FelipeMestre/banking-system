@@ -3,6 +3,13 @@
 Takes every collaborator as an argument so the whole HTTP surface can be
 exercised with fakes — no broker, no Postgres, no Redis. `main.py` is the
 composition root that supplies the real ones.
+
+Everything handed in here is a process-wide singleton, stashed on
+`app.state` and read back by the dependency providers in
+`controllers/dependencies.py`. Request-scoped things (the DB session, and the
+repositories/services built on it) are NOT arguments here at all — they are
+built per request by that module's `Depends` chain, rooted in
+`infra/database/session.get_db_session`.
 """
 from __future__ import annotations
 
@@ -10,31 +17,25 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Awaitable, Callable, Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings
-from .controllers import (
-    customer_controller,
-    account_controller,
-    error_handlers,
-    location_controller,
-    branch_controller,
-    transfer_controller,
-)
+from .api.v1.services import error_handlers
+from .api.v1 import main as main_controller
+from .infra.cache.interfaces.cache_service import ICacheService
+from .infra.kafka.interfaces.event_publisher import IEventPublisher
+from .infra.kafka.status_registry import StatusRegistry
 
 
 def create_app(
     *,
     settings: Settings,
-    transfer_service,
-    account_service,
-    status_registry,
-    location_repository,
-    branch_repository,
-    customer_repository,
-    account_repository,
-    cache,
+    cache: ICacheService,
+    publisher: IEventPublisher,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    status_registry: StatusRegistry,
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
     on_stop_async: Optional[Callable[[], Awaitable[None]]] = None,
@@ -57,6 +58,12 @@ def create_app(
 
     app = FastAPI(title="OpenBankAPI", version="2.0.0", lifespan=lifespan)
 
+    app.state.settings = settings
+    app.state.cache = cache
+    app.state.publisher = publisher
+    app.state.sessionmaker = sessionmaker
+    app.state.status_registry = status_registry
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_allow_origins),
@@ -70,16 +77,5 @@ def create_app(
     def health():
         return {"status": "ok"}
 
-    ttl = settings.cache_ttl_seconds
-    app.include_router(
-        transfer_controller.build_router(
-            transfer_service, status_registry, settings.websocket_timeout_seconds
-        )
-    )
-    app.include_router(location_controller.build_router(location_repository, cache, ttl))
-    app.include_router(branch_controller.build_router(branch_repository, cache, ttl))
-    app.include_router(customer_controller.build_router(customer_repository, cache, ttl))
-    app.include_router(
-        account_controller.build_router(account_service, account_repository, cache, ttl)
-    )
+    app.include_router(main_controller.api_router)
     return app

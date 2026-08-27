@@ -13,7 +13,7 @@ import sys
 from .config import Settings
 from .domain.model import is_valid_account_number
 from .domain.service import AccountService
-from .infra.kafka.adapters import KafkaEventPublisher
+from .infra.kafka.repositories import KafkaEventPublisherRepository
 
 
 def _parse(pair: str):
@@ -36,7 +36,7 @@ def main(argv) -> int:
         return 2
 
     settings = Settings.from_env()
-    publisher = KafkaEventPublisher(settings)
+    publisher = KafkaEventPublisherRepository(settings)
     service = AccountService(settings, repository=None, publisher=publisher)
 
     for account, cents in openings:
