@@ -19,6 +19,7 @@ class LocationUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Optional[Name] = None
+    active: Optional[bool] = None
 
 
 class LocationResponseDTO(BaseModel):
@@ -26,3 +27,4 @@ class LocationResponseDTO(BaseModel):
 
     id: UUID
     name: str
+    active: bool

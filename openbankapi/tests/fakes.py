@@ -65,7 +65,7 @@ class FakeLocationRepository:
         self.loads = 0
 
     async def create(self, *, name: str) -> Location:
-        entity = Location(id=uuid.uuid4(), name=name, created_at=_now(), updated_at=_now())
+        entity = Location(id=uuid.uuid4(), name=name, active=True, created_at=_now(), updated_at=_now())
         self.rows[entity.id] = entity
         return entity
 
@@ -77,14 +77,23 @@ class FakeLocationRepository:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
 
-    async def update(self, location_id: UUID, *, name: Optional[str]) -> Optional[Location]:
+    async def update(
+        self, location_id: UUID, *, name: Optional[str] = None, active: Optional[bool] = None
+    ) -> Optional[Location]:
         current = self.rows.get(location_id)
         if current is None:
             return None
-        updated = Location(id=current.id, name=name or current.name,
-                           created_at=current.created_at, updated_at=_now())
+        updated = Location(
+            id=current.id,
+            name=name if name is not None else current.name,
+            active=current.active if active is None else active,
+            created_at=current.created_at, updated_at=_now(),
+        )
         self.rows[location_id] = updated
         return updated
+
+    async def deactivate(self, location_id: UUID) -> Optional[Location]:
+        return await self.update(location_id, active=False)
 
 
 class FakeBranchRepository:

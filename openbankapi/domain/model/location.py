@@ -10,5 +10,6 @@ from uuid import UUID
 class Location:
     id: UUID
     name: str
+    active: bool
     created_at: datetime
     updated_at: datetime

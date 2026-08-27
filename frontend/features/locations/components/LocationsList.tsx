@@ -12,13 +12,18 @@ type State =
   | { kind: "ready"; items: Location[]; total: number };
 
 interface Props {
-  /** Bump this (e.g. after a create or edit) to force a refetch at the current page. */
+  /** Bump this (e.g. after a create, edit, or delete) to force a refetch at the current page. */
   refreshToken?: number;
   /** Renders an Edit action per row when supplied. */
   onEdit?: (location: Location) => void;
+  /** Renders a Delete action on active rows when supplied. */
+  onDelete?: (location: Location) => void;
+  /** Renders an Activate action on inactive rows when supplied. */
+  onActivate?: (location: Location) => void;
 }
 
-export function LocationsList({ refreshToken, onEdit }: Props = {}) {
+export function LocationsList({ refreshToken, onEdit, onDelete, onActivate }: Props = {}) {
+  const showActions = Boolean(onEdit || onDelete || onActivate);
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -66,13 +71,14 @@ export function LocationsList({ refreshToken, onEdit }: Props = {}) {
             <tr>
               <th>ID</th>
               <th>Name</th>
-              {onEdit ? <th></th> : null}
+              <th>Active</th>
+              {showActions ? <th></th> : null}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={onEdit ? 3 : 2} className="text-neutral-600">
+                <td colSpan={showActions ? 4 : 3} className="text-neutral-600">
                   No locations to show.
                 </td>
               </tr>
@@ -81,11 +87,39 @@ export function LocationsList({ refreshToken, onEdit }: Props = {}) {
                 <tr key={location.id}>
                   <td className="font-mono text-xs">{location.id}</td>
                   <td>{location.name}</td>
-                  {onEdit ? (
+                  <td>
+                    <span className={"tag " + (location.active ? "tag-accent" : "tag-neutral")}>
+                      {location.active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  {showActions ? (
                     <td className="text-right">
-                      <button type="button" className="btn btn-secondary" onClick={() => onEdit(location)}>
-                        Edit
-                      </button>
+                      <div className="flex justify-end gap-ds-2">
+                        {onEdit ? (
+                          <button type="button" className="btn btn-secondary" onClick={() => onEdit(location)}>
+                            Edit
+                          </button>
+                        ) : null}
+                        {location.active
+                          ? onDelete && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => onDelete(location)}
+                              >
+                                Delete
+                              </button>
+                            )
+                          : onActivate && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => onActivate(location)}
+                              >
+                                Activate
+                              </button>
+                            )}
+                      </div>
                     </td>
                   ) : null}
                 </tr>

@@ -1,4 +1,4 @@
-"""`locations` endpoints (spec §8.2). No delete: branches reference them."""
+"""`locations` endpoints (spec §8.2). Soft delete: active=false."""
 from __future__ import annotations
 
 from uuid import UUID
@@ -58,7 +58,17 @@ async def update(
     repository: LocationRepositoryDep,
     cache: CacheDep,
 ):
-    updated = await repository.update(location_id, name=body.name)
+    updated = await repository.update(location_id, name=body.name, active=body.active)
+    if updated is None:
+        raise LocationNotFoundError(location_id)
+    await cache.delete(cache_key(ENTITY, location_id))
+    return updated
+
+
+@router.delete("/{location_id}", response_model=LocationResponseDTO)
+async def soft_delete(location_id: UUID, repository: LocationRepositoryDep, cache: CacheDep):
+    # The row survives: branches reference it, and history must stay readable.
+    updated = await repository.deactivate(location_id)
     if updated is None:
         raise LocationNotFoundError(location_id)
     await cache.delete(cache_key(ENTITY, location_id))
