@@ -12,11 +12,13 @@ type State =
   | { kind: "ready"; items: Customer[]; total: number };
 
 interface Props {
-  /** Bump this (e.g. after a create) to force a refetch at the current page. */
+  /** Bump this (e.g. after a create or edit) to force a refetch at the current page. */
   refreshToken?: number;
+  /** Renders an Edit action per row when supplied. */
+  onEdit?: (customer: Customer) => void;
 }
 
-export function CustomersList({ refreshToken }: Props = {}) {
+export function CustomersList({ refreshToken, onEdit }: Props = {}) {
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -70,12 +72,13 @@ export function CustomersList({ refreshToken }: Props = {}) {
               <th>Gender</th>
               <th>Age</th>
               <th>Active</th>
+              {onEdit ? <th></th> : null}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-neutral-600">
+                <td colSpan={onEdit ? 9 : 8} className="text-neutral-600">
                   No customers to show.
                 </td>
               </tr>
@@ -94,6 +97,13 @@ export function CustomersList({ refreshToken }: Props = {}) {
                       {customer.active ? "Active" : "Inactive"}
                     </span>
                   </td>
+                  {onEdit ? (
+                    <td className="text-right">
+                      <button type="button" className="btn btn-secondary" onClick={() => onEdit(customer)}>
+                        Edit
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))
             )}

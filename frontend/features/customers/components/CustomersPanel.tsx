@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { CustomersList } from "./CustomersList";
+import { EditCustomerDialog } from "./EditCustomerDialog";
+import type { Customer } from "../types";
 
-/** What the Customers admin tab actually renders: the table plus the create flow. */
+/** What the Customers admin tab actually renders: the table plus the create/edit flows. */
 export function CustomersPanel() {
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
   return (
@@ -17,12 +20,20 @@ export function CustomersPanel() {
         </button>
       </div>
 
-      <CustomersList refreshToken={refreshToken} />
+      <CustomersList refreshToken={refreshToken} onEdit={setEditing} />
 
       {addOpen ? (
         <AddCustomerDialog
           onClose={() => setAddOpen(false)}
           onCreated={() => setRefreshToken((token) => token + 1)}
+        />
+      ) : null}
+
+      {editing ? (
+        <EditCustomerDialog
+          customer={editing}
+          onClose={() => setEditing(null)}
+          onUpdated={() => setRefreshToken((token) => token + 1)}
         />
       ) : null}
     </div>
