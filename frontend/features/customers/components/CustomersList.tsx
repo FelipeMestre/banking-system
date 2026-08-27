@@ -11,7 +11,12 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: Customer[]; total: number };
 
-export function CustomersList() {
+interface Props {
+  /** Bump this (e.g. after a create) to force a refetch at the current page. */
+  refreshToken?: number;
+}
+
+export function CustomersList({ refreshToken }: Props = {}) {
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -35,7 +40,7 @@ export function CustomersList() {
     return () => {
       cancelled = true;
     };
-  }, [offset]);
+  }, [offset, refreshToken]);
 
   if (state.kind === "loading") {
     return <p className="subtitle">Loading customers…</p>;
