@@ -4,22 +4,23 @@ import { useState } from "react";
 import { AccountsList } from "@/features/accounts";
 import { BranchesList } from "@/features/branches";
 import { CustomersList } from "@/features/customers";
+import { LocationsList } from "@/features/locations";
 
 const TABS = ["Accounts", "Branches", "Customers", "Locations"] as const;
 type Tab = (typeof TABS)[number];
 
-const PANELS: Partial<Record<Tab, React.ComponentType>> = {
+const PANELS: Record<Tab, React.ComponentType> = {
   Accounts: AccountsList,
   Branches: BranchesList,
   Customers: CustomersList,
+  Locations: LocationsList,
 };
 
 /**
  * Page-level composition, colocated with the route it belongs to (per the
  * feature-oriented architecture: app composes screens from feature
- * components, it doesn't own business logic itself). Accounts, Branches, and
- * Customers are wired to their real APIs; Locations is still a placeholder
- * until its own feature exists. Styled as Modernist's `.seg` segmented
+ * components, it doesn't own business logic itself). Each tab is wired to
+ * its own feature's real API. Styled as Modernist's `.seg` segmented
  * control, but driven by button + aria-selected state instead of radio
  * inputs — `.seg-opt`'s `:has(input:checked)` styling has nothing to key
  * off of without them.
@@ -52,7 +53,7 @@ export function AdminTabs() {
         return (
           <div key={tab} role="tabpanel" hidden={active !== tab}>
             <h2>{tab}</h2>
-            {Panel ? <Panel /> : <p className="subtitle">{tab} management is coming soon.</p>}
+            <Panel />
           </div>
         );
       })}
