@@ -5,7 +5,7 @@ from typing import Generic, List, TypeVar
 
 from pydantic import BaseModel, Field
 
-from ...infra.database.interfaces.common import DEFAULT_LIMIT, MAX_LIMIT
+from ....infra.database.interfaces.common import DEFAULT_LIMIT, MAX_LIMIT
 
 T = TypeVar("T")
 

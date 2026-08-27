@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from ..domain.exceptions import (
+from ....domain.exceptions import (
     AccountNotOperableError,
     DomainError,
     DuplicateError,
