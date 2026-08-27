@@ -9,7 +9,7 @@ class TransferRequested:
     """A request to move money, before any ledger has seen it.
 
     Deliberately not a dict and deliberately not JSON: the wire shape from §5 is
-    produced by `infra/kafka/adapters`, so the domain never depends on how this
+    produced by `infra/kafka/repositories`, so the domain never depends on how this
     happens to be encoded on a topic.
     """
 

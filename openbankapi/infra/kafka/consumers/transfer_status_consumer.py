@@ -15,12 +15,12 @@ from typing import Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from .status_registry import StatusRegistry
+from ..status_registry import StatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.status")
 
 
-class StatusConsumer:
+class TransferStatusConsumer:
     def __init__(self, settings: Settings, registry: StatusRegistry):
         self._settings = settings
         self._registry = registry

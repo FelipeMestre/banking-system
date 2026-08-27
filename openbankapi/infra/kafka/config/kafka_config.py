@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ...config import Settings
+from ....config import Settings
 
 # librdkafka defaults to `consistent_random`, which hashes keys with CRC32.
 # The Java client — which is what the Flink sink uses — hashes with murmur2.

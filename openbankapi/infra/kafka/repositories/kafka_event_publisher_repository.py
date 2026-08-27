@@ -13,12 +13,12 @@ from typing import Any, Dict
 from confluent_kafka import Producer
 
 from ....config import Settings
-from ..kafka_config import producer_config
+from ..config.kafka_config import producer_config
 
 LOG = logging.getLogger("openbankapi.kafka")
 
 
-class KafkaEventPublisher:
+class KafkaEventPublisherRepository:
     def __init__(self, settings: Settings):
         self._producer = Producer(producer_config(settings, client_id="openbankapi-producer"))
 
