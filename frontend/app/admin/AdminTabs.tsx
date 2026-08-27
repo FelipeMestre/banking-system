@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AccountsList } from "@/features/accounts";
 import { BranchesList } from "@/features/branches";
 import { CustomersList } from "@/features/customers";
-import { LocationsList } from "@/features/locations";
+import { LocationsPanel } from "@/features/locations";
 
 const TABS = ["Accounts", "Branches", "Customers", "Locations"] as const;
 type Tab = (typeof TABS)[number];
@@ -13,7 +13,7 @@ const PANELS: Record<Tab, React.ComponentType> = {
   Accounts: AccountsList,
   Branches: BranchesList,
   Customers: CustomersList,
-  Locations: LocationsList,
+  Locations: LocationsPanel,
 };
 
 /**

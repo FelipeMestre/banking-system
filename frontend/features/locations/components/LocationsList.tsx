@@ -11,7 +11,14 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: Location[]; total: number };
 
-export function LocationsList() {
+interface Props {
+  /** Bump this (e.g. after a create or edit) to force a refetch at the current page. */
+  refreshToken?: number;
+  /** Renders an Edit action per row when supplied. */
+  onEdit?: (location: Location) => void;
+}
+
+export function LocationsList({ refreshToken, onEdit }: Props = {}) {
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -35,7 +42,7 @@ export function LocationsList() {
     return () => {
       cancelled = true;
     };
-  }, [offset]);
+  }, [offset, refreshToken]);
 
   if (state.kind === "loading") {
     return <p className="subtitle">Loading locations…</p>;
@@ -59,12 +66,13 @@ export function LocationsList() {
             <tr>
               <th>ID</th>
               <th>Name</th>
+              {onEdit ? <th></th> : null}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={2} className="text-neutral-600">
+                <td colSpan={onEdit ? 3 : 2} className="text-neutral-600">
                   No locations to show.
                 </td>
               </tr>
@@ -73,6 +81,13 @@ export function LocationsList() {
                 <tr key={location.id}>
                   <td className="font-mono text-xs">{location.id}</td>
                   <td>{location.name}</td>
+                  {onEdit ? (
+                    <td className="text-right">
+                      <button type="button" className="btn btn-secondary" onClick={() => onEdit(location)}>
+                        Edit
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))
             )}
