@@ -5,4 +5,5 @@ confluent-kafka==2.6.1
 # session.execute(...)` raises MissingGreenlet at runtime.
 sqlalchemy[asyncio]==2.0.52
 asyncpg==0.31.0
+alembic==1.19.1
 redis==8.1.0

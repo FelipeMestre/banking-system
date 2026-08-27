@@ -1,10 +1,11 @@
 """Translate Postgres constraint violations into domain errors (spec §11.4).
 
 Keyed on the constraint NAME the driver reports, never on message text: messages
-are localised and reworded between versions, names are stable. `init.sql`
-deliberately leaves Postgres to generate its default names (`<table>_<col>_key`,
-`<table>_<col>_fkey`), which is what this table mirrors — renaming a constraint
-there silently breaks the mapping here.
+are localised and reworded between versions, names are stable. The baseline
+Alembic migration deliberately leaves every constraint unnamed, so Postgres
+generates its own default names (`<table>_<col>_key`, `<table>_<col>_fkey`),
+which is what this table mirrors — naming a constraint there silently breaks
+the mapping here.
 
 Translating on the way out, rather than pre-checking with a SELECT, avoids a
 time-of-check-to-time-of-use race: the row could vanish between the check and
