@@ -6,6 +6,10 @@ returns. It does not read Postgres, because making the payment path depend on
 the reference-data database would reintroduce exactly the cross-system coupling
 this architecture exists to avoid — and because the only question that actually
 gates a transfer, "are there funds?", can only be answered by Flink.
+
+Plain domain object: no FastAPI, no Depends, no import from `api` or `infra`.
+Per the architecture doc, the domain layer must never depend on any other
+layer — its Dep wiring lives in `config/dependencies.py`.
 """
 from __future__ import annotations
 
@@ -14,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ...config import Settings
+from ...infra.kafka.interfaces.event_publisher import IEventPublisher
 from ..events import TransferRequested
 
 
@@ -46,7 +51,7 @@ def to_wire(event: TransferRequested) -> Dict[str, Any]:
 
 
 class TransferService:
-    def __init__(self, settings: Settings, publisher):
+    def __init__(self, settings: Settings, publisher: IEventPublisher):
         self._settings = settings
         self._publisher = publisher
 

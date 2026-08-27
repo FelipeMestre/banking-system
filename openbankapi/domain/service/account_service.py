@@ -1,4 +1,10 @@
-"""Account creation orchestration (spec §3.5, §8.2)."""
+"""Account creation orchestration (spec §3.5, §8.2).
+
+Plain domain object: no FastAPI, no Depends, no import from `api` or `infra`
+beyond the ports it needs. Per the architecture doc, the domain layer must
+never depend on any other layer — its Dep wiring lives in
+`config/dependencies.py`, not here.
+"""
 from __future__ import annotations
 
 import uuid
@@ -7,6 +13,8 @@ from typing import Any, Dict
 from uuid import UUID
 
 from ...config import Settings
+from ...infra.database.interfaces import IAccountRepository
+from ...infra.kafka.interfaces.event_publisher import IEventPublisher
 from ..model import Account
 
 
@@ -15,7 +23,9 @@ def _now() -> str:
 
 
 class AccountService:
-    def __init__(self, settings: Settings, repository, publisher):
+    def __init__(
+        self, settings: Settings, repository: IAccountRepository, publisher: IEventPublisher
+    ):
         self._settings = settings
         self._repository = repository
         self._publisher = publisher
