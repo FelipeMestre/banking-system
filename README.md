@@ -47,7 +47,7 @@ Seed some balances (the ledger has no deposit concept — a balance is whatever
 the account's event log says):
 
 ```bash
-docker compose exec gateway python -m openbankapi.seed 1234567890123456=500000
+docker compose exec openbankapi python -m openbankapi.seed 1234567890123456=500000
 ```
 
 Send a transfer:

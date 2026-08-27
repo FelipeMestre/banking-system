@@ -120,13 +120,27 @@ services:
     command: ["postgres", "-c", "wal_level=logical"]
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Replayed exactly once, when the volume is empty. `down -v` re-runs it.
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openbank -d openbank"]
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # Schema is Alembic-owned now (infra/database/migrations); this one-shot
+  # container brings a fresh volume up to head before openbankapi starts.
+  db-migrate:
+    build:
+      context: ./openbankapi
+    container_name: db-migrate
+    restart: "no"
+    # cwd inside the image is /app (see Dockerfile); the package itself lives
+    # one level down at /app/openbankapi, same as the openbankapi service's own CMD.
+    command: ["alembic", "-c", "openbankapi/infra/database/config/alembic.ini", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
 
   redis:
     image: redis:7-alpine
@@ -141,15 +155,19 @@ services:
       timeout: 5s
       retries: 20
 
-  # Still named `gateway` per spec §10, though the package is now openbankapi.
-  gateway:
+  openbankapi:
     build:
       context: ./openbankapi
-    container_name: gateway
+    container_name: openbankapi
+    command: ["uvicorn", "openbankapi.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./openbankapi:/app/openbankapi
     ports:
       - "8000:8000"
     depends_on:
       kafka-init:
+        condition: service_completed_successfully
+      db-migrate:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
