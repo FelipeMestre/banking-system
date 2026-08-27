@@ -14,11 +14,11 @@ import re
 import pytest
 
 CONTROLLERS = [
-    ("customer_controller", "customer_dto", ["CustomerCreateDTO", "CustomerUpdateDTO"]),
-    ("account_controller", "account_dto", ["AccountCreateDTO", "AccountUpdateDTO"]),
-    ("branch_controller", "branch_dto", ["BranchCreateDTO", "BranchUpdateDTO"]),
-    ("location_controller", "location_dto", ["LocationCreateDTO", "LocationUpdateDTO"]),
-    ("transfer_controller", "transfer_dto", ["TransferRequestDTO"]),
+    ("customer_router", "customer_dto", ["CustomerCreateDTO", "CustomerUpdateDTO"]),
+    ("account_router", "account_dto", ["AccountCreateDTO", "AccountUpdateDTO"]),
+    ("branch_router", "branch_dto", ["BranchCreateDTO", "BranchUpdateDTO"]),
+    ("location_router", "location_dto", ["LocationCreateDTO", "LocationUpdateDTO"]),
+    ("transfer_router", "transfer_dto", ["TransferRequestDTO"]),
 ]
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -26,10 +26,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize("controller,dto_module,dto_names", CONTROLLERS, ids=lambda v: v if isinstance(v, str) else "")
 def test_every_body_field_a_controller_reads_exists_on_its_dto(controller, dto_module, dto_names):
-    source = (ROOT / "controllers" / f"{controller}.py").read_text()
+    source = (ROOT / "api" / "v1" / "routers" / f"{controller}.py").read_text()
     read = set(re.findall(r"body\.(\w+)", source))
 
-    module = importlib.import_module(f"openbankapi.controllers.dtos.{dto_module}")
+    module = importlib.import_module(f"openbankapi.api.v1.dtos.{dto_module}")
     declared: set[str] = set()
     for name in dto_names:
         declared |= set(getattr(module, name).model_fields)
@@ -40,7 +40,7 @@ def test_every_body_field_a_controller_reads_exists_on_its_dto(controller, dto_m
 
 def test_no_dto_anywhere_declares_a_balance_field():
     """The rule from spec §3.5, asserted across every account DTO at once."""
-    from openbankapi.controllers.dtos import account_dto
+    from openbankapi.api.v1.dtos import account_dto
 
     for name in ["AccountCreateDTO", "AccountUpdateDTO"]:
         assert "balance" not in getattr(account_dto, name).model_fields, name

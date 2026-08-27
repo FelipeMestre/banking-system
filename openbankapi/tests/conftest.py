@@ -8,8 +8,13 @@ from fastapi.testclient import TestClient
 
 from openbankapi.app import create_app
 from openbankapi.config import Settings
-from openbankapi.domain.service import AccountService, TransferService
-from openbankapi.infra.kafka.services import StatusRegistry
+from openbankapi.config.dependencies import (
+    get_account_repository,
+    get_branch_repository,
+    get_customer_repository,
+    get_location_repository,
+)
+from openbankapi.infra.kafka.status_registry import StatusRegistry
 
 from .fakes import (
     FakeCustomerRepository,
@@ -44,15 +49,15 @@ def build(*, cache=None, accounts=None, branches=None) -> Harness:
 
     app = create_app(
         settings=settings,
-        transfer_service=TransferService(settings, publisher),
-        account_service=AccountService(settings, accounts, publisher),
-        status_registry=registry,
-        location_repository=locations,
-        branch_repository=branches,
-        customer_repository=customers,
-        account_repository=accounts,
         cache=cache,
+        publisher=publisher,
+        sessionmaker=None,  # unused: every repository dependency is overridden below
+        status_registry=registry,
     )
+    app.dependency_overrides[get_location_repository] = lambda: locations
+    app.dependency_overrides[get_branch_repository] = lambda: branches
+    app.dependency_overrides[get_customer_repository] = lambda: customers
+    app.dependency_overrides[get_account_repository] = lambda: accounts
     client = TestClient(app)
     return Harness(client, publisher, cache, registry,
                    (locations, branches, customers, accounts), settings)

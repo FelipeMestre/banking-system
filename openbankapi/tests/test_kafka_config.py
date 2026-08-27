@@ -1,6 +1,6 @@
 """The gateway and the Flink sink must agree on how keys map to partitions."""
 from openbankapi.config import Settings
-from openbankapi.infra.kafka.kafka_config import producer_config
+from openbankapi.infra.kafka.config.kafka_config import producer_config
 
 
 def test_producer_uses_the_java_compatible_partitioner():

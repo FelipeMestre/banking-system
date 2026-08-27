@@ -14,7 +14,7 @@ import pytest
 
 from openbankapi.config import Settings
 from openbankapi.domain.events import BalanceUpdated
-from openbankapi.infra.kafka.services import AccountBalanceConsumer
+from openbankapi.infra.kafka.consumers import AccountBalanceConsumer
 
 from .fakes import FakeCache, FakeAccountRepository
 
@@ -63,17 +63,17 @@ def test_a_malformed_record_is_dropped_not_fatal():
 
 def test_it_updates_balance_and_invalidates_the_cache():
     async def scenario():
-        repo, numero = await _seeded_repo()
+        repo, account_number = await _seeded_repo()
         cache = FakeCache()
-        cache.store[f"account:{numero}"] = {"balance": 0}
+        cache.store[f"account:{account_number}"] = {"balance": 0}
 
-        await _consumer(repo, cache)._apply(BalanceUpdated(numero, 458700, "t"))
-        return numero, repo.rows[numero].balance, cache.deletes, cache.store
+        await _consumer(repo, cache)._apply(BalanceUpdated(account_number, 458700, "t"))
+        return account_number, repo.rows[account_number].balance, cache.deletes, cache.store
 
-    numero, balance, deletes, store = asyncio.run(scenario())
+    account_number, balance, deletes, store = asyncio.run(scenario())
     assert balance == 458700
-    assert deletes == [f"account:{numero}"]
-    assert f"account:{numero}" not in store, "the stale entry must be gone"
+    assert deletes == [f"account:{account_number}"]
+    assert f"account:{account_number}" not in store, "the stale entry must be gone"
 
 
 def test_an_unknown_account_is_skipped_without_raising():
@@ -92,11 +92,11 @@ def test_an_unknown_account_is_skipped_without_raising():
 def test_replaying_the_same_record_converges():
     """The topic is compacted; re-applying a snapshot is idempotent."""
     async def scenario():
-        repo, numero = await _seeded_repo()
+        repo, account_number = await _seeded_repo()
         consumer = _consumer(repo, FakeCache())
         for _ in range(3):
-            await consumer._apply(BalanceUpdated(numero, 12345, "t"))
-        return repo.rows[numero].balance
+            await consumer._apply(BalanceUpdated(account_number, 12345, "t"))
+        return repo.rows[account_number].balance
 
     assert asyncio.run(scenario()) == 12345
 
@@ -104,9 +104,9 @@ def test_replaying_the_same_record_converges():
 def test_the_projection_is_the_only_thing_that_writes_balance():
     """A CRUD update must not be able to move the balance, even internally."""
     async def scenario():
-        repo, numero = await _seeded_repo()
-        await _consumer(repo, FakeCache())._apply(BalanceUpdated(numero, 500, "t"))
-        await repo.update(numero, status="blocked")
-        return repo.rows[numero].balance
+        repo, account_number = await _seeded_repo()
+        await _consumer(repo, FakeCache())._apply(BalanceUpdated(account_number, 500, "t"))
+        await repo.update(account_number, status="blocked")
+        return repo.rows[account_number].balance
 
     assert asyncio.run(scenario()) == 500

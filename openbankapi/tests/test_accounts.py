@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 
-from openbankapi.controllers.dtos.account_dto import AccountUpdateDTO
+from openbankapi.api.v1.dtos.account_dto import AccountUpdateDTO
 from openbankapi.tests.conftest import build
 from openbankapi.tests.fakes import FakeAccountRepository
 
@@ -74,10 +74,10 @@ def test_sending_balance_in_an_update_is_rejected(wired):
 
 
 def test_a_legitimate_update_still_leaves_the_balance_alone(wired):
-    numero = _create(wired).json()["account_number"]
-    await_balance = wired.accounts.rows[numero].balance
+    account_number = _create(wired).json()["account_number"]
+    await_balance = wired.accounts.rows[account_number].balance
 
-    response = wired.client.put(f"/accounts/{numero}", json={"status": "blocked"})
+    response = wired.client.put(f"/accounts/{account_number}", json={"status": "blocked"})
 
     assert response.status_code == 200
     assert response.json()["status"] == "blocked"
@@ -110,10 +110,10 @@ def test_a_nonexistent_branch_is_a_clean_4xx(wired):
 
 
 def test_deleting_an_account_closes_it_rather_than_removing_it(wired):
-    numero = _create(wired).json()["account_number"]
+    account_number = _create(wired).json()["account_number"]
 
-    assert wired.client.delete(f"/accounts/{numero}").json()["status"] == "closed"
-    assert wired.client.get(f"/accounts/{numero}").status_code == 200
+    assert wired.client.delete(f"/accounts/{account_number}").json()["status"] == "closed"
+    assert wired.client.get(f"/accounts/{account_number}").status_code == 200
 
 
 def test_an_unknown_account_is_404(wired):
