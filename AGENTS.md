@@ -475,75 +475,75 @@ def read_user(user_id: int, repo: UserRepositoryInterface = Depends(get_user_rep
 
 # NextJS 16 frontend project 
 Next.js 16 is strictly the frontend and all business logic and data access live in a separate backend, I use a feature-oriented architecture with a thin routing layer. The main goal is to make the codebase easy to navigate by business domain, prevent shared folders from becoming dumping grounds, and keep dependencies predictable as the number of features grows.
-
 For example:
 
 ```
-src/
-├── app/
-│   ├── (auth)/
-│   │   ├── login/
-│   │   │   └── page.tsx
-│   │   └── forgot-password/
-│   │       └── page.tsx
-│   │
-│   ├── (dashboard)/
-│   │   ├── layout.tsx
-│   │   ├── dashboard/
-│   │   │   └── page.tsx
-│   │   ├── customers/
-│   │   │   └── page.tsx
-│   │   ├── accounts/
-│   │   │   └── page.tsx
-│   │   ├── transactions/
-│   │   │   └── page.tsx
-│   │   └── reports/
-│   │       └── page.tsx
-│   │
-│   ├── layout.tsx
-│   ├── error.tsx
-│   ├── loading.tsx
-│   └── globals.css
-│
-├── features/
-│   ├── customers/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── api/
-│   │   ├── schemas/
-│   │   ├── types.ts
-│   │   └── index.ts
-│   │
-│   ├── accounts/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── api/
-│   │   ├── schemas/
-│   │   ├── types.ts
-│   │   └── index.ts
-│   │
-│   ├── transactions/
-│   ├── reports/
-│   ├── users/
-│   └── ...
-│
-├── components/
-│   ├── ui/
-│   ├── layout/
-│   └── shared/
-│
-├── lib/
-│   ├── api/
-│   ├── auth/
-│   ├── permissions/
-│   ├── formatting/
-│   ├── validation/
-│   └── utils/
-│
-├── providers/
-├── config/
-└── types/
+    src/
+    ├── app/
+    │   ├── (auth)/
+    │   │   ├── login/
+    │   │   │   └── page.tsx
+    │   │   └── forgot-password/
+    │   │       └── page.tsx
+    │   │
+    │   ├── (dashboard)/
+    │   │   ├── layout.tsx
+    │   │   ├── dashboard/
+    │   │   │   └── page.tsx
+    │   │   ├── customers/
+    │   │   │   └── page.tsx
+    │   │   ├── accounts/
+    │   │   │   └── page.tsx
+    │   │   ├── transactions/
+    │   │   │   └── page.tsx
+    │   │   └── reports/
+    │   │       └── page.tsx
+    │   │
+    │   ├── layout.tsx
+    │   ├── error.tsx
+    │   ├── loading.tsx
+    │   └── globals.css
+    │
+    ├── features/
+    │   ├── customers/
+    │   │   ├── components/
+    │   │   ├── hooks/
+    │   │   ├── api/
+    │   │   ├── schemas/
+    │   │   ├── types.ts
+    │   │   └── index.ts
+    │   │
+    │   ├── accounts/
+    │   │   ├── components/
+    │   │   ├── hooks/
+    │   │   ├── api/
+    │   │   ├── schemas/
+    │   │   ├── types.ts
+    │   │   └── index.ts
+    │   │
+    │   ├── transactions/
+    │   ├── reports/
+    │   ├── users/
+    │   └── ...
+    │
+    ├── components/
+    │   ├── ui/
+    │   ├── layout/
+    │   └── shared/
+    │
+    ├── lib/
+    │   ├── api/
+    │   ├── auth/
+    │   ├── permissions/
+    │   ├── formatting/
+    │   ├── validation/
+    │   └── utils/
+    │
+    ├── providers/
+    ├── config/
+    └── types/
 ```
+
 The philosophy
 
 The most important decision is that app is responsible for routing, not business functionality. A page.tsx should mostly compose a screen from the appropriate feature components. You don't want 500-line pages containing API calls, state management, validation, and business-specific UI logic. Next.js route groups such as (dashboard) are particularly useful here because they let you organize the application without affecting the URL structure.
@@ -673,6 +673,36 @@ tests/integration/accounts/
 You might render the account page, mock the backend API, interact with filters, pagination, loading states, errors, etc.
 
 The important point is that you don't test the backend through these tests. The backend should have its own integration and unit test suite in its own project.
+
+## Tailwind
+
+Prefer Tailwind utility classes over hand-written CSS whenever a utility already does the job. Reach for a custom `@layer components` class in `app/globals.css` (this project's Modernist design system: `.btn`, `.field`, `.dialog`, `.tag`, `.alert-error`, etc.) only for a visual pattern reused across multiple components — never as the first resort for a one-off tweak.
+
+### Do / Don't
+
+```tsx
+// DON'T — a new CSS file/class for a one-off layout tweak
+// some.module.css
+.wrapper { display: flex; gap: 12px; margin-top: 16px; }
+
+// DO — Tailwind utilities, using this project's own ds-* spacing scale
+<div className="flex gap-ds-3 mt-ds-4">
+
+// DON'T — inline styles for anything Tailwind already expresses
+<div style={{ display: "flex", alignItems: "center" }}>
+
+// DO
+<div className="flex items-center">
+```
+
+### Rules
+
+- Use Tailwind utilities for layout, spacing, typography, and one-off visual adjustments — don't reach for a new CSS class or file before checking whether a utility already covers it.
+- Use this project's own `--spacing-ds-*` scale (`gap-ds-2`, `p-ds-4`, `mt-ds-6`, ...) instead of Tailwind's default numeric scale, per `app/globals.css`'s own convention. Don't mix both scales in the same component.
+- Promote a utility combination to a `@layer components` class only once it's genuinely reused across 2+ components (Modernist's own pattern: `.btn`, `.field`, `.dialog`, `.tag`) — not preemptively for a single usage.
+- Never use inline `style={{...}}` when the same result is expressible in Tailwind utilities.
+- Never hardcode a color, spacing, or radius value that already has a design-system token (`--color-accent-700`, `--spacing-ds-3`, `--radius-md`, ...) — reference the token instead of duplicating its value.
+- A new standalone CSS file (`*.module.css` or similar) is a last resort. If you add one, justify why Tailwind utilities and the existing `@layer components` classes weren't enough — the same discipline this doc already asks for inline imports.
 <!-- END:nextjs-agent-rules -->
 
 

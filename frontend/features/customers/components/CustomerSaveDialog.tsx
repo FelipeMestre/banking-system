@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { validateDateOfBirth, validateIdentificationNumber, validatePersonName } from "../schemas/customer-fields";
 import { CustomerForm } from "./CustomerForm";
 import type { Customer } from "../types";
@@ -112,7 +113,7 @@ export function CustomerSaveDialog({ title, initialDraft = EMPTY_DRAFT, onClose,
           dateOfBirth: touched.dateOfBirth ? errors.dateOfBirth : null,
         }}
       />
-      {submitError ? <p className="hint">{submitError}</p> : null}
+      {submitError ? <ErrorMessage message={submitError} /> : null}
     </Dialog>
   );
 }

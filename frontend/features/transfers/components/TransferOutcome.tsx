@@ -13,7 +13,7 @@ export function TransferOutcome({ phase, onRecheck, onReset }: Props) {
   if (phase.kind === "idle") return null;
 
   return (
-    <section className="card outcome" aria-live="polite">
+    <section className="card gap-[0.6rem]" aria-live="polite">
       {renderBody(phase, onRecheck, onReset)}
     </section>
   );
@@ -22,12 +22,12 @@ export function TransferOutcome({ phase, onRecheck, onReset }: Props) {
 function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props["onReset"]) {
   switch (phase.kind) {
     case "submitting":
-      return <p className="status status-pending">Submitting…</p>;
+      return <p className="text-[1.15rem] font-bold text-neutral-600">Submitting…</p>;
 
     case "pending":
       return (
         <>
-          <p className="status status-pending">Processing…</p>
+          <p className="text-[1.15rem] font-bold text-neutral-600">Processing…</p>
           <p className="detail">
             Sending {formatCents(phase.amount)} plus a {formatCents(phase.feeAmount)} fee. Waiting
             for the ledger to decide.
@@ -39,7 +39,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
     case "approved":
       return (
         <>
-          <p className="status status-approved">approved ✅</p>
+          <p className="text-[1.15rem] font-bold text-[#12813f]">approved ✅</p>
           <RequestId value={phase.requestId} />
           <RestartButton onReset={onReset} />
         </>
@@ -48,7 +48,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
     case "declined":
       return (
         <>
-          <p className="status status-declined">
+          <p className="text-[1.15rem] font-bold text-accent-700">
             declined ❌ {phase.status.reason ? `(${phase.status.reason})` : null}
           </p>
           <RequestId value={phase.requestId} />
@@ -59,7 +59,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
     case "unresolved":
       return (
         <>
-          <p className="status status-pending">Still pending</p>
+          <p className="text-[1.15rem] font-bold text-neutral-600">Still pending</p>
           <p className="detail">
             The gateway stopped waiting before the ledger answered. The transfer may still settle.
           </p>
@@ -73,7 +73,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
     case "error":
       return (
         <>
-          <p className="status status-declined">Something went wrong</p>
+          <p className="text-[1.15rem] font-bold text-accent-700">Something went wrong</p>
           <p className="detail">{phase.message}</p>
           <RestartButton onReset={onReset} />
         </>
@@ -84,7 +84,7 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
 function RequestId({ value }: { value: string }) {
   return (
     <p className="detail">
-      request_id <code>{value}</code>
+      request_id <code className="font-mono text-[0.8rem] break-all">{value}</code>
     </p>
   );
 }

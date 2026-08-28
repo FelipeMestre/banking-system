@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { validateLocationName } from "../schemas/location-name";
 import { LocationForm } from "./LocationForm";
 import type { Location } from "../types";
@@ -62,7 +63,7 @@ export function LocationSaveDialog({ title, initialName = "", onClose, onSaved, 
         onNameBlur={() => setTouched(true)}
         error={touched ? validationError : null}
       />
-      {submitError ? <p className="hint">{submitError}</p> : null}
+      {submitError ? <ErrorMessage message={submitError} /> : null}
     </Dialog>
   );
 }

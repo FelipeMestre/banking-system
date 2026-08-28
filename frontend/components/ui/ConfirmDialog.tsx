@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Dialog } from "./Dialog";
+import { ErrorMessage } from "./ErrorMessage";
 
 interface Props {
   title: string;
@@ -53,7 +54,7 @@ export function ConfirmDialog({
       acceptDisabled={submitting}
     >
       {message}
-      {error ? <p className="hint">{error}</p> : null}
+      {error ? <ErrorMessage message={error} /> : null}
     </Dialog>
   );
 }

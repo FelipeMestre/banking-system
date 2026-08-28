@@ -172,15 +172,6 @@
   }
 }
 
-@layer utilities {
-  .text-muted {
-    color: color-mix(in srgb, var(--color-text) 55%, transparent);
-  }
-  .grayscale {
-    filter: grayscale(1) contrast(1.08);
-  }
-}
-
 @layer components {
   /* — rules — */
   .hr {
@@ -505,18 +496,20 @@
 /* ══════════════════════════════════════════════════════════════════════
  * App-level extensions — NOT part of Modernist, kept separate on purpose.
  *
- * These classes predate the Modernist handoff (transfer flow status text,
- * the placeholder account badge) and aren't in the source token sheet. They
- * are remapped onto Modernist's tokens so existing pages don't render
- * unstyled while the components themselves are rebuilt on the system's own
- * .card/.btn/.field patterns in a follow-up step — that rebuild is
- * out of scope for "foundations".
+ * These classes predate the Modernist handoff and aren't in the source
+ * token sheet. They are remapped onto Modernist's tokens so existing pages
+ * don't render unstyled while the components themselves are rebuilt on the
+ * system's own .card/.btn/.field patterns in a follow-up step — that
+ * rebuild is out of scope for "foundations".
  *
- * Modernist has no semantic success color (its own credit/debit convention
- * uses --color-neutral-900 for credit and --color-accent-700 for debit, not
- * green/red). "Declined" honestly maps onto that debit convention;
- * "approved" does not have an equivalent, so its pre-existing green is kept
- * as this app's own exception rather than invented as a new system token.
+ * The transfer outcome's status text (TransferOutcome.tsx), the "outcome"
+ * card gap, and the request-id `<code>` styling used to live here too; they
+ * were low-reuse enough (1-2 call sites, mostly single CSS properties) to
+ * inline as Tailwind utilities directly in JSX instead — see the Tailwind
+ * section of AGENTS.md. `approved`'s green (#12813f) and `declined`'s
+ * text-accent-700 are still the same exception noted there: Modernist has
+ * no semantic success color, so the pre-existing green is kept as this
+ * app's own exception rather than invented as a new system token.
  * ══════════════════════════════════════════════════════════════════════ */
 @layer components {
   .subtitle {
@@ -531,39 +524,27 @@
     color: var(--color-neutral-600);
   }
 
-  .outcome {
-    gap: 0.6rem;
-  }
-
-  .status {
-    margin: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-  }
-
-  .status-pending {
-    color: var(--color-neutral-600);
-  }
-
-  .status-approved {
-    /* Exception: Modernist defines no success color. Kept from the app's
-       pre-existing palette rather than invented as a new system token. */
-    color: #12813f;
-  }
-
-  .status-declined {
-    color: var(--color-accent-700);
-  }
-
   .detail {
     margin: 0;
     font-size: 0.85rem;
     color: var(--color-neutral-600);
   }
 
-  code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.8rem;
-    word-break: break-all;
+  /* An operation-level failure (a rejected save, a blocked delete) — distinct
+     from a plain `.hint`, which is quiet per-field guidance, not an error. */
+  .alert-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--color-accent-100);
+    color: var(--color-accent-700);
+    font-size: 0.85rem;
+  }
+  .alert-error svg {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
   }
 }
