@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getLocations } from "../api/get-locations";
 import type { Location } from "../types";
 
@@ -50,11 +53,11 @@ export function LocationsList({ refreshToken, onEdit, onDelete, onActivate }: Pr
   }, [offset, refreshToken]);
 
   if (state.kind === "loading") {
-    return <p className="subtitle">Loading locations…</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading locations…</p>;
   }
 
   if (state.kind === "error") {
-    return <p className="subtitle">{state.message}</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">{state.message}</p>;
   }
 
   const { items, total } = state;
@@ -66,67 +69,59 @@ export function LocationsList({ refreshToken, onEdit, onDelete, onActivate }: Pr
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="overflow-x-auto border-2 border-divider">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Active</th>
-              {showActions ? <th></th> : null}
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Active</TableHead>
+              {showActions ? <TableHead></TableHead> : null}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {items.length === 0 ? (
-              <tr>
-                <td colSpan={showActions ? 4 : 3} className="text-neutral-600">
+              <TableRow>
+                <TableCell colSpan={showActions ? 4 : 3} className="text-neutral-600">
                   No locations to show.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((location) => (
-                <tr key={location.id}>
-                  <td className="font-mono text-xs">{location.id}</td>
-                  <td>{location.name}</td>
-                  <td>
-                    <span className={"tag " + (location.active ? "tag-accent" : "tag-neutral")}>
+                <TableRow key={location.id}>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{location.id}</TableCell>
+                  <TableCell>{location.name}</TableCell>
+                  <TableCell>
+                    <Badge variant={location.active ? "default" : "secondary"}>
                       {location.active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
+                    </Badge>
+                  </TableCell>
                   {showActions ? (
-                    <td className="text-right">
+                    <TableCell className="text-right">
                       <div className="flex justify-end gap-ds-2">
                         {onEdit ? (
-                          <button type="button" className="btn btn-secondary" onClick={() => onEdit(location)}>
+                          <Button type="button" variant="outline" onClick={() => onEdit(location)}>
                             Edit
-                          </button>
+                          </Button>
                         ) : null}
                         {location.active
                           ? onDelete && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onDelete(location)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onDelete(location)}>
                                 Delete
-                              </button>
+                              </Button>
                             )
                           : onActivate && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onActivate(location)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onActivate(location)}>
                                 Activate
-                              </button>
+                              </Button>
                             )}
                       </div>
-                    </td>
+                    </TableCell>
                   ) : null}
-                </tr>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="flex items-center justify-between">
@@ -134,22 +129,22 @@ export function LocationsList({ refreshToken, onEdit, onDelete, onActivate }: Pr
           {total === 0 ? "No locations" : `Showing ${from}–${to} of ${total}`}
         </span>
         <div className="flex gap-ds-2">
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canPrev}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
           >
             Previous
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canNext}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>

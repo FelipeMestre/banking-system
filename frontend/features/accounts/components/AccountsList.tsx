@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { currencySymbol, formatCents } from "@/lib/money";
 import { getAccounts } from "../api/get-accounts";
 import type { Account } from "../types";
 
 const PAGE_SIZE = 10;
 
-const STATUS_TAG: Record<Account["status"], string> = {
-  active: "tag-accent",
-  blocked: "tag-outline",
-  closed: "tag-neutral",
+// "blocked" keeps the accent-colored outline `.tag-outline` used to have —
+// shadcn's own `outline` Badge variant is a plain neutral border, so the
+// accent color is painted back on top rather than dropped.
+const STATUS_BADGE: Record<Account["status"], { variant: "default" | "secondary" | "outline"; className?: string }> = {
+  active: { variant: "default" },
+  blocked: { variant: "outline", className: "border-accent text-accent" },
+  closed: { variant: "secondary" },
 };
 
 type State =
@@ -45,11 +51,11 @@ export function AccountsList() {
   }, [offset]);
 
   if (state.kind === "loading") {
-    return <p className="subtitle">Loading accounts…</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading accounts…</p>;
   }
 
   if (state.kind === "error") {
-    return <p className="subtitle">{state.message}</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">{state.message}</p>;
   }
 
   const { items, total } = state;
@@ -61,42 +67,44 @@ export function AccountsList() {
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="overflow-x-auto border-2 border-divider">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Account Number</th>
-              <th>Currency</th>
-              <th>Customer ID</th>
-              <th>Branch ID</th>
-              <th>Balance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Account Number</TableHead>
+              <TableHead>Currency</TableHead>
+              <TableHead>Customer ID</TableHead>
+              <TableHead>Branch ID</TableHead>
+              <TableHead>Balance</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-neutral-600">
+              <TableRow>
+                <TableCell colSpan={7} className="text-neutral-600">
                   No accounts to show.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((account) => (
-                <tr key={account.id}>
-                  <td className="font-mono text-xs">{account.id}</td>
-                  <td className="font-mono text-xs">{account.account_number}</td>
-                  <td>{account.currency}</td>
-                  <td className="font-mono text-xs">{account.customer_id}</td>
-                  <td className="font-mono text-xs">{account.branch_id}</td>
-                  <td>{formatCents(account.balance, currencySymbol(account.currency))}</td>
-                  <td>
-                    <span className={"tag " + STATUS_TAG[account.status]}>{account.status}</span>
-                  </td>
-                </tr>
+                <TableRow key={account.id}>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{account.id}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{account.account_number}</TableCell>
+                  <TableCell>{account.currency}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{account.customer_id}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{account.branch_id}</TableCell>
+                  <TableCell>{formatCents(account.balance, currencySymbol(account.currency))}</TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_BADGE[account.status].variant} className={STATUS_BADGE[account.status].className}>
+                      {account.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="flex items-center justify-between">
@@ -104,22 +112,22 @@ export function AccountsList() {
           {total === 0 ? "No accounts" : `Showing ${from}–${to} of ${total}`}
         </span>
         <div className="flex gap-ds-2">
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canPrev}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
           >
             Previous
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canNext}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>

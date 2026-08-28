@@ -1,3 +1,4 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { currencySymbol, formatCents } from "@/lib/money";
 import type { Transaction } from "@/lib/types";
 
@@ -38,57 +39,60 @@ export function TransactionsTable({ accountLabel, currencyCode, transactions }: 
         </a>
       </div>
 
-      <table className="table tabular-nums">
-        <thead>
-          <tr>
-            <th className="border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
+      <Table className="tabular-nums">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
               Date
-            </th>
-            <th className="border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
+            </TableHead>
+            <TableHead className="border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
               Description
-            </th>
-            <th className="whitespace-nowrap border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
+            </TableHead>
+            <TableHead className="whitespace-nowrap border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
               Credit
-            </th>
-            <th className="whitespace-nowrap border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
+            </TableHead>
+            <TableHead className="whitespace-nowrap border-b-2 border-divider py-0 pr-[12px] pb-[10px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
               Debit
-            </th>
-            <th className="whitespace-nowrap border-b-2 border-divider py-0 pb-[10px] pl-[12px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
+            </TableHead>
+            <TableHead className="whitespace-nowrap border-b-2 border-divider py-0 pb-[10px] pl-[12px] text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
               Balance
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {transactions.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="border-b border-neutral-300 py-[13px] text-[13px] text-neutral-600">
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                className="border-b border-neutral-300 py-[13px] text-[13px] whitespace-normal text-neutral-600"
+              >
                 No movements in the last 90 days
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : (
             transactions.map((row) => (
-              <tr key={row.id}>
-                <td className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] align-top text-xs text-neutral-700">
+              <TableRow key={row.id}>
+                <TableCell className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] align-top text-xs text-neutral-700">
                   {formatShortDate(row.date)}
-                </td>
-                <td className="border-b border-neutral-300 py-[13px] pr-[12px] align-top text-sm">
+                </TableCell>
+                <TableCell className="border-b border-neutral-300 py-[13px] pr-[12px] align-top text-sm whitespace-normal">
                   <div className="font-semibold">{row.description}</div>
                   <div className="mt-[2px] text-[11px] tracking-[0.04em] text-neutral-600">{row.reference}</div>
-                </td>
-                <td className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] text-right align-top text-sm font-semibold text-neutral-900">
+                </TableCell>
+                <TableCell className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] text-right align-top text-sm font-semibold text-neutral-900">
                   {row.creditCents ? formatCents(row.creditCents, symbol) : <span aria-hidden>—</span>}
-                </td>
-                <td className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] text-right align-top text-sm font-semibold text-accent-700">
+                </TableCell>
+                <TableCell className="whitespace-nowrap border-b border-neutral-300 py-[13px] pr-[12px] text-right align-top text-sm font-semibold text-accent-700">
                   {row.debitCents ? formatCents(row.debitCents, symbol) : <span aria-hidden>—</span>}
-                </td>
-                <td className="whitespace-nowrap border-b border-neutral-300 py-[13px] pl-[12px] text-right align-top text-[13px] text-neutral-700">
+                </TableCell>
+                <TableCell className="whitespace-nowrap border-b border-neutral-300 py-[13px] pl-[12px] text-right align-top text-[13px] text-neutral-700">
                   {formatCents(row.balanceCents, symbol)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
       <div className="mt-[14px] flex items-center justify-between gap-ds-4 text-xs text-neutral-600">
         <span>

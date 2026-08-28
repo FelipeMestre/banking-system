@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { getLocations } from "@/features/locations";
 import type { Location } from "@/features/locations";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FieldErrors {
   code: string | null;
@@ -55,10 +58,9 @@ export function BranchForm({
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="field">
-        <label htmlFor="branch-code">Code</label>
-        <input
+        <Label htmlFor="branch-code">Code</Label>
+        <Input
           id="branch-code"
-          className="input"
           value={code}
           onChange={(event) => onCodeChange(event.target.value)}
           onBlur={() => onFieldBlur("code")}
@@ -75,10 +77,9 @@ export function BranchForm({
       </div>
 
       <div className="field">
-        <label htmlFor="branch-name">Name</label>
-        <input
+        <Label htmlFor="branch-name">Name</Label>
+        <Input
           id="branch-name"
-          className="input"
           value={name}
           onChange={(event) => onNameChange(event.target.value)}
           onBlur={() => onFieldBlur("name")}
@@ -94,24 +95,24 @@ export function BranchForm({
       </div>
 
       <div className="field">
-        <label htmlFor="branch-location">Location</label>
-        <select
-          id="branch-location"
-          className="input"
+        <Label htmlFor="branch-location">Location</Label>
+        <Select
           value={locationId}
-          onChange={(event) => onLocationIdChange(event.target.value)}
-          onBlur={() => onFieldBlur("locationId")}
+          onValueChange={onLocationIdChange}
           disabled={locations === null}
-          aria-invalid={errors.locationId !== null}
-          aria-describedby={errors.locationId ? "branch-location-error" : undefined}
+          onOpenChange={(open) => !open && onFieldBlur("locationId")}
         >
-          <option value="">{locations === null ? "Loading locations…" : "Select a location"}</option>
-          {(locations ?? []).map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="branch-location" className="w-full" aria-invalid={errors.locationId !== null}>
+            <SelectValue placeholder={locations === null ? "Loading locations…" : "Select a location"} />
+          </SelectTrigger>
+          <SelectContent>
+            {(locations ?? []).map((location) => (
+              <SelectItem key={location.id} value={location.id}>
+                {location.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {locationsError ? <p className="hint">{locationsError}</p> : null}
         {errors.locationId ? (
           <p id="branch-location-error" className="hint">

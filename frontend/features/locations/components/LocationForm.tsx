@@ -1,3 +1,6 @@
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 interface Props {
   name: string;
   onNameChange: (value: string) => void;
@@ -10,10 +13,9 @@ interface Props {
 export function LocationForm({ name, onNameChange, onNameBlur, error }: Props) {
   return (
     <div className="field">
-      <label htmlFor="location-name">Name</label>
-      <input
+      <Label htmlFor="location-name">Name</Label>
+      <Input
         id="location-name"
-        className="input"
         value={name}
         onChange={(event) => onNameChange(event.target.value)}
         onBlur={onNameBlur}

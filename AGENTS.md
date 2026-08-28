@@ -676,7 +676,7 @@ The important point is that you don't test the backend through these tests. The 
 
 ## Tailwind
 
-Prefer Tailwind utility classes over hand-written CSS whenever a utility already does the job. Reach for a custom `@layer components` class in `app/globals.css` (this project's Modernist design system: `.btn`, `.field`, `.dialog`, `.tag`, `.alert-error`, etc.) only for a visual pattern reused across multiple components — never as the first resort for a one-off tweak.
+Prefer Tailwind utility classes over hand-written CSS whenever a utility already does the job. The component layer is shadcn/ui (`components/ui/*` — `Button`, `Input`, `Label`, `Select`, `Dialog`, `Card`, `Table`, `Badge`, `Tabs`, `Alert`), styled via CSS variables in `app/globals.css` bridged onto this project's own brand tokens (`--color-accent`, `--spacing-ds-*`, `--radius-*`, etc.) rather than shadcn's own default palette — the look is this app's own, the components underneath are shadcn's. Reach for a hand-written `@layer components` class only for a visual pattern reused across multiple components with no shadcn equivalent — `.field` (a Label+Input(+error) wrapper) is the one surviving example — never as the first resort for a one-off tweak, and never as a substitute for an existing shadcn component.
 
 ### Do / Don't
 
@@ -699,7 +699,7 @@ Prefer Tailwind utility classes over hand-written CSS whenever a utility already
 
 - Use Tailwind utilities for layout, spacing, typography, and one-off visual adjustments — don't reach for a new CSS class or file before checking whether a utility already covers it.
 - Use this project's own `--spacing-ds-*` scale (`gap-ds-2`, `p-ds-4`, `mt-ds-6`, ...) instead of Tailwind's default numeric scale, per `app/globals.css`'s own convention. Don't mix both scales in the same component.
-- Promote a utility combination to a `@layer components` class only once it's genuinely reused across 2+ components (Modernist's own pattern: `.btn`, `.field`, `.dialog`, `.tag`) — not preemptively for a single usage.
+- Check for an existing shadcn component (`components/ui/*`) before reaching for a new one — the same is true for a `@layer components` class, kept only for a pattern with no shadcn equivalent (`.field`, the Label+Input(+error) wrapper, is the one that survived) and only once genuinely reused across 2+ components, not preemptively for a single usage.
 - Never use inline `style={{...}}` when the same result is expressible in Tailwind utilities.
 - Never hardcode a color, spacing, or radius value that already has a design-system token (`--color-accent-700`, `--spacing-ds-3`, `--radius-md`, ...) — reference the token instead of duplicating its value.
 - A new standalone CSS file (`*.module.css` or similar) is a last resort. If you add one, justify why Tailwind utilities and the existing `@layer components` classes weren't enough — the same discipline this doc already asks for inline imports.

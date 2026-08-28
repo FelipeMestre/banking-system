@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getBranches } from "../api/get-branches";
 import type { Branch } from "../types";
 
@@ -50,11 +53,11 @@ export function BranchesList({ refreshToken, onEdit, onDelete, onActivate }: Pro
   }, [offset, refreshToken]);
 
   if (state.kind === "loading") {
-    return <p className="subtitle">Loading branches…</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading branches…</p>;
   }
 
   if (state.kind === "error") {
-    return <p className="subtitle">{state.message}</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">{state.message}</p>;
   }
 
   const { items, total } = state;
@@ -66,71 +69,63 @@ export function BranchesList({ refreshToken, onEdit, onDelete, onActivate }: Pro
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="overflow-x-auto border-2 border-divider">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Location ID</th>
-              <th>Active</th>
-              {showActions ? <th></th> : null}
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Location ID</TableHead>
+              <TableHead>Active</TableHead>
+              {showActions ? <TableHead></TableHead> : null}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {items.length === 0 ? (
-              <tr>
-                <td colSpan={showActions ? 6 : 5} className="text-neutral-600">
+              <TableRow>
+                <TableCell colSpan={showActions ? 6 : 5} className="text-neutral-600">
                   No branches to show.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((branch) => (
-                <tr key={branch.id}>
-                  <td className="font-mono text-xs">{branch.id}</td>
-                  <td>{branch.code}</td>
-                  <td>{branch.name}</td>
-                  <td className="font-mono text-xs">{branch.location_id}</td>
-                  <td>
-                    <span className={"tag " + (branch.active ? "tag-accent" : "tag-neutral")}>
+                <TableRow key={branch.id}>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{branch.id}</TableCell>
+                  <TableCell>{branch.code}</TableCell>
+                  <TableCell>{branch.name}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{branch.location_id}</TableCell>
+                  <TableCell>
+                    <Badge variant={branch.active ? "default" : "secondary"}>
                       {branch.active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
+                    </Badge>
+                  </TableCell>
                   {showActions ? (
-                    <td className="text-right">
+                    <TableCell className="text-right">
                       <div className="flex justify-end gap-ds-2">
                         {onEdit ? (
-                          <button type="button" className="btn btn-secondary" onClick={() => onEdit(branch)}>
+                          <Button type="button" variant="outline" onClick={() => onEdit(branch)}>
                             Edit
-                          </button>
+                          </Button>
                         ) : null}
                         {branch.active
                           ? onDelete && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onDelete(branch)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onDelete(branch)}>
                                 Delete
-                              </button>
+                              </Button>
                             )
                           : onActivate && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onActivate(branch)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onActivate(branch)}>
                                 Activate
-                              </button>
+                              </Button>
                             )}
                       </div>
-                    </td>
+                    </TableCell>
                   ) : null}
-                </tr>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="flex items-center justify-between">
@@ -138,22 +133,22 @@ export function BranchesList({ refreshToken, onEdit, onDelete, onActivate }: Pro
           {total === 0 ? "No branches" : `Showing ${from}–${to} of ${total}`}
         </span>
         <div className="flex gap-ds-2">
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canPrev}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
           >
             Previous
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canNext}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>

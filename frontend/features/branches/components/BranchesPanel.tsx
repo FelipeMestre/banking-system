@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { ActivateBranchDialog } from "./ActivateBranchDialog";
 import { AddBranchDialog } from "./AddBranchDialog";
 import { BranchesList } from "./BranchesList";
@@ -19,9 +20,9 @@ export function BranchesPanel() {
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setAddOpen(true)}>
+        <Button type="button" onClick={() => setAddOpen(true)}>
           Add branch
-        </button>
+        </Button>
       </div>
 
       <BranchesList

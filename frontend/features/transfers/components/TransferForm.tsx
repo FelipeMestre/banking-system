@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatCents, parseCentsInput } from "@/lib/money";
 import type { TransferRequestBody } from "../types";
 
@@ -29,12 +32,11 @@ export function TransferForm({ disabled, onSubmit }: Props) {
   }
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
+    <form className="flex flex-col gap-ds-2 rounded-md bg-surface p-ds-3" onSubmit={handleSubmit}>
       <div className="field">
-        <label htmlFor="source">From account</label>
-        <input
+        <Label htmlFor="source">From account</Label>
+        <Input
           id="source"
-          className="input"
           value={sourceAccount}
           onChange={(event) => setSourceAccount(event.target.value)}
           disabled={disabled}
@@ -43,10 +45,9 @@ export function TransferForm({ disabled, onSubmit }: Props) {
       </div>
 
       <div className="field">
-        <label htmlFor="destination">To account</label>
-        <input
+        <Label htmlFor="destination">To account</Label>
+        <Input
           id="destination"
-          className="input"
           value={destinationAccount}
           onChange={(event) => setDestinationAccount(event.target.value)}
           disabled={disabled}
@@ -55,10 +56,9 @@ export function TransferForm({ disabled, onSubmit }: Props) {
       </div>
 
       <div className="field">
-        <label htmlFor="amount">Amount in cents</label>
-        <input
+        <Label htmlFor="amount">Amount in cents</Label>
+        <Input
           id="amount"
-          className="input"
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
           disabled={disabled}
@@ -73,9 +73,9 @@ export function TransferForm({ disabled, onSubmit }: Props) {
         </p>
       </div>
 
-      <button type="submit" className="btn btn-primary btn-block" disabled={!canSubmit}>
+      <Button type="submit" className="w-full" disabled={!canSubmit}>
         {disabled ? "Working…" : "Send transfer"}
-      </button>
+      </Button>
     </form>
   );
 }

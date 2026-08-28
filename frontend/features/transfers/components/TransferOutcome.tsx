@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
 import type { Phase } from "../types";
 
@@ -13,7 +14,10 @@ export function TransferOutcome({ phase, onRecheck, onReset }: Props) {
   if (phase.kind === "idle") return null;
 
   return (
-    <section className="card gap-[0.6rem]" aria-live="polite">
+    <section
+      className="flex flex-col gap-[0.6rem] rounded-md bg-surface p-ds-3"
+      aria-live="polite"
+    >
       {renderBody(phase, onRecheck, onReset)}
     </section>
   );
@@ -64,9 +68,9 @@ function renderBody(phase: Phase, onRecheck: Props["onRecheck"], onReset: Props[
             The gateway stopped waiting before the ledger answered. The transfer may still settle.
           </p>
           <RequestId value={phase.requestId} />
-          <button type="button" className="btn btn-secondary" onClick={() => onRecheck(phase.requestId)}>
+          <Button type="button" variant="outline" onClick={() => onRecheck(phase.requestId)}>
             Check again
-          </button>
+          </Button>
         </>
       );
 
@@ -91,8 +95,8 @@ function RequestId({ value }: { value: string }) {
 
 function RestartButton({ onReset }: { onReset: () => void }) {
   return (
-    <button type="button" className="btn btn-secondary" onClick={onReset}>
+    <Button type="button" variant="outline" onClick={onReset}>
       New transfer
-    </button>
+    </Button>
   );
 }

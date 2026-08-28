@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCustomers } from "../api/get-customers";
 import type { Customer } from "../types";
 
@@ -50,11 +53,11 @@ export function CustomersList({ refreshToken, onEdit, onDelete, onActivate }: Pr
   }, [offset, refreshToken]);
 
   if (state.kind === "loading") {
-    return <p className="subtitle">Loading customers…</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading customers…</p>;
   }
 
   if (state.kind === "error") {
-    return <p className="subtitle">{state.message}</p>;
+    return <p className="m-0 text-[0.9rem] text-neutral-600">{state.message}</p>;
   }
 
   const { items, total } = state;
@@ -66,77 +69,69 @@ export function CustomersList({ refreshToken, onEdit, onDelete, onActivate }: Pr
   return (
     <div className="flex flex-col gap-ds-3">
       <div className="overflow-x-auto border-2 border-divider">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Identification Number</th>
-              <th>First Name</th>
-              <th>Last Name</th>
-              <th>Date of Birth</th>
-              <th>Gender</th>
-              <th>Age</th>
-              <th>Active</th>
-              {showActions ? <th></th> : null}
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Identification Number</TableHead>
+              <TableHead>First Name</TableHead>
+              <TableHead>Last Name</TableHead>
+              <TableHead>Date of Birth</TableHead>
+              <TableHead>Gender</TableHead>
+              <TableHead>Age</TableHead>
+              <TableHead>Active</TableHead>
+              {showActions ? <TableHead></TableHead> : null}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {items.length === 0 ? (
-              <tr>
-                <td colSpan={showActions ? 9 : 8} className="text-neutral-600">
+              <TableRow>
+                <TableCell colSpan={showActions ? 9 : 8} className="text-neutral-600">
                   No customers to show.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((customer) => (
-                <tr key={customer.id}>
-                  <td className="font-mono text-xs">{customer.id}</td>
-                  <td>{customer.identification_number}</td>
-                  <td>{customer.first_name}</td>
-                  <td>{customer.last_name}</td>
-                  <td>{customer.date_of_birth}</td>
-                  <td>{customer.gender ?? "—"}</td>
-                  <td>{customer.age}</td>
-                  <td>
-                    <span className={"tag " + (customer.active ? "tag-accent" : "tag-neutral")}>
+                <TableRow key={customer.id}>
+                  <TableCell className="font-mono text-xs whitespace-normal break-all">{customer.id}</TableCell>
+                  <TableCell>{customer.identification_number}</TableCell>
+                  <TableCell>{customer.first_name}</TableCell>
+                  <TableCell>{customer.last_name}</TableCell>
+                  <TableCell>{customer.date_of_birth}</TableCell>
+                  <TableCell>{customer.gender ?? "—"}</TableCell>
+                  <TableCell>{customer.age}</TableCell>
+                  <TableCell>
+                    <Badge variant={customer.active ? "default" : "secondary"}>
                       {customer.active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
+                    </Badge>
+                  </TableCell>
                   {showActions ? (
-                    <td className="text-right">
+                    <TableCell className="text-right">
                       <div className="flex justify-end gap-ds-2">
                         {onEdit ? (
-                          <button type="button" className="btn btn-secondary" onClick={() => onEdit(customer)}>
+                          <Button type="button" variant="outline" onClick={() => onEdit(customer)}>
                             Edit
-                          </button>
+                          </Button>
                         ) : null}
                         {customer.active
                           ? onDelete && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onDelete(customer)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onDelete(customer)}>
                                 Delete
-                              </button>
+                              </Button>
                             )
                           : onActivate && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => onActivate(customer)}
-                              >
+                              <Button type="button" variant="outline" onClick={() => onActivate(customer)}>
                                 Activate
-                              </button>
+                              </Button>
                             )}
                       </div>
-                    </td>
+                    </TableCell>
                   ) : null}
-                </tr>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="flex items-center justify-between">
@@ -144,22 +139,22 @@ export function CustomersList({ refreshToken, onEdit, onDelete, onActivate }: Pr
           {total === 0 ? "No customers" : `Showing ${from}–${to} of ${total}`}
         </span>
         <div className="flex gap-ds-2">
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canPrev}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
           >
             Previous
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="outline"
             disabled={!canNext}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>

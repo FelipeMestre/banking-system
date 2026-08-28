@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 /**
  * "Pay a bill" and "Download statement" have no destination in this app yet
@@ -11,15 +12,15 @@ export function QuickActions() {
     <section>
       <h6 className="mb-[14px] text-xs">Quick actions</h6>
       <div className="flex flex-col gap-[2px]">
-        <Link href="/transfer" className="btn btn-primary btn-block mt-0">
-          Send a transfer
-        </Link>
-        <button type="button" disabled className="btn btn-secondary btn-block mt-0">
+        <Button asChild className="w-full justify-start">
+          <Link href="/transfer">Send a transfer</Link>
+        </Button>
+        <Button type="button" variant="outline" disabled className="w-full justify-start">
           Pay a bill
-        </button>
-        <button type="button" disabled className="btn btn-secondary btn-block mt-0">
+        </Button>
+        <Button type="button" variant="outline" disabled className="w-full justify-start">
           Download statement
-        </button>
+        </Button>
       </div>
     </section>
   );

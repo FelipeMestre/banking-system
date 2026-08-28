@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountsList } from "@/features/accounts";
 import { BranchesPanel } from "@/features/branches";
 import { CustomersPanel } from "@/features/customers";
@@ -20,43 +21,30 @@ const PANELS: Record<Tab, React.ComponentType> = {
  * Page-level composition, colocated with the route it belongs to (per the
  * feature-oriented architecture: app composes screens from feature
  * components, it doesn't own business logic itself). Each tab is wired to
- * its own feature's real API. Styled as Modernist's `.seg` segmented
- * control, but driven by button + aria-selected state instead of radio
- * inputs — `.seg-opt`'s `:has(input:checked)` styling has nothing to key
- * off of without them.
+ * its own feature's real API.
  */
 export function AdminTabs() {
   const [active, setActive] = useState<Tab>("Accounts");
 
   return (
-    <div className="flex flex-col gap-ds-6">
-      <div role="tablist" aria-label="Admin sections" className="seg w-fit">
+    <Tabs value={active} onValueChange={(value) => setActive(value as Tab)} className="gap-ds-6">
+      <TabsList aria-label="Admin sections" className="w-fit">
         {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={active === tab}
-            onClick={() => setActive(tab)}
-            className={
-              "seg-opt " +
-              (active === tab ? "bg-accent text-bg" : "hover:bg-neutral-200")
-            }
-          >
+          <TabsTrigger key={tab} value={tab} className="hover:cursor-pointer">
             {tab}
-          </button>
+          </TabsTrigger>
         ))}
-      </div>
+      </TabsList>
 
       {TABS.map((tab) => {
         const Panel = PANELS[tab];
         return (
-          <div key={tab} role="tabpanel" hidden={active !== tab}>
+          <TabsContent key={tab} value={tab}>
             <h2>{tab}</h2>
             <Panel />
-          </div>
+          </TabsContent>
         );
       })}
-    </div>
+    </Tabs>
   );
 }

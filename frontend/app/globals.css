@@ -12,6 +12,11 @@
  */
 @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* ---break---
+ */
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   /* — color: base roles — */
@@ -103,6 +108,7 @@
     font-size: 15px;
     line-height: 1.55;
     font-weight: 400;
+    @apply bg-background text-foreground;
   }
 
   h1,
@@ -170,326 +176,30 @@
   ::selection {
     background: color-mix(in srgb, var(--color-accent) 30%, transparent);
   }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
 }
 
 @layer components {
-  /* — rules — */
-  .hr {
-    height: 2px;
-    border: 0;
-    margin: var(--spacing-ds-4) 0;
-    background: var(--color-divider);
-  }
-
-  /* — buttons — */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    cursor: pointer;
-    text-decoration: none;
-    font-family: var(--font-heading);
-    font-weight: var(--font-heading-weight);
-    font-size: 14px;
-    line-height: 1.2;
-    color: var(--color-text);
-    background: transparent;
-    border: 1px solid transparent;
-    padding: var(--spacing-ds-2) calc(var(--spacing-ds-3) * 1.2);
-    border-radius: var(--radius-md);
-  }
-  .btn svg {
-    display: block;
-  }
-  .btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-  .btn-primary {
-    background: var(--color-accent);
-    color: var(--color-bg);
-  }
-  .btn-primary:hover {
-    background: var(--color-accent-600);
-  }
-  .btn-primary:active {
-    background: var(--color-accent-700);
-  }
-  .btn-secondary {
-    border-color: var(--color-divider);
-  }
-  .btn-secondary:hover {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
-  }
-  .btn-secondary:active {
-    background: color-mix(in srgb, var(--color-text) 14%, transparent);
-  }
-  .btn-ghost {
-    color: var(--color-accent);
-    padding-inline: var(--spacing-ds-1);
-  }
-  .btn-ghost:hover {
-    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  }
-  .btn-ghost:active {
-    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
-  }
-  .btn-icon {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-  }
-  .btn-block {
-    width: 100%;
-    margin-top: var(--spacing-ds-2);
-    justify-content: flex-start;
-    text-align: left;
-  }
-
-  /* — forms — */
+  /* — forms —
+   * The one survivor of the Modernist @layer components block, now that
+   * everything else (.btn*, .card*, .table*, .tag*, .seg*, .dialog*, .nav*,
+   * .radio*, .elev*, .hr, .input) has been migrated onto shadcn components
+   * or inlined as Tailwind utilities (see the shadcn migration notes). This
+   * one still earns its keep: `.field` wraps a Label+Input(+error message)
+   * pair in every form across the app, and shadcn's own Label component
+   * renders a plain `<label>` as .field's direct child, so this selector
+   * still matches and still needs to exist.
+   */
   .field > label {
     display: block;
     font-size: 12px;
     margin-bottom: 5px;
     color: color-mix(in srgb, var(--color-text) 70%, transparent);
-  }
-  .input {
-    width: 100%;
-    min-height: 36px;
-    padding: 6px 10px;
-    font: inherit;
-    font-size: 14px;
-    color: var(--color-text);
-    caret-color: var(--color-accent);
-    background: var(--color-surface);
-    border: 1px solid var(--color-divider);
-    border-radius: var(--radius-md);
-  }
-  .input:hover {
-    border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
-  }
-  .input:focus-visible {
-    border-color: var(--color-accent);
-    outline-offset: 0;
-  }
-  textarea.input {
-    min-height: 90px;
-    resize: vertical;
-  }
-  .radio {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .radio input,
-  .seg-opt input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-    pointer-events: none;
-  }
-  .radio .dot {
-    width: 16px;
-    height: 16px;
-    flex: none;
-    border-radius: 50%;
-    border: 1.5px solid var(--color-divider);
-  }
-  .radio:hover .dot {
-    border-color: var(--color-accent);
-  }
-  .radio input:checked + .dot {
-    border-color: var(--color-accent);
-    background: var(--color-accent);
-    box-shadow: inset 0 0 0 4px var(--color-bg);
-  }
-  .radio input:focus-visible + .dot {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-  }
-  .seg {
-    display: inline-flex;
-    overflow: hidden;
-    border: 1px solid var(--color-divider);
-    border-radius: var(--radius-md);
-  }
-  .seg-opt {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 12px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .seg-opt + .seg-opt {
-    border-left: 1px solid var(--color-divider);
-  }
-  .seg-opt:has(input:checked) {
-    background: var(--color-accent);
-    color: var(--color-bg);
-  }
-  .seg-opt:not(:has(input:checked)):hover {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
-  }
-  .seg-opt:has(input:focus-visible) {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
-  }
-
-  /* — cards — */
-  .card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-ds-2);
-    padding: var(--spacing-ds-3);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-  }
-  .card-kicker {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-accent);
-  }
-  .card-title {
-    font-family: var(--font-heading);
-    font-weight: var(--font-heading-weight);
-    font-size: 17px;
-    line-height: 1.2;
-  }
-  .card-body {
-    margin: 0;
-    font-size: 13px;
-    opacity: 0.8;
-    flex: 1;
-  }
-  .card-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: color-mix(in srgb, var(--color-text) 50%, transparent);
-  }
-  .elev-sm {
-    box-shadow: var(--shadow-sm);
-  }
-  .elev-md {
-    box-shadow: var(--shadow-md);
-  }
-  .elev-lg {
-    box-shadow: var(--shadow-lg);
-  }
-
-  /* — tags — */
-  .tag {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11px;
-    letter-spacing: 0.02em;
-    padding: 3px 10px;
-    border-radius: calc(var(--radius-md) * 0.75);
-  }
-  .tag-accent {
-    background: var(--color-accent-100);
-    color: var(--color-accent-800);
-  }
-  .tag-accent-2 {
-    background: var(--color-accent-2-100);
-    color: var(--color-accent-2-800);
-  }
-  .tag-neutral {
-    background: var(--color-neutral-100);
-    color: var(--color-neutral-800);
-  }
-  .tag-outline {
-    border: 1px solid var(--color-accent);
-    color: var(--color-accent);
-  }
-
-  /* — navigation — */
-  .nav {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-ds-4);
-    padding: var(--spacing-ds-3) var(--spacing-ds-4);
-    border-bottom: 2px solid var(--color-divider);
-  }
-  .nav-brand {
-    font-family: var(--font-heading);
-    font-weight: var(--font-heading-weight);
-    font-size: 18px;
-    margin-right: auto;
-  }
-  .nav a {
-    color: inherit;
-    text-decoration: none;
-    font-size: 14px;
-  }
-  .nav a:hover,
-  .nav a[aria-current="page"] {
-    color: var(--color-accent);
-  }
-
-  /* — tables — */
-  .table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-  }
-  .table th {
-    text-align: left;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: color-mix(in srgb, var(--color-text) 60%, transparent);
-    padding: var(--spacing-ds-2);
-    border-bottom: 2px solid var(--color-divider);
-  }
-  .table td {
-    padding: var(--spacing-ds-2);
-    border-bottom: 1px solid var(--color-divider);
-  }
-  .table tbody tr:hover {
-    background: color-mix(in srgb, var(--color-text) 4%, transparent);
-  }
-
-  /* — dialog — */
-  .dialog-backdrop {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: var(--spacing-ds-4);
-    background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
-  }
-  .dialog {
-    width: min(440px, 100%);
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-ds-3);
-    padding: var(--spacing-ds-4);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-lg);
-  }
-  .dialog-title {
-    font-family: var(--font-heading);
-    font-weight: var(--font-heading-weight);
-    font-size: 20px;
-  }
-  .dialog-body {
-    font-size: 14px;
-    opacity: 0.85;
-  }
-  .dialog-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--spacing-ds-2);
-    margin-top: var(--spacing-ds-2);
   }
 }
 
@@ -547,4 +257,116 @@
     flex-shrink: 0;
     margin-top: 0.1rem;
   }
+}
+/* ---break---
+ * shadcn's semantic Tailwind color names, bridged onto Modernist's own
+ * tokens (see the `:root` block below) rather than shadcn's default
+ * palette — the brand (red accent, flat corners, Archivo) stays exactly
+ * as it was; only the component implementation underneath changes.
+ */
+@theme inline {
+  --font-sans: var(--font-body);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  /* --color-accent is deliberately NOT re-bridged here: the original
+     @theme block above already defines it as the literal brand red, and
+     redeclaring it as var(--accent) here — with :root's --accent pointing
+     back at --color-accent to preserve that same brand red — created a
+     circular reference (A depends on B, B depends on A), which the CSS
+     spec makes invalid: both variables silently resolved to nothing.
+     Leaving the original literal definition alone avoids the cycle. */
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+/* ---break---
+ * The actual values: every shadcn semantic variable points at an existing
+ * Modernist token, not a new color. --radius is 0 — Modernist is flat by
+ * design (see the --radius-sm/md/lg overrides up in the first @theme
+ * block) — so every shadcn radius step derived from it in the block above
+ * stays 0 too. No `.dark` block: Modernist is light-only by design (see
+ * the note on the first @theme block above) and nothing in this app ever
+ * toggles a `.dark` class, so a placeholder dark palette would be dead,
+ * misleading code rather than a real feature.
+ *
+ * --accent is NOT shadcn's usual quiet hover tint here: `--color-accent`
+ * was already this app's own brand-red token long before shadcn existed,
+ * and Tailwind v4 merges every `@theme` block's `--color-*` names into one
+ * namespace — whichever declaration of `--color-accent` comes last in the
+ * file wins for every existing `bg-accent`/`text-accent` usage across the
+ * whole app (Sidebar, Topbar, AdminTabs, TransactionsTable, ...), not just
+ * shadcn's own components. Pointing shadcn's `--accent` at the pale
+ * `--color-accent-100` tint (the "natural" semantic reading) silently
+ * overrode every one of those with a near-invisible pink — confirmed live
+ * (the admin tabs' active-tab red disappeared). Pointing it at the full
+ * brand red instead keeps every existing usage exactly as it was; the only
+ * side effect is that a shadcn component's own hover/focus highlight (e.g.
+ * a Select item) is bold red rather than a subtle gray, which is
+ * consistent with this app's own established convention rather than a bug.
+ */
+:root {
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-600);
+  --accent: var(--color-accent);
+  --accent-foreground: var(--color-bg);
+  --destructive: var(--color-accent-700);
+  --border: var(--color-divider);
+  --input: var(--color-divider);
+  --ring: var(--color-accent);
+  --chart-1: var(--color-accent-300);
+  --chart-2: var(--color-accent-500);
+  --chart-3: var(--color-accent-700);
+  --chart-4: var(--color-neutral-400);
+  --chart-5: var(--color-neutral-700);
+  --radius: 0px;
+  --sidebar: var(--color-surface);
+  --sidebar-foreground: var(--color-text);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-bg);
+  --sidebar-accent: var(--color-accent-100);
+  --sidebar-accent-foreground: var(--color-accent-800);
+  --sidebar-border: var(--color-divider);
+  --sidebar-ring: var(--color-accent);
 }
