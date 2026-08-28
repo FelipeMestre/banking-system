@@ -247,6 +247,12 @@ class FakeAccountRepository:
             for account in self.rows.values()
         )
 
+    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
+        return any(
+            account.branch_id == branch_id and account.status is AccountStatus.ACTIVE
+            for account in self.rows.values()
+        )
+
     async def apply_balance(self, account_number: str, balance: int) -> bool:
         current = self.rows.get(account_number)
         if current is None:

@@ -35,6 +35,7 @@ from starlette.requests import HTTPConnection
 
 from .config import Settings
 from ..domain.service.account_service import AccountService
+from ..domain.service.branch_service import BranchService
 from ..domain.service.customer_service import CustomerService
 from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
@@ -145,3 +146,13 @@ def get_customer_service(
 
 
 CustomerServiceDep = Annotated[CustomerService, Depends(get_customer_service)]
+
+
+def get_branch_service(
+    branch_repository: BranchRepositoryDep,
+    account_repository: AccountRepositoryDep,
+) -> BranchService:
+    return BranchService(branch_repository, account_repository)
+
+
+BranchServiceDep = Annotated[BranchService, Depends(get_branch_service)]

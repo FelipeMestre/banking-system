@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from ....domain.exceptions import (
     AccountNotOperableError,
+    BranchHasActiveAccountsError,
     CustomerAccountsNotEmptyError,
     DomainError,
     DuplicateError,
@@ -33,6 +34,7 @@ _STATUS = [
     (InvalidAccountNumberError, 400),
     (InsufficientFundsError, 409),
     (CustomerAccountsNotEmptyError, 409),
+    (BranchHasActiveAccountsError, 409),
 ]
 
 

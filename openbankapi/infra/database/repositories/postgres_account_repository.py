@@ -144,6 +144,18 @@ class PostgresAccountRepository(PostgresRepository):
             )
         )
 
+    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
+        return bool(
+            await self._session.scalar(
+                select(
+                    exists().where(
+                        AccountORM.branch_id == branch_id,
+                        AccountORM.status == AccountStatus.ACTIVE.value,
+                    )
+                )
+            )
+        )
+
 
 class PostgresAccountBalanceProjection:
     """The only writer of `accounts.balance` (spec §3.6).

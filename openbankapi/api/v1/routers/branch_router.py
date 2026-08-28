@@ -5,10 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from openbankapi.api.v1.dtos.branch_dto import BranchResponseDTO, BranchUpdateDTO
+from openbankapi.api.v1.dtos.branch_dto import BranchCreateDTO, BranchResponseDTO, BranchUpdateDTO
 from openbankapi.api.v1.dtos.common import PageParams, PageResponse
 from openbankapi.api.v1.services.cache_aside import read_through
-from openbankapi.config.dependencies import BranchRepositoryDep, CacheDep, SettingsDep
+from openbankapi.config.dependencies import BranchRepositoryDep, BranchServiceDep, CacheDep, SettingsDep
 from openbankapi.domain.exceptions import BranchNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
 
@@ -67,9 +67,9 @@ async def update(
 
 
 @router.delete("/{branch_id}", response_model=BranchResponseDTO)
-async def soft_delete(branch_id: UUID, repository: BranchRepositoryDep, cache: CacheDep):
+async def soft_delete(branch_id: UUID, service: BranchServiceDep, cache: CacheDep):
     # The row survives: accounts reference it, and history must stay readable.
-    updated = await repository.deactivate(branch_id)
+    updated = await service.deactivate(branch_id)
     if updated is None:
         raise BranchNotFoundError(branch_id)
     await cache.delete(cache_key(ENTITY, branch_id))

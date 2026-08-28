@@ -63,6 +63,15 @@ class IAccountRepository(Protocol):
         """
         ...
 
+    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
+        """Whether this branch has any account with status `active`.
+
+        No balance check here, unlike the customer rule: a branch is
+        reference data, not the funds' owner. Used to refuse a branch
+        soft-delete until every account there is moved or closed.
+        """
+        ...
+
 
 class IAccountBalanceProjection(Protocol):
     """The one capability that may write `balance`. Handed only to the consumer."""

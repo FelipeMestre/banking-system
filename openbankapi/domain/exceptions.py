@@ -102,6 +102,19 @@ class CustomerAccountsNotEmptyError(DomainError):
         )
 
 
+class BranchHasActiveAccountsError(DomainError):
+    """A branch cannot be soft-deleted while it still has an active account. -> 409
+
+    Unlike a customer, a branch is reference data an account merely points at
+    — there is no per-account balance rule here, only status: any account
+    still `active` at this branch must be moved or closed first.
+    """
+
+    def __init__(self, branch_id: object):
+        self.branch_id = branch_id
+        super().__init__(f"The branch {branch_id} still has an active account and cannot be deleted")
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 
