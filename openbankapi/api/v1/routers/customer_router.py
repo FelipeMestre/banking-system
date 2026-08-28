@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from openbankapi.api.v1.dtos.common import PageParams, PageResponse
 from openbankapi.api.v1.dtos.customer_dto import CustomerCreateDTO, CustomerResponseDTO, CustomerUpdateDTO
 from openbankapi.api.v1.services.cache_aside import read_through
-from openbankapi.config.dependencies import CacheDep, CustomerRepositoryDep, SettingsDep
+from openbankapi.config.dependencies import CacheDep, CustomerRepositoryDep, CustomerServiceDep, SettingsDep
 from openbankapi.domain.exceptions import CustomerNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
 
@@ -77,8 +77,8 @@ async def update(
 
 
 @router.delete("/{customer_id}", response_model=CustomerResponseDTO)
-async def soft_delete(customer_id: UUID, repository: CustomerRepositoryDep, cache: CacheDep):
-    updated = await repository.deactivate(customer_id)
+async def soft_delete(customer_id: UUID, service: CustomerServiceDep, cache: CacheDep):
+    updated = await service.deactivate(customer_id)
     if updated is None:
         raise CustomerNotFoundError(customer_id)
     await cache.delete(cache_key(ENTITY, customer_id))

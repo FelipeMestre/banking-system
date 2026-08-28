@@ -16,6 +16,19 @@ export async function describeFailure(response: Response): Promise<string> {
   if (response.status === 422) {
     return "The gateway rejected those values. Check the accounts and amount.";
   }
+  // A domain error (see openbankapi's error_handlers.py) carries a message
+  // written for a human — a business rule ("customer still has accounts"),
+  // not a status code. Prefer that over the generic fallback whenever it's
+  // actually there.
+  try {
+    const body = await response.json();
+    const message = body?.error?.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  } catch {
+    // Not JSON, or no body at all — fall through to the generic message.
+  }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
 }
 

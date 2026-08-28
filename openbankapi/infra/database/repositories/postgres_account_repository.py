@@ -13,7 +13,7 @@ import secrets
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, update as sql_update
+from sqlalchemy import exists, select, update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -130,6 +130,19 @@ class PostgresAccountRepository(PostgresRepository):
             {"status": AccountStatus.CLOSED.value},
         )
         return _to_domain(row) if row else None
+
+    async def has_nonempty_account_for_customer(self, customer_id: UUID) -> bool:
+        return bool(
+            await self._session.scalar(
+                select(
+                    exists().where(
+                        AccountORM.customer_id == customer_id,
+                        AccountORM.status == AccountStatus.ACTIVE.value,
+                        AccountORM.balance != 0,
+                    )
+                )
+            )
+        )
 
 
 class PostgresAccountBalanceProjection:

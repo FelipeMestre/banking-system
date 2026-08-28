@@ -35,6 +35,7 @@ from starlette.requests import HTTPConnection
 
 from .config import Settings
 from ..domain.service.account_service import AccountService
+from ..domain.service.customer_service import CustomerService
 from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
 from ..infra.database.interfaces import (
@@ -134,3 +135,13 @@ def get_transfer_service(settings: SettingsDep, publisher: PublisherDep) -> Tran
 
 
 TransferServiceDep = Annotated[TransferService, Depends(get_transfer_service)]
+
+
+def get_customer_service(
+    customer_repository: CustomerRepositoryDep,
+    account_repository: AccountRepositoryDep,
+) -> CustomerService:
+    return CustomerService(customer_repository, account_repository)
+
+
+CustomerServiceDep = Annotated[CustomerService, Depends(get_customer_service)]

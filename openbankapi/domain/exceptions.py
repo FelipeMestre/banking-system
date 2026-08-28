@@ -85,6 +85,23 @@ class AccountNotOperableError(DomainError):
         super().__init__(f"account {account_number} is {status}")
 
 
+class CustomerAccountsNotEmptyError(DomainError):
+    """A customer cannot be soft-deleted while an account isn't empty. -> 409
+
+    "Empty" means every account is either not active (blocked/closed) or has a
+    zero balance — not that the customer has no account rows at all. An
+    account can carry funds and still be perfectly reachable after the
+    customer is deactivated, so the caller must zero or close it first.
+    """
+
+    def __init__(self, customer_id: object):
+        self.customer_id = customer_id
+        super().__init__(
+            f"customer {customer_id} still has an active account with a nonzero balance "
+            "and cannot be deleted"
+        )
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 

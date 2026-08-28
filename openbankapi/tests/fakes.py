@@ -167,7 +167,7 @@ class FakeCustomerRepository:
         updated = Customer(
             id=current.id,
             identification_number=supplied.get("identification_number", current.identification_number),
-            name=supplied.get("name", current.name),
+            first_name=supplied.get("first_name", current.first_name),
             last_name=supplied.get("last_name", current.last_name),
             date_of_birth=supplied.get("date_of_birth", current.date_of_birth),
             gender=supplied.get("gender", current.gender),
@@ -238,6 +238,14 @@ class FakeAccountRepository:
 
     async def close(self, account_number: str) -> Optional[Account]:
         return await self.update(account_number, status="closed")
+
+    async def has_nonempty_account_for_customer(self, customer_id: UUID) -> bool:
+        return any(
+            account.customer_id == customer_id
+            and account.status is AccountStatus.ACTIVE
+            and account.balance != 0
+            for account in self.rows.values()
+        )
 
     async def apply_balance(self, account_number: str, balance: int) -> bool:
         current = self.rows.get(account_number)

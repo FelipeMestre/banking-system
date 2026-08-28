@@ -53,6 +53,16 @@ class IAccountRepository(Protocol):
         """Soft delete: `status = 'closed'`."""
         ...
 
+    async def has_nonempty_account_for_customer(self, customer_id: UUID) -> bool:
+        """Whether this customer owns an account that isn't "empty".
+
+        Empty means either not active (blocked/closed) or a zero balance. A
+        closed account, or an active one sitting at 0, does not block
+        anything — only an active account that still carries funds does.
+        Used to refuse a customer soft-delete until every account is empty.
+        """
+        ...
+
 
 class IAccountBalanceProjection(Protocol):
     """The one capability that may write `balance`. Handed only to the consumer."""
