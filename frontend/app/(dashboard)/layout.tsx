@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/home/Sidebar";
 import { Topbar } from "@/components/home/Topbar";
 import { CUSTOMER_GREETING, LAST_SIGN_IN } from "@/lib/placeholder-home";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
 
 /**
  * The dashboard shell (sidebar + topbar). A route group — `(dashboard)`
@@ -10,12 +11,14 @@ import { CUSTOMER_GREETING, LAST_SIGN_IN } from "@/lib/placeholder-home";
  */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-screen grid-cols-[76px_1fr] bg-bg text-text">
-      <Sidebar />
-      <div className="flex min-w-0 flex-col">
-        <Topbar greeting={CUSTOMER_GREETING} lastSignIn={LAST_SIGN_IN} />
-        <main className="flex min-w-0 flex-1 flex-col px-ds-8 pt-[28px] pb-[40px]">{children}</main>
+    <RequireAuth>
+      <div className="grid min-h-screen grid-cols-[76px_1fr] bg-bg text-text">
+        <Sidebar />
+        <div className="flex min-w-0 flex-col">
+          <Topbar greeting={CUSTOMER_GREETING} lastSignIn={LAST_SIGN_IN} />
+          <main className="flex min-w-0 flex-1 flex-col px-ds-8 pt-[28px] pb-[40px]">{children}</main>
+        </div>
       </div>
-    </div>
+    </RequireAuth>
   );
 }
