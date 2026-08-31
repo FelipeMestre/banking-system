@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Auth0ProviderWithNavigate } from "@/lib/auth/Auth0ProviderWithNavigate";
 
 export const metadata: Metadata = {
   title: "Banking Payment System",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Auth0ProviderWithNavigate>{children}</Auth0ProviderWithNavigate>
+      </body>
     </html>
   );
 }

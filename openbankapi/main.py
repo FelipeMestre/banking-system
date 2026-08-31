@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from fastapi_plugin.fast_api_client import Auth0FastAPI
+
 from .app import create_app
 from .config import Settings
 from .infra.cache.repositories import get_null_cache_repository, get_redis_cache_repository
@@ -36,6 +38,15 @@ status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
 
+# None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
+# to exist first — see config/dependencies.py for how routes degrade to a
+# clear 503 instead of crashing the whole app when this is unset).
+auth0 = (
+    Auth0FastAPI(domain=settings.auth0_domain, audience=settings.auth0_audience)
+    if settings.auth0_domain and settings.auth0_audience
+    else None
+)
+
 
 def _start(loop: asyncio.AbstractEventLoop) -> None:
     status_consumer.start(loop)
@@ -59,6 +70,7 @@ app = create_app(
     publisher=publisher,
     sessionmaker=sessionmaker,
     status_registry=status_registry,
+    auth0=auth0,
     on_start=_start,
     on_stop=_stop,
     on_stop_async=_stop_async,

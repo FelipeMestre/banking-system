@@ -28,9 +28,10 @@ taking an HTTPConnection").
 """
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request
+from fastapi_plugin.fast_api_client import Auth0FastAPI
 from starlette.requests import HTTPConnection
 
 from .config import Settings
@@ -84,6 +85,39 @@ def get_status_registry(conn: HTTPConnection) -> StatusRegistry:
 
 
 StatusRegistryDep = Annotated[StatusRegistry, Depends(get_status_registry)]
+
+
+def get_auth0(conn: HTTPConnection) -> Optional[Auth0FastAPI]:
+    return conn.app.state.auth0
+
+
+Auth0Dep = Annotated[Optional[Auth0FastAPI], Depends(get_auth0)]
+
+
+def _require_auth0(auth0: Optional[Auth0FastAPI]) -> Auth0FastAPI:
+    if auth0 is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Auth0 is not configured — set AUTH0_DOMAIN and AUTH0_AUDIENCE.",
+        )
+    return auth0
+
+
+async def get_current_user(request: Request, auth0: Auth0Dep) -> dict:
+    """Requires a valid Access Token; returns its decoded claims."""
+    return await _require_auth0(auth0).require_auth()(request)
+
+
+CurrentUserDep = Annotated[dict, Depends(get_current_user)]
+
+
+def require_scope(scope: str):
+    """Like `CurrentUserDep`, but also requires `scope` in the token's `scope` claim."""
+
+    async def _dependency(request: Request, auth0: Auth0Dep) -> dict:
+        return await _require_auth0(auth0).require_auth(scopes=scope)(request)
+
+    return _dependency
 
 
 # --- repositories: request-scoped, built fresh on the shared session --------

@@ -20,6 +20,7 @@ from typing import Awaitable, Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_plugin.fast_api_client import Auth0FastAPI
 
 from .config import Settings
 from .api.v1.services import error_handlers
@@ -36,6 +37,7 @@ def create_app(
     publisher: IEventPublisher,
     sessionmaker: async_sessionmaker[AsyncSession],
     status_registry: StatusRegistry,
+    auth0: Optional[Auth0FastAPI] = None,
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
     on_stop_async: Optional[Callable[[], Awaitable[None]]] = None,
@@ -63,6 +65,7 @@ def create_app(
     app.state.publisher = publisher
     app.state.sessionmaker = sessionmaker
     app.state.status_registry = status_registry
+    app.state.auth0 = auth0
 
     app.add_middleware(
         CORSMiddleware,

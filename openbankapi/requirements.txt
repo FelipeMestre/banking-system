@@ -1,4 +1,4 @@
-fastapi==0.115.6
+fastapi==0.115.14
 uvicorn[standard]==0.34.0
 confluent-kafka==2.6.1
 # The [asyncio] extra is what pulls greenlet; without it every `await
@@ -7,3 +7,7 @@ sqlalchemy[asyncio]==2.0.52
 asyncpg==0.31.0
 alembic==1.19.1
 redis==8.1.0
+# Auth0's own FastAPI SDK — verifies Access Tokens (JWKS-backed) and rejects
+# unauthenticated/under-scoped requests. Bumps fastapi from 0.115.6: this
+# version needs >=0.115.11,<0.116.0.
+auth0-fastapi-api==1.0.0b5

@@ -39,6 +39,13 @@ class Settings:
     websocket_timeout_seconds: float = 30.0
     status_cache_size: int = 10_000
 
+    # --- Auth0 ---
+    # No client secret here on purpose: verifying an Access Token is a JWKS
+    # (public-key) check, not a token exchange — this API is a resource
+    # server, not an OAuth client of its own.
+    auth0_domain: str = ""
+    auth0_audience: str = ""
+
     @staticmethod
     def from_env() -> "Settings":
         return Settings(
@@ -58,4 +65,6 @@ class Settings:
             cors_allow_origins=_tuple_from_env("CORS_ALLOW_ORIGINS", ("http://localhost:3000",)),
             websocket_timeout_seconds=float(os.getenv("WEBSOCKET_TIMEOUT_SECONDS", "30")),
             status_cache_size=int(os.getenv("STATUS_CACHE_SIZE", "10000")),
+            auth0_domain=os.getenv("AUTH0_DOMAIN", ""),
+            auth0_audience=os.getenv("AUTH0_AUDIENCE", ""),
         )

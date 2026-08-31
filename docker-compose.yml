@@ -188,6 +188,11 @@ services:
       FEES_ACCOUNT: "0000000000000001"
       FEE_FLAT_CENTS: "25"
       WEBSOCKET_TIMEOUT_SECONDS: "30"
+      AUTH0_DOMAIN: dev-ekwg1eyvfjrof0to.us.auth0.com
+      # Empty until an Auth0 "API" resource exists (Applications > APIs in the
+      # dashboard, or `auth0 apis create`) — auth stays off (503 on the
+      # protected routes) rather than the app failing to start until then.
+      AUTH0_AUDIENCE: "https://dev-ekwg1eyvfjrof0to.us.auth0.com/api/v2/"
 
   kafka-ui:
     image: tchiotludo/akhq:0.25.1
