@@ -1,5 +1,5 @@
 import { currencySymbol, formatCents, maskAccountNumber } from "@/lib/money";
-import type { AccountSummary } from "@/lib/placeholder-home";
+import type { AccountSummary } from "@/features/accounts";
 
 interface Props {
   account: AccountSummary;
