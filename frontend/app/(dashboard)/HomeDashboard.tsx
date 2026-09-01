@@ -6,8 +6,15 @@ import { CreditCardPanel } from "@/components/home/CreditCardPanel";
 import { CREDIT_CARD, SHOW_CREDIT_CARD } from "@/components/home/credit-card-fixture";
 import { QuickActions } from "@/components/home/QuickActions";
 import { TotalPosition } from "@/components/home/TotalPosition";
-import { getAccounts, totalPositionByCurrency, type Account } from "@/features/accounts";
+import {
+  CreateAccountDialog,
+  NoAccountsEmptyState,
+  getAccounts,
+  totalPositionByCurrency,
+  type Account,
+} from "@/features/accounts";
 import { getTransactions, type Transaction } from "@/features/transactions";
+import { ApiError } from "@/lib/api/client";
 
 const ACCOUNTS_PAGE_SIZE = 50;
 const TRANSACTIONS_PAGE_SIZE = 20;
@@ -15,7 +22,11 @@ const TRANSACTIONS_PAGE_SIZE = 20;
 type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; accounts: Account[] };
+  | { kind: "ready"; accounts: Account[] }
+  // 404 from getAccounts means this Auth0 identity has no linked Customer yet
+  // (amendment): shown with the SAME empty-state UI as a genuinely empty
+  // list, but the dialog also needs to collect KYC fields to auto-link it.
+  | { kind: "no-customer-linked" };
 
 /**
  * Fetches the caller's own accounts (spec §2.1) and, for whichever one is
@@ -26,6 +37,7 @@ export function HomeDashboard() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selectedAccountNumber, setSelectedAccountNumber] = useState<string | null>(null);
   const [transactionsByAccount, setTransactionsByAccount] = useState<Record<string, Transaction[]>>({});
+  const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
 
   const refetchAccounts = useCallback(() => {
     let cancelled = false;
@@ -38,12 +50,15 @@ export function HomeDashboard() {
         setSelectedAccountNumber((current) => current ?? page.items[0]?.account_number ?? null);
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            kind: "error",
-            message: error instanceof Error ? error.message : "Could not load accounts.",
-          });
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 404) {
+          setState({ kind: "no-customer-linked" });
+          return;
         }
+        setState({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Could not load accounts.",
+        });
       });
 
     return () => {
@@ -87,15 +102,28 @@ export function HomeDashboard() {
     return <p className="m-0 text-[0.9rem] text-neutral-600">{state.message}</p>;
   }
 
-  const { accounts } = state;
+  const accounts = state.kind === "ready" ? state.accounts : [];
 
-  if (accounts.length === 0) {
+  if (state.kind === "no-customer-linked" || accounts.length === 0) {
+    // Same empty-state UI for both cases; only the dialog's KYC requirement
+    // differs (amendment — spec: "No customer linked" routes here too).
+    const requiresKyc = state.kind === "no-customer-linked";
     return (
       <div className="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-ds-8">
-        <p className="m-0 text-[0.9rem] text-neutral-600">You have no accounts yet.</p>
+        <NoAccountsEmptyState onCreateClick={() => setShowCreateAccountDialog(true)} />
         <aside className="flex flex-col gap-[28px]">
           <TotalPosition totals={[]} />
         </aside>
+        {showCreateAccountDialog ? (
+          <CreateAccountDialog
+            requiresKyc={requiresKyc}
+            onClose={() => setShowCreateAccountDialog(false)}
+            onSuccess={() => {
+              setShowCreateAccountDialog(false);
+              refetchAccounts();
+            }}
+          />
+        ) : null}
       </div>
     );
   }
