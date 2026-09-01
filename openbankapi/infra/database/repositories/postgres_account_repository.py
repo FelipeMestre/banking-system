@@ -108,6 +108,12 @@ class PostgresAccountRepository(PostgresRepository):
         rows, total = await self._fetch_page(AccountORM, limit=limit, offset=offset)
         return page_of([_to_domain(r) for r in rows], total, limit, offset)
 
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page:
+        rows, total = await self._fetch_page(
+            AccountORM, AccountORM.customer_id == customer_id, limit=limit, offset=offset
+        )
+        return page_of([_to_domain(r) for r in rows], total, limit, offset)
+
     async def update(
         self,
         account_number: str,

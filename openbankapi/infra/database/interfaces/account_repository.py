@@ -37,6 +37,10 @@ class IAccountRepository(Protocol):
 
     async def list(self, *, limit: int, offset: int) -> Page[Account]: ...
 
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page[Account]:
+        """Accounts owned by one customer only (spec §2.1 — homepage scoping)."""
+        ...
+
     async def update(
         self,
         account_number: str,

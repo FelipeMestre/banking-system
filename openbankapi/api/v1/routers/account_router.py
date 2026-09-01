@@ -17,6 +17,7 @@ from openbankapi.config.dependencies import (
     AccountRepositoryDep,
     AccountServiceDep,
     CacheDep,
+    CurrentCustomerDep,
     SettingsDep,
 )
 from openbankapi.domain.exceptions import AccountNotFoundError
@@ -41,8 +42,11 @@ async def create(body: AccountCreateDTO, service: AccountServiceDep):
 
 
 @router.get("", response_model=PageResponse[AccountResponseDTO])
-async def list_all(repository: AccountRepositoryDep, page: PageParams = Depends()):
-    result = await repository.list(limit=page.limit, offset=page.offset)
+async def list_all(
+    repository: AccountRepositoryDep, customer: CurrentCustomerDep, page: PageParams = Depends()
+):
+    """Scoped to the caller's own accounts (spec §2.1) — never the whole table."""
+    result = await repository.list_by_customer(customer.id, limit=page.limit, offset=page.offset)
     return PageResponse(
         items=[AccountResponseDTO.model_validate(i) for i in result.items],
         total=result.total, limit=result.limit, offset=result.offset,
