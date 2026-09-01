@@ -49,3 +49,10 @@ class CustomerResponseDTO(BaseModel):
     # Derived on every read from date_of_birth; there is no age column (§3.4).
     age: int
     active: bool
+    auth0_sub: Optional[str] = None
+
+
+class CustomerAuth0LinkDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sub: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]

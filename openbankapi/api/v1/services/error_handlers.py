@@ -16,6 +16,7 @@ from ....domain.exceptions import (
     AccountNotOperableError,
     BranchHasActiveAccountsError,
     CustomerAccountsNotEmptyError,
+    CustomerNotLinkedError,
     DomainError,
     DuplicateError,
     InsufficientFundsError,
@@ -28,6 +29,7 @@ LOG = logging.getLogger("openbankapi.errors")
 
 _STATUS = [
     (NotFoundError, 404),
+    (CustomerNotLinkedError, 404),
     (ReferencedEntityNotFoundError, 422),
     (DuplicateError, 409),
     (AccountNotOperableError, 409),

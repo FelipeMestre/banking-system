@@ -26,6 +26,7 @@ def _to_domain(row: CustomerORM) -> Customer:
         active=row.active,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        auth0_sub=row.auth0_sub,
     )
 
 
@@ -55,6 +56,10 @@ class PostgresCustomerRepository(PostgresRepository):
         row = await self._fetch_one(CustomerORM, CustomerORM.id == customer_id)
         return _to_domain(row) if row else None
 
+    async def get_by_auth0_sub(self, sub: str) -> Optional[Customer]:
+        row = await self._fetch_one(CustomerORM, CustomerORM.auth0_sub == sub)
+        return _to_domain(row) if row else None
+
     async def list(self, *, limit: int, offset: int) -> Page:
         rows, total = await self._fetch_page(CustomerORM, limit=limit, offset=offset)
         return page_of([_to_domain(r) for r in rows], total, limit, offset)
@@ -69,6 +74,7 @@ class PostgresCustomerRepository(PostgresRepository):
         date_of_birth: Optional[date] = None,
         gender: Optional[str] = None,
         active: Optional[bool] = None,
+        auth0_sub: Optional[str] = None,
     ) -> Optional[Customer]:
         row = await self._update(
             CustomerORM,
@@ -80,6 +86,7 @@ class PostgresCustomerRepository(PostgresRepository):
                 "date_of_birth": date_of_birth,
                 "gender": gender,
                 "active": active,
+                "auth0_sub": auth0_sub,
             },
         )
         return _to_domain(row) if row else None

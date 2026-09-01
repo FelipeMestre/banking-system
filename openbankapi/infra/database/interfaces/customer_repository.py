@@ -22,6 +22,10 @@ class ICustomerRepository(Protocol):
 
     async def get(self, customer_id: UUID) -> Optional[Customer]: ...
 
+    async def get_by_auth0_sub(self, sub: str) -> Optional[Customer]:
+        """Resolve the customer linked to this Auth0 identity, if any (spec §1.2)."""
+        ...
+
     async def list(self, *, limit: int, offset: int) -> Page[Customer]: ...
 
     async def update(
@@ -34,6 +38,7 @@ class ICustomerRepository(Protocol):
         date_of_birth: Optional[date] = None,
         gender: Optional[str] = None,
         active: Optional[bool] = None,
+        auth0_sub: Optional[str] = None,
     ) -> Optional[Customer]: ...
 
     async def deactivate(self, customer_id: UUID) -> Optional[Customer]: ...

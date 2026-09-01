@@ -115,6 +115,18 @@ class BranchHasActiveAccountsError(DomainError):
         super().__init__(f"The branch {branch_id} still has an active account and cannot be deleted")
 
 
+class CustomerNotLinkedError(DomainError):
+    """A valid Auth0 identity has no linked Customer. -> 404
+
+    Distinct from `CustomerNotFoundError`: the token is fine, there is simply
+    no customer record whose `auth0_sub` matches this identity yet (spec §1.2).
+    """
+
+    def __init__(self, sub: str):
+        self.sub = sub
+        super().__init__(f"no customer linked to this identity")
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 

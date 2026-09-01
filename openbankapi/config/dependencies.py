@@ -35,6 +35,8 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 from starlette.requests import HTTPConnection
 
 from .config import Settings
+from ..domain.exceptions import CustomerNotLinkedError
+from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
 from ..domain.service.customer_service import CustomerService
@@ -149,6 +151,23 @@ def get_account_repository(session: DbSession) -> IAccountRepository:
 
 
 AccountRepositoryDep = Annotated[IAccountRepository, Depends(get_account_repository)]
+
+
+async def get_current_customer(
+    claims: CurrentUserDep, customer_repository: CustomerRepositoryDep
+) -> Customer:
+    """The Customer linked to the caller's Auth0 identity (spec §1.2).
+
+    `CurrentUserDep` already turned an invalid/missing token into a 401 before
+    this ever runs; the only decision left here is 404 vs resolved.
+    """
+    customer = await customer_repository.get_by_auth0_sub(claims.get("sub", ""))
+    if customer is None:
+        raise CustomerNotLinkedError(claims.get("sub", ""))
+    return customer
+
+
+CurrentCustomerDep = Annotated[Customer, Depends(get_current_customer)]
 
 
 # --- domain services: plain classes, composed here where FastAPI is allowed -
