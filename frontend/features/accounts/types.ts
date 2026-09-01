@@ -9,3 +9,7 @@ export interface Account {
   balance: number;
   status: "active" | "blocked" | "closed";
 }
+
+/** The home page's account summary: the wire `Account` plus a display label
+ * the backend has no column for (no `name`/nickname on `accounts` today). */
+export type AccountSummary = Account & { label: string };
