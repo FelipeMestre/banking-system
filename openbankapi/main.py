@@ -13,9 +13,9 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 from .app import create_app
 from .config import Settings
 from .infra.cache.repositories import get_null_cache_repository, get_redis_cache_repository
-from .infra.database.repositories import PostgresAccountBalanceProjection
+from .infra.database.repositories import PostgresAccountBalanceProjection, PostgresTransactionWriter
 from .infra.database.config.session import create_engine, create_sessionmaker
-from .infra.kafka.consumers import AccountBalanceConsumer, TransferStatusConsumer
+from .infra.kafka.consumers import AccountBalanceConsumer, TransactionConsumer, TransferStatusConsumer
 from .infra.kafka.repositories import KafkaEventPublisherRepository
 from .infra.kafka.status_registry import StatusRegistry
 
@@ -30,6 +30,10 @@ sessionmaker = create_sessionmaker(engine)
 # The balance writer is built separately and handed ONLY to the consumer below.
 # Nothing that serves an HTTP request ever holds one (spec §3.5). Every other
 balance_projection = PostgresAccountBalanceProjection(sessionmaker)
+# Same reasoning applies to the transactions writer: it is driven by a Kafka
+# thread, not an HTTP request, so it keeps its own sessionmaker rather than
+# sharing the request-scoped session `TransactionRepositoryDep` uses.
+transaction_writer = PostgresTransactionWriter(sessionmaker)
 
 cache = get_redis_cache_repository(settings.redis_url) if settings.redis_url else get_null_cache_repository()
 
@@ -37,6 +41,7 @@ publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
+transaction_consumer = TransactionConsumer(settings, transaction_writer)
 
 # None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
 # to exist first — see config/dependencies.py for how routes degrade to a
@@ -51,11 +56,13 @@ auth0 = (
 def _start(loop: asyncio.AbstractEventLoop) -> None:
     status_consumer.start(loop)
     balance_consumer.start(loop)
+    transaction_consumer.start(loop)
 
 
 def _stop() -> None:
     status_consumer.stop()
     balance_consumer.stop()
+    transaction_consumer.stop()
     publisher.close()
 
 

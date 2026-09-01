@@ -22,6 +22,7 @@ class Settings:
     account_balances_topic: str = "account-balances"
     status_consumer_group: str = ""          # empty -> unique per process
     balance_consumer_group: str = "openbankapi-balances"
+    transaction_consumer_group: str = "openbankapi-transactions"
 
     # --- Postgres / Redis ---
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
@@ -55,6 +56,9 @@ class Settings:
             account_balances_topic=os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances"),
             status_consumer_group=os.getenv("STATUS_CONSUMER_GROUP", ""),
             balance_consumer_group=os.getenv("BALANCE_CONSUMER_GROUP", "openbankapi-balances"),
+            transaction_consumer_group=os.getenv(
+                "TRANSACTION_CONSUMER_GROUP", "openbankapi-transactions"
+            ),
             database_dsn=os.getenv(
                 "DATABASE_DSN", "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
             ),
