@@ -13,3 +13,14 @@ export interface Account {
 /** The home page's account summary: the wire `Account` plus a display label
  * the backend has no column for (no `name`/nickname on `accounts` today). */
 export type AccountSummary = Account & { label: string };
+
+/** KYC fields required only when auto-linking a never-before-seen Auth0
+ * identity via `POST /accounts/me` (amendment — `gender` stays optional). */
+export interface FirstAccountKyc {
+  identification_number: string;
+  first_name: string;
+  last_name: string;
+  /** `YYYY-MM-DD`. */
+  date_of_birth: string;
+  gender?: string;
+}
