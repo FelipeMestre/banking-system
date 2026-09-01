@@ -6,6 +6,7 @@
  */
 const DEFAULT_AUTH0_DOMAIN = "dev-ekwg1eyvfjrof0to.us.auth0.com";
 const DEFAULT_AUTH0_CLIENT_ID = "cwGe8nQhKP6EYpmCseLd3yOHDWIU1Ynp";
+const DEFAULT_AUTH0_AUDIENCE = "https://dev-ekwg1eyvfjrof0to.us.auth0.com/api/v2/";
 
 export function auth0Domain(): string {
   return process.env.NEXT_PUBLIC_AUTH0_DOMAIN ?? DEFAULT_AUTH0_DOMAIN;
@@ -13,4 +14,8 @@ export function auth0Domain(): string {
 
 export function auth0ClientId(): string {
   return process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID ?? DEFAULT_AUTH0_CLIENT_ID;
+}
+
+export function auth0Audience(): string {
+  return process.env.NEXT_PUBLIC_AUTH0_AUDIENCE ?? DEFAULT_AUTH0_AUDIENCE;
 }

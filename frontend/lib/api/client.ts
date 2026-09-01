@@ -37,3 +37,30 @@ export function toWebSocketUrl(origin: string, path: string): string {
   const scheme = origin.startsWith("https://") ? "wss://" : "ws://";
   return `${scheme}${origin.replace(/^https?:\/\//, "")}${path}`;
 }
+
+/**
+ * Every homepage-backing endpoint requires a Customer resolved via
+ * `CurrentCustomerDep` (spec §1.2), which needs a Bearer Access Token.
+ *
+ * `getAccessTokenSilently()` only exists inside a component tree wrapped by
+ * `Auth0Provider` — it is a hook's return value, not something this plain
+ * module can call directly. `Auth0ProviderWithNavigate` registers the getter
+ * once, on mount, so every plain API-client function can go through
+ * `authorizedFetch` without needing to be a hook itself.
+ */
+type AccessTokenGetter = () => Promise<string | undefined>;
+
+let accessTokenGetter: AccessTokenGetter | null = null;
+
+export function setAccessTokenGetter(getter: AccessTokenGetter | null): void {
+  accessTokenGetter = getter;
+}
+
+export async function authorizedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const token = accessTokenGetter ? await accessTokenGetter() : undefined;
+  const headers = new Headers(init.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(input, { ...init, headers });
+}

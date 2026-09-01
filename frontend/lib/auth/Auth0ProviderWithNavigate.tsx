@@ -1,12 +1,41 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Auth0Provider, type AppState } from "@auth0/auth0-react";
+import { useEffect, type ReactNode } from "react";
+import { Auth0Provider, useAuth0, type AppState } from "@auth0/auth0-react";
 import { useRouter } from "next/navigation";
-import { auth0ClientId, auth0Domain } from "./config";
+import { setAccessTokenGetter } from "../api/client";
+import { auth0Audience, auth0ClientId, auth0Domain } from "./config";
 
 interface Props {
   children: ReactNode;
+}
+
+/**
+ * Registers `getAccessTokenSilently` with `lib/api/client.ts` on mount.
+ *
+ * Plain API-client functions (e.g. `features/accounts/api/get-accounts.ts`)
+ * are not React components and cannot call `useAuth0()` themselves — this
+ * bridge is what lets `authorizedFetch` reach the SDK's token cache anyway.
+ * Deregisters on unmount so a stale getter never outlives its provider.
+ */
+function AccessTokenBridge({ children }: { children: ReactNode }) {
+  const { getAccessTokenSilently } = useAuth0();
+
+  useEffect(() => {
+    setAccessTokenGetter(async () => {
+      try {
+        return await getAccessTokenSilently();
+      } catch {
+        // Not authenticated yet, or silent renewal failed — the request this
+        // token was for will simply go out unauthenticated and get its own
+        // 401, which is the correct failure mode here, not a crash.
+        return undefined;
+      }
+    });
+    return () => setAccessTokenGetter(null);
+  }, [getAccessTokenSilently]);
+
+  return <>{children}</>;
 }
 
 /**
@@ -29,10 +58,11 @@ export function Auth0ProviderWithNavigate({ children }: Props) {
       clientId={auth0ClientId()}
       authorizationParams={{
         redirect_uri: typeof window !== "undefined" ? window.location.origin : undefined,
+        audience: auth0Audience(),
       }}
       onRedirectCallback={onRedirectCallback}
     >
-      {children}
+      <AccessTokenBridge>{children}</AccessTokenBridge>
     </Auth0Provider>
   );
 }
