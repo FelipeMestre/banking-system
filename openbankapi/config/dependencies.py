@@ -187,8 +187,10 @@ def get_account_service(
     settings: SettingsDep,
     repository: AccountRepositoryDep,
     publisher: PublisherDep,
+    branch_repository: BranchRepositoryDep,
+    customer_repository: CustomerRepositoryDep,
 ) -> AccountService:
-    return AccountService(settings, repository, publisher)
+    return AccountService(settings, repository, publisher, branch_repository, customer_repository)
 
 
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]

@@ -9,9 +9,12 @@ validator that someone could later relax.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 
 from openbankapi.api.v1.dtos.account_dto import AccountCreateDTO, AccountResponseDTO, AccountUpdateDTO
 from openbankapi.api.v1.dtos.common import PageParams, PageResponse
+from openbankapi.api.v1.dtos.first_account_dto import FirstAccountCreateDTO, FirstAccountKycDTO
 from openbankapi.api.v1.dtos.transaction_dto import TransactionsPageDTO, TransactionsPageParams
 from openbankapi.api.v1.services.cache_aside import read_through
 from openbankapi.config.dependencies import (
@@ -19,6 +22,8 @@ from openbankapi.config.dependencies import (
     AccountServiceDep,
     CacheDep,
     CurrentCustomerDep,
+    CurrentUserDep,
+    CustomerRepositoryDep,
     SettingsDep,
     TransactionServiceDep,
 )
@@ -40,6 +45,65 @@ async def create(body: AccountCreateDTO, service: AccountServiceDep):
     the generated value is retried internally and never becomes a 500."""
     return await service.open_account(
         currency=body.currency, customer_id=body.customer_id, branch_id=body.branch_id
+    )
+
+
+@router.post("/me", status_code=201, response_model=AccountResponseDTO)
+async def create_first_account(
+    claims: CurrentUserDep,
+    service: AccountServiceDep,
+    customer_repository: CustomerRepositoryDep,
+    body: FirstAccountCreateDTO = FirstAccountCreateDTO(),
+):
+    """Self-service first account (spec: zero client-supplied account params).
+
+    `currency`/`branch_id` in a client-sent body are always ignored, never
+    read — currency is always USD and the branch is always the
+    server-resolved oldest active branch (see `open_first_account`).
+
+    Runs under `CurrentUserDep` (raw claims), not `CurrentCustomerDep`, so an
+    identity with no linked `Customer` reaches this body instead of 404ing
+    before it runs (amendment). The lookup happens here so the two cases can
+    branch:
+
+    - Already linked: the KYC body, if any, is read but never passed to any
+      repository call — it is discarded entirely, so an existing Customer's
+      data can never be overwritten by a body sent along for the ride (spec —
+      "Linked customer, KYC body ignored").
+    - Never linked: the KYC fields are re-validated against the strict
+      `FirstAccountKycDTO` (422 on missing/invalid, including under-18) before
+      `AccountService.open_first_account_for_identity` ever runs — keeping
+      that validation in the router, not the domain service, so the domain
+      layer never imports a DTO or Pydantic (this codebase's layering rule).
+
+    Concurrency note: the atomic lock-then-check-then-insert ordering that
+    keeps two concurrent requests for the same identity from both succeeding
+    is implemented in `AccountService` via `pg_advisory_xact_lock`. It is
+    verified by code review and manual/staging testing, not by this
+    single-threaded fake-backed suite (see design's Testing Strategy —
+    Atomicity / Concurrency rows).
+    """
+    sub = claims.get("sub", "")
+    customer = await customer_repository.get_by_auth0_sub(sub)
+    if customer is not None:
+        return await service.open_first_account(customer)
+
+    try:
+        kyc = FirstAccountKycDTO.model_validate(body.model_dump())
+    except ValidationError as error:
+        # `include_context=False`: a `ctx` entry can carry the raw exception
+        # object a `@field_validator` raised (e.g. the underage `ValueError`
+        # below) — not JSON-serializable, and error_handlers.py's own
+        # `RequestValidationError` handler only strips `input`, not `ctx`.
+        raise RequestValidationError(error.errors(include_url=False, include_context=False)) from error
+
+    return await service.open_first_account_for_identity(
+        sub,
+        identification_number=kyc.identification_number,
+        first_name=kyc.first_name,
+        last_name=kyc.last_name,
+        date_of_birth=kyc.date_of_birth,
+        gender=kyc.gender,
     )
 
 
