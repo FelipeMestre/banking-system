@@ -155,6 +155,9 @@ class FakeCustomerRepository:
     async def get(self, customer_id: UUID) -> Optional[Customer]:
         return self.rows.get(customer_id)
 
+    async def get_by_auth0_sub(self, sub: str) -> Optional[Customer]:
+        return next((c for c in self.rows.values() if c.auth0_sub == sub), None)
+
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
@@ -172,6 +175,7 @@ class FakeCustomerRepository:
             date_of_birth=supplied.get("date_of_birth", current.date_of_birth),
             gender=supplied.get("gender", current.gender),
             active=supplied.get("active", current.active),
+            auth0_sub=supplied.get("auth0_sub", current.auth0_sub),
             created_at=current.created_at, updated_at=_now(),
         )
         self.rows[customer_id] = updated

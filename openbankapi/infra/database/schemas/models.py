@@ -74,6 +74,8 @@ class CustomerORM(Base):
     date_of_birth: Mapped[dt.date] = mapped_column(Date, nullable=False)
     gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # Set only via PATCH /customers/{id}/auth0-link (spec §1.1); never backfilled.
+    auth0_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 

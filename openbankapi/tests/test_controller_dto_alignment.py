@@ -14,7 +14,7 @@ import re
 import pytest
 
 CONTROLLERS = [
-    ("customer_router", "customer_dto", ["CustomerCreateDTO", "CustomerUpdateDTO"]),
+    ("customer_router", "customer_dto", ["CustomerCreateDTO", "CustomerUpdateDTO", "CustomerAuth0LinkDTO"]),
     ("account_router", "account_dto", ["AccountCreateDTO", "AccountUpdateDTO"]),
     ("branch_router", "branch_dto", ["BranchCreateDTO", "BranchUpdateDTO"]),
     ("location_router", "location_dto", ["LocationCreateDTO", "LocationUpdateDTO"]),

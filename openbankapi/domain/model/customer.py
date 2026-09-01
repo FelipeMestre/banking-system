@@ -28,6 +28,8 @@ class Customer:
     active: bool
     created_at: datetime
     updated_at: datetime
+    # Set only via PATCH /customers/{id}/auth0-link (spec §1.1). Never inferred.
+    auth0_sub: Optional[str] = None
 
     def age_at(self, today: date) -> int:
         """Completed years as of `today`. Injected date keeps this testable."""

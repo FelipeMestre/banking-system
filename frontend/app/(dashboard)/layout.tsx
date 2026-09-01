@@ -1,7 +1,12 @@
 import { Sidebar } from "@/components/home/Sidebar";
 import { Topbar } from "@/components/home/Topbar";
-import { CUSTOMER_GREETING, LAST_SIGN_IN } from "@/lib/placeholder-home";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+
+// Invented — there is no endpoint for a personalized greeting or a last
+// sign-in timestamp today. Static, same values `lib/placeholder-home.ts`
+// used to hold, kept here since nothing else in the app needs them.
+const CUSTOMER_GREETING = "Good afternoon";
+const LAST_SIGN_IN = "";
 
 /**
  * The dashboard shell (sidebar + topbar). A route group — `(dashboard)`
