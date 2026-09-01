@@ -92,7 +92,7 @@ export function HomeDashboard() {
   if (accounts.length === 0) {
     return (
       <div className="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-ds-8">
-        <p className="m-0 text-[0.9rem] text-neutral-600">No accounts yet.</p>
+        <p className="m-0 text-[0.9rem] text-neutral-600">You have no accounts yet.</p>
         <aside className="flex flex-col gap-[28px]">
           <TotalPosition totals={[]} />
         </aside>

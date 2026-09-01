@@ -62,7 +62,7 @@ describe("HomeDashboard", () => {
 
     render(<HomeDashboard />);
 
-    expect(await screen.findByText("No accounts yet.")).toBeInTheDocument();
+    expect(await screen.findByText("You have no accounts yet.")).toBeInTheDocument();
   });
 
   it("surfaces a genuine error's message rather than crashing", async () => {
