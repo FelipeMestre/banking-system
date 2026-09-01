@@ -13,6 +13,7 @@ from openbankapi.config.dependencies import (
     get_branch_repository,
     get_customer_repository,
     get_location_repository,
+    get_transaction_repository,
 )
 from openbankapi.infra.kafka.status_registry import StatusRegistry
 
@@ -23,6 +24,7 @@ from .fakes import (
     FakePublisher,
     FakeBranchRepository,
     FakeCache,
+    FakeTransactionRepository,
 )
 
 
@@ -32,11 +34,11 @@ class Harness:
         self.publisher = publisher
         self.cache = cache
         self.registry = registry
-        self.locations, self.branches, self.customers, self.accounts = repos
+        self.locations, self.branches, self.customers, self.accounts, self.transactions = repos
         self.settings = settings
 
 
-def build(*, cache=None, accounts=None, branches=None) -> Harness:
+def build(*, cache=None, accounts=None, branches=None, transactions=None) -> Harness:
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     publisher = FakePublisher()
     cache = cache or FakeCache()
@@ -46,6 +48,7 @@ def build(*, cache=None, accounts=None, branches=None) -> Harness:
     branches = branches or FakeBranchRepository()
     customers = FakeCustomerRepository()
     accounts = accounts or FakeAccountRepository()
+    transactions = transactions or FakeTransactionRepository()
 
     app = create_app(
         settings=settings,
@@ -58,9 +61,10 @@ def build(*, cache=None, accounts=None, branches=None) -> Harness:
     app.dependency_overrides[get_branch_repository] = lambda: branches
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
+    app.dependency_overrides[get_transaction_repository] = lambda: transactions
     client = TestClient(app)
     return Harness(client, publisher, cache, registry,
-                   (locations, branches, customers, accounts), settings)
+                   (locations, branches, customers, accounts, transactions), settings)
 
 
 @pytest.fixture

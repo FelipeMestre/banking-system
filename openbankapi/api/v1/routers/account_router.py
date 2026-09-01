@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 
 from openbankapi.api.v1.dtos.account_dto import AccountCreateDTO, AccountResponseDTO, AccountUpdateDTO
 from openbankapi.api.v1.dtos.common import PageParams, PageResponse
+from openbankapi.api.v1.dtos.transaction_dto import TransactionsPageDTO, TransactionsPageParams
 from openbankapi.api.v1.services.cache_aside import read_through
 from openbankapi.config.dependencies import (
     AccountRepositoryDep,
@@ -19,8 +20,9 @@ from openbankapi.config.dependencies import (
     CacheDep,
     CurrentCustomerDep,
     SettingsDep,
+    TransactionServiceDep,
 )
-from openbankapi.domain.exceptions import AccountNotFoundError
+from openbankapi.domain.exceptions import AccountAccessForbiddenError, AccountNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
 
 ENTITY = "account"
@@ -51,6 +53,26 @@ async def list_all(
         items=[AccountResponseDTO.model_validate(i) for i in result.items],
         total=result.total, limit=result.limit, offset=result.offset,
     )
+
+
+@router.get("/{account_number}/transactions", response_model=TransactionsPageDTO)
+async def list_transactions(
+    account_number: str,
+    repository: AccountRepositoryDep,
+    customer: CurrentCustomerDep,
+    service: TransactionServiceDep,
+    page: TransactionsPageParams = Depends(),
+):
+    """Newest-first, keyset-paginated (spec §3.3). 403s rather than 404s when
+    the account exists but belongs to someone else (spec §3.4) — the caller
+    must never learn account_number existence from the status code alone."""
+    account = await repository.get_by_account_number(account_number)
+    if account is None:
+        raise AccountNotFoundError(account_number)
+    if account.customer_id != customer.id:
+        raise AccountAccessForbiddenError(account_number)
+    result = await service.list_for_account(account_number, limit=page.limit, cursor=page.cursor)
+    return TransactionsPageDTO(items=result.items, next_cursor=result.next_cursor)
 
 
 @router.get("/{account_number}", response_model=AccountResponseDTO)
