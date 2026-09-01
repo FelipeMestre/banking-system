@@ -127,6 +127,18 @@ class CustomerNotLinkedError(DomainError):
         super().__init__(f"no customer linked to this identity")
 
 
+class AccountAccessForbiddenError(DomainError):
+    """A resolved customer tried to reach an account they do not own. -> 403
+
+    Distinct from `AccountNotFoundError`: the account exists, the caller is
+    simply not entitled to see it (spec §3.4).
+    """
+
+    def __init__(self, account_number: str):
+        self.account_number = account_number
+        super().__init__(f"account {account_number} does not belong to this customer")
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 
