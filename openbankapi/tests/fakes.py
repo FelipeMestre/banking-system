@@ -16,7 +16,7 @@ from openbankapi.domain.exceptions import (
     DuplicateError,
     ReferencedEntityNotFoundError,
 )
-from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch
+from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch, Transaction, TransactionType
 from openbankapi.infra.database.interfaces.common import Page
 
 
@@ -268,3 +268,54 @@ class FakeAccountRepository:
             created_at=current.created_at, updated_at=_now(),
         )
         return True
+
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page:
+        items = [a for a in self.rows.values() if a.customer_id == customer_id][offset : offset + limit]
+        total = sum(1 for a in self.rows.values() if a.customer_id == customer_id)
+        return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+class FakeTransactionRepository:
+    """Identity is `(request_id, account_number, type)` — the same tuple the
+    real `UNIQUE` constraint and `ON CONFLICT DO NOTHING` enforce (spec §3.2).
+    """
+
+    def __init__(self):
+        self.rows: List[Transaction] = []
+        self._seen: set = set()
+
+    async def insert(
+        self,
+        *,
+        request_id: UUID,
+        account_number: str,
+        type: str,
+        amount: int,
+        counterparty_account: str,
+        decline_reason: Optional[str],
+        ts: dt.datetime,
+    ) -> None:
+        key = (request_id, account_number, type)
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        self.rows.append(
+            Transaction(
+                id=uuid.uuid4(), request_id=request_id, account_number=account_number,
+                type=TransactionType(type), amount=amount,
+                counterparty_account=counterparty_account, decline_reason=decline_reason, ts=ts,
+            )
+        )
+
+    async def list_by_account(
+        self, account_number: str, *, limit: int, before: Optional[tuple] = None
+    ) -> List[Transaction]:
+        candidates = [row for row in self.rows if row.account_number == account_number]
+        if before is not None:
+            before_ts, before_id = before
+            candidates = [
+                row for row in candidates
+                if (row.ts, row.id) < (before_ts, before_id)
+            ]
+        candidates.sort(key=lambda row: (row.ts, row.id), reverse=True)
+        return candidates[:limit]
