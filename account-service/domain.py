@@ -138,7 +138,7 @@ def _on_transfer_requested(
     if not _is_valid_amount(amount) or not _is_valid_amount(fee_amount, allow_zero=True):
         return Decision(
             dedup_keys=(debit_key,),
-            account_events=(_declined(event, account, REASON_INVALID_AMOUNT, now),),
+            account_events=(_declined(event, account, REASON_INVALID_AMOUNT, now, amount),),
         )
 
     balance = state.balance or 0
@@ -147,7 +147,7 @@ def _on_transfer_requested(
     if balance < total:
         return Decision(
             dedup_keys=(debit_key,),
-            account_events=(_declined(event, account, REASON_INSUFFICIENT_FUNDS, now),),
+            account_events=(_declined(event, account, REASON_INSUFFICIENT_FUNDS, now, amount),),
         )
 
     # The reservation: the funds leave the source account here, before either
@@ -158,7 +158,7 @@ def _on_transfer_requested(
         new_balance=reserved,
         dedup_keys=(debit_key,),
         account_events=(
-            _outgoing(event, account, total, now),
+            _outgoing(event, account, total, fee_amount, now),
             _incoming(event, event["destination_account"], amount, LEG_CREDIT_DESTINATION, now),
             _incoming(event, event["fees_account"], fee_amount, LEG_CREDIT_FEES, now),
         ),
@@ -194,12 +194,16 @@ def _is_valid_amount(value: Any, allow_zero: bool = False) -> bool:
 # --- event builders (spec §4) ------------------------------------------------
 
 
-def _outgoing(event: Dict[str, Any], account: str, amount: int, now: str) -> Dict[str, Any]:
+def _outgoing(
+    event: Dict[str, Any], account: str, amount: int, fee_amount: int, now: str
+) -> Dict[str, Any]:
     return {
         "type": OUTGOING_PAYMENT,
         "request_id": event["request_id"],
         "account_id": account,
         "amount": amount,
+        "fee_amount": fee_amount,
+        "destination_account": event["destination_account"],
         "leg": LEG_DEBIT,
         "ts": now,
     }
@@ -213,16 +217,21 @@ def _incoming(
         "request_id": event["request_id"],
         "account_id": account,
         "amount": amount,
+        "source_account": event["source_account"],
         "leg": leg,
         "ts": now,
     }
 
 
-def _declined(event: Dict[str, Any], account: str, reason: str, now: str) -> Dict[str, Any]:
+def _declined(
+    event: Dict[str, Any], account: str, reason: str, now: str, amount: int
+) -> Dict[str, Any]:
     return {
         "type": DECLINED_PAYMENT,
         "request_id": event["request_id"],
         "account_id": account,
+        "amount": amount,
+        "destination_account": event["destination_account"],
         "reason": reason,
         "ts": now,
     }

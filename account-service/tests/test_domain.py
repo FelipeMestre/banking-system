@@ -339,6 +339,40 @@ def test_balance_records_carry_no_request_id():
     assert set(decision.balance_events[0]) == {"account_id", "balance", "ts"}
 
 
+# --- transactions read-model enrichment (wire-homepage-api spec §3.1) -------
+
+
+def test_outgoing_payment_event_carries_fee_amount_and_destination_account():
+    decision = decide("acc-src", transfer_requested(destination="acc-dst", fee_amount=25), empty(balance=5000), now=TS)
+
+    outgoing = next(e for e in decision.account_events if e["type"] == "outgoing_payment")
+    assert outgoing["fee_amount"] == 25
+    assert outgoing["destination_account"] == "acc-dst"
+
+
+def test_incoming_payment_events_carry_source_account():
+    decision = decide("acc-src", transfer_requested(source="acc-src"), empty(balance=5000), now=TS)
+
+    incoming_events = [e for e in decision.account_events if e["type"] == "incoming_payment"]
+    assert incoming_events
+    for event in incoming_events:
+        assert event["source_account"] == "acc-src"
+
+
+def test_declined_payment_event_carries_destination_account_and_amount():
+    decision = decide(
+        "acc-src",
+        transfer_requested(destination="acc-dst", amount=1100, fee_amount=25),
+        empty(balance=1124),
+        now=TS,
+    )
+
+    declined = decision.account_events[0]
+    assert declined["type"] == "declined_payment"
+    assert declined["destination_account"] == "acc-dst"
+    assert declined["amount"] == 1100
+
+
 def test_every_balance_change_is_announced_exactly_once():
     """The invariant the read model depends on, checked across every branch."""
     cases = [
