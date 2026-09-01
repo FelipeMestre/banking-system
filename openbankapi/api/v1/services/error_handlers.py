@@ -17,11 +17,13 @@ from ....domain.exceptions import (
     AccountNotOperableError,
     BranchHasActiveAccountsError,
     CustomerAccountsNotEmptyError,
+    CustomerAlreadyHasAccountError,
     CustomerNotLinkedError,
     DomainError,
     DuplicateError,
     InsufficientFundsError,
     InvalidAccountNumberError,
+    NoActiveBranchAvailableError,
     NotFoundError,
     ReferencedEntityNotFoundError,
 )
@@ -39,6 +41,8 @@ _STATUS = [
     (CustomerAccountsNotEmptyError, 409),
     (BranchHasActiveAccountsError, 409),
     (AccountAccessForbiddenError, 403),
+    (CustomerAlreadyHasAccountError, 409),
+    (NoActiveBranchAvailableError, 503),
 ]
 
 

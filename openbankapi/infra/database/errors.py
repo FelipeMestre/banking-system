@@ -34,6 +34,7 @@ _FOREIGN_KEYS = {
 _UNIQUE_KEYS = {
     "branches_code_key": "code",
     "customers_identification_number_key": "identification_number",
+    "customers_auth0_sub_key": "auth0_sub",
 }
 
 

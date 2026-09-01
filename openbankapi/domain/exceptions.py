@@ -139,6 +139,30 @@ class AccountAccessForbiddenError(DomainError):
         super().__init__(f"account {account_number} does not belong to this customer")
 
 
+class CustomerAlreadyHasAccountError(DomainError):
+    """A customer may only ever open one account through `POST /accounts/me`. -> 409
+
+    Status-agnostic on purpose: owning even one closed, zero-balance account
+    is still "already has an account" for the self-service flow — the generic
+    multi-account `POST /accounts` path (staff-only) is unaffected.
+    """
+
+    def __init__(self, customer_id: object):
+        self.customer_id = customer_id
+        super().__init__(f"customer {customer_id} already owns an account")
+
+
+class NoActiveBranchAvailableError(DomainError):
+    """No ACTIVE branch exists to resolve as the default for a new account. -> 503
+
+    Distinct from an unmapped bug: this is an operational/configuration state
+    (no active branch has been set up yet), not a defect in the request.
+    """
+
+    def __init__(self):
+        super().__init__("no active branch is available to open an account")
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 

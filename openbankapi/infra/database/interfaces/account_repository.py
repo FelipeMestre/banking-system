@@ -76,6 +76,38 @@ class IAccountRepository(Protocol):
         """
         ...
 
+    async def has_any_account_for_customer(self, customer_id: UUID) -> bool:
+        """Whether this customer owns any account row, in any status.
+
+        Backs the `POST /accounts/me` self-service guard: unlike
+        `has_nonempty_account_for_customer`, status and balance are
+        irrelevant here — owning even one closed, zero-balance account is
+        enough to block a second self-service account.
+        """
+        ...
+
+    async def lock_customer_for_account_creation(self, customer_id: UUID) -> None:
+        """Acquire a transaction-scoped advisory lock keyed on this customer.
+
+        Must be called, and awaited, before `has_any_account_for_customer`
+        inside the same transaction, so the check-then-insert sequence for
+        one customer can never race with itself. Released automatically at
+        commit or rollback — never held past the request.
+        """
+        ...
+
+    async def lock_identity_for_account_creation(self, auth0_sub: str) -> None:
+        """Acquire a transaction-scoped advisory lock keyed on this Auth0 `sub`.
+
+        Alongside, not replacing, `lock_customer_for_account_creation`: this
+        one guards the never-linked-identity path of `POST /accounts/me`
+        (amendment), where no `Customer` row — and therefore no `customer_id`
+        — exists yet to key a lock on. Must be called, and awaited, before the
+        post-lock re-check of `get_by_auth0_sub`, so two concurrent requests
+        for the same never-before-seen `sub` cannot both create a `Customer`.
+        """
+        ...
+
 
 class IAccountBalanceProjection(Protocol):
     """The one capability that may write `balance`. Handed only to the consumer."""

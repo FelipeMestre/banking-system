@@ -13,7 +13,7 @@ import secrets
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import exists, select, update as sql_update
+from sqlalchemy import exists, select, text, update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -160,6 +160,34 @@ class PostgresAccountRepository(PostgresRepository):
                     )
                 )
             )
+        )
+
+    async def has_any_account_for_customer(self, customer_id: UUID) -> bool:
+        # Status-agnostic on purpose (spec: "any account, any status") — see
+        # the port docstring for why this differs from the nonempty check.
+        return bool(
+            await self._session.scalar(
+                select(exists().where(AccountORM.customer_id == customer_id))
+            )
+        )
+
+    async def lock_customer_for_account_creation(self, customer_id: UUID) -> None:
+        # Transaction-scoped advisory lock: released automatically at commit
+        # or rollback, never held past this request's single shared session
+        # (see _base.py's Unit-of-Work docstring). `hashtext` folds the UUID
+        # into the bigint key `pg_advisory_xact_lock` expects.
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:customer_id))"),
+            {"customer_id": str(customer_id)},
+        )
+
+    async def lock_identity_for_account_creation(self, auth0_sub: str) -> None:
+        # Mirrors lock_customer_for_account_creation above, re-keyed on the
+        # Auth0 `sub` string for the never-linked-identity path (amendment),
+        # where no customer_id exists yet.
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:sub))"),
+            {"sub": auth0_sub},
         )
 
 
