@@ -24,7 +24,7 @@ describe("authorizedFetch", () => {
 
     await authorizedFetch("http://gateway.example/accounts");
 
-    const [, init] = fetchSpy.mock.calls[0];
+    const [, init] = fetchSpy.mock.calls[0]!;
     const headers = new Headers(init?.headers);
     expect(headers.get("Authorization")).toBe("Bearer the-access-token");
   });
@@ -34,7 +34,7 @@ describe("authorizedFetch", () => {
 
     await authorizedFetch("http://gateway.example/accounts");
 
-    const [, init] = fetchSpy.mock.calls[0];
+    const [, init] = fetchSpy.mock.calls[0]!;
     const headers = new Headers(init?.headers);
     expect(headers.has("Authorization")).toBe(false);
   });
