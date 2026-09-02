@@ -41,6 +41,7 @@ def create_app(
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
     on_stop_async: Optional[Callable[[], Awaitable[None]]] = None,
+    foreign_exchange_cache_service: Optional[object] = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -66,6 +67,7 @@ def create_app(
     app.state.sessionmaker = sessionmaker
     app.state.status_registry = status_registry
     app.state.auth0 = auth0
+    app.state.foreign_exchange_cache_service = foreign_exchange_cache_service
 
     app.add_middleware(
         CORSMiddleware,
