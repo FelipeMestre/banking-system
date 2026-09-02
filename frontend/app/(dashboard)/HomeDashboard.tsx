@@ -6,6 +6,7 @@ import { CreditCardPanel } from "@/components/home/CreditCardPanel";
 import { CREDIT_CARD, SHOW_CREDIT_CARD } from "@/components/home/credit-card-fixture";
 import { QuickActions } from "@/components/home/QuickActions";
 import { TotalPosition } from "@/components/home/TotalPosition";
+import { LoadingScreen } from "@/components/ui/loading-screen";
 import {
   CreateAccountDialog,
   NoAccountsEmptyState,
@@ -95,7 +96,7 @@ export function HomeDashboard() {
   }, [selectedAccountNumber]);
 
   if (state.kind === "loading") {
-    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading your accounts…</p>;
+    return <LoadingScreen message="Loading your accounts securely" fullScreen={false} showBranding={false} />;
   }
 
   if (state.kind === "error") {

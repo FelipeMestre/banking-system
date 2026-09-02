@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LoadingScreen } from "@/components/ui/loading-screen";
 import { currencySymbol, formatCents } from "@/lib/money";
 import { getAccounts } from "../api/get-accounts";
 import type { Account } from "../types";
@@ -51,7 +52,7 @@ export function AccountsList() {
   }, [offset]);
 
   if (state.kind === "loading") {
-    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading accounts…</p>;
+    return <LoadingScreen message="Loading accounts…" fullScreen={false} showBranding={false} />;
   }
 
   if (state.kind === "error") {

@@ -3,6 +3,10 @@ import { cn } from "@/lib/utils";
 export interface LoadingScreenProps {
   message?: string;
   fullScreen?: boolean;
+  /** Whether to show the OpenBank logo/wordmark. Reserve this for app-wide
+   * loading moments (route transitions, auth resolving) — set false for a
+   * spinner embedded inside an already-branded screen (a table, a panel). */
+  showBranding?: boolean;
   "data-testid"?: string;
 }
 
@@ -11,6 +15,7 @@ const DEFAULT_MESSAGE = "Loading your accounts securely";
 export function LoadingScreen({
   message = DEFAULT_MESSAGE,
   fullScreen = true,
+  showBranding = true,
   "data-testid": dataTestId,
 }: LoadingScreenProps) {
   return (
@@ -26,15 +31,17 @@ export function LoadingScreen({
         fullScreen ? "min-h-screen" : "min-h-[240px]"
       )}
     >
-      <div className="flex items-center gap-ds-3">
-        <div
-          aria-hidden="true"
-          className="h-3.5 w-3.5 rounded-none bg-accent"
-        />
-        <span className="font-heading text-lg font-extrabold tracking-tight text-text">
-          OpenBank
-        </span>
-      </div>
+      {showBranding ? (
+        <div className="flex items-center gap-ds-3">
+          <div
+            aria-hidden="true"
+            className="h-3.5 w-3.5 rounded-none bg-accent"
+          />
+          <span className="font-heading text-lg font-extrabold tracking-tight text-text">
+            OpenBank
+          </span>
+        </div>
+      ) : null}
 
       <div
         aria-hidden="true"

@@ -110,6 +110,14 @@ describe("LoadingScreen", () => {
     expect(screen.getByText("OpenBank")).toBeInTheDocument();
   });
 
+  it("showBranding={false} hides the OpenBank logo/wordmark but keeps the spinner and message", () => {
+    render(<LoadingScreen message="Loading accounts…" showBranding={false} />);
+    expect(screen.queryByText("OpenBank")).not.toBeInTheDocument();
+    const status = screen.getByRole("status");
+    expect(status.querySelector(".border-t-accent")).not.toBeNull();
+    expect(screen.getAllByText("Loading accounts…").length).toBeGreaterThanOrEqual(1);
+  });
+
   it("is not a progressbar and has no aria-valuenow", () => {
     render(<LoadingScreen />);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
