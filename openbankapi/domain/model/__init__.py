@@ -8,6 +8,7 @@ from .account import (
 )
 from .location import Location
 from .branch import Branch
+from .transaction import Transaction, TransactionType
 
 __all__ = [
     "Customer",
@@ -17,4 +18,6 @@ __all__ = [
     "Branch",
     "ACCOUNT_NUMBER_LENGTH",
     "is_valid_account_number",
+    "Transaction",
+    "TransactionType",
 ]

@@ -12,6 +12,23 @@ export function gatewayOrigin(): string {
   return (process.env.NEXT_PUBLIC_GATEWAY_URL ?? DEFAULT_GATEWAY).replace(/\/+$/, "");
 }
 
+/**
+ * A gateway failure that carries the HTTP status alongside the human-readable
+ * message `describeFailure` already produces. A caller that only has a bare
+ * `Error` cannot distinguish a 404 (e.g. "no customer linked to this
+ * identity") from a 401 or a network failure without parsing the message
+ * text — this makes the status a first-class, typed field instead.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function describeFailure(response: Response): Promise<string> {
   if (response.status === 422) {
     return "The gateway rejected those values. Check the accounts and amount.";
