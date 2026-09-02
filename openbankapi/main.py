@@ -13,8 +13,11 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 from .app import create_app
 from .config import Settings
 from .infra.cache.repositories import get_null_cache_repository, get_redis_cache_repository
+from .infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
 from .infra.database.repositories import PostgresAccountBalanceProjection
 from .infra.database.config.session import create_engine, create_sessionmaker
+from .infra.foreign_exchange_service.config.foreign_exchange_config import ForeignExchangeConfig
+from .infra.foreign_exchange_service.repository.frankfurter_repository import FrankfurterRepository
 from .infra.kafka.consumers import AccountBalanceConsumer, TransferStatusConsumer
 from .infra.kafka.repositories import KafkaEventPublisherRepository
 from .infra.kafka.status_registry import StatusRegistry
@@ -32,6 +35,10 @@ sessionmaker = create_sessionmaker(engine)
 balance_projection = PostgresAccountBalanceProjection(sessionmaker)
 
 cache = get_redis_cache_repository(settings.redis_url) if settings.redis_url else get_null_cache_repository()
+
+foreign_exchange_config = ForeignExchangeConfig()
+foreign_exchange_repository = FrankfurterRepository(foreign_exchange_config)
+foreign_exchange_cache_service = ForeignExchangeCacheService(cache, foreign_exchange_repository)
 
 publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
@@ -74,4 +81,5 @@ app = create_app(
     on_start=_start,
     on_stop=_stop,
     on_stop_async=_stop_async,
+    foreign_exchange_cache_service=foreign_exchange_cache_service,
 )

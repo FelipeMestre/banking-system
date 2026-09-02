@@ -35,19 +35,25 @@ class FakePublisher:
 class FakeCache:
     """Counts hits and misses so cache-aside can actually be asserted."""
 
-    def __init__(self, *, failing: bool = False):
-        self.store: Dict[str, Any] = {}
+    def __init__(self, *, failing: bool = False, store: Optional[Dict[str, Any]] = None):
+        self.store: Dict[str, Any] = store if store is not None else {}
         self.failing = failing
         self.gets = 0
+        self.get_calls: List[str] = []
+        self.set_calls: List[tuple[str, Any, int]] = []
         self.deletes: List[str] = []
+        self.ttls: Dict[str, int] = {}
 
     async def get(self, key: str):
         self.gets += 1
+        self.get_calls.append(key)
         if self.failing:
             return None  # a broken cache degrades to a miss, never an error
         return self.store.get(key)
 
     async def set(self, key: str, value: Any, ttl_seconds: int = 300) -> None:
+        self.set_calls.append((key, value, ttl_seconds))
+        self.ttls[key] = ttl_seconds
         if not self.failing:
             self.store[key] = value
 
@@ -268,3 +274,22 @@ class FakeAccountRepository:
             created_at=current.created_at, updated_at=_now(),
         )
         return True
+
+
+class FakeForeignExchangeRepository:
+    """Fake for IForeignExchangeRepository — counts calls, returns fixed mids."""
+
+    def __init__(
+        self,
+        rates: Optional[Dict[str, float]] = None,
+        raise_error: Optional[Exception] = None,
+    ):
+        self.rates: Dict[str, float] = rates if rates is not None else {"EUR": 0.8613, "GBP": 0.74}
+        self.raise_error = raise_error
+        self.calls = 0
+
+    async def get_all_mid_rates(self) -> Dict[str, float]:
+        self.calls += 1
+        if self.raise_error is not None:
+            raise self.raise_error
+        return dict(self.rates)
