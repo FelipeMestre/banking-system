@@ -170,3 +170,8 @@ class InsufficientFundsError(DomainError):
     decline as an event, not an exception. Kept because the spec names it and
     because a future synchronous path would need it.
     """
+
+
+class RateNotAvailableError(DomainError):
+    """Frankfurter returned no usable rates. -> 502."""
+

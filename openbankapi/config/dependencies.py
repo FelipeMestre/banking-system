@@ -92,6 +92,13 @@ def get_status_registry(conn: HTTPConnection) -> StatusRegistry:
 StatusRegistryDep = Annotated[StatusRegistry, Depends(get_status_registry)]
 
 
+def get_foreign_exchange_cache_service(conn: HTTPConnection):
+    return conn.app.state.foreign_exchange_cache_service
+
+
+ForeignExchangeCacheServiceDep = Annotated[object, Depends(get_foreign_exchange_cache_service)]
+
+
 def get_auth0(conn: HTTPConnection) -> Optional[Auth0FastAPI]:
     return conn.app.state.auth0
 

@@ -25,12 +25,14 @@ from ....domain.exceptions import (
     InvalidAccountNumberError,
     NoActiveBranchAvailableError,
     NotFoundError,
+    RateNotAvailableError,
     ReferencedEntityNotFoundError,
 )
 
 LOG = logging.getLogger("openbankapi.errors")
 
 _STATUS = [
+    (RateNotAvailableError, 502),
     (NotFoundError, 404),
     (CustomerNotLinkedError, 404),
     (ReferencedEntityNotFoundError, 422),

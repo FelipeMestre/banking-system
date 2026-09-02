@@ -25,20 +25,36 @@ from .fakes import (
     FakeBranchRepository,
     FakeCache,
     FakeTransactionRepository,
+    FakeForeignExchangeRepository,
 )
 
 
 class Harness:
-    def __init__(self, client, publisher, cache, registry, repos, settings):
+    def __init__(self, client, publisher, cache, registry, repos, settings, fx_cache_service=None, fx_repo=None):
         self.client = client
         self.publisher = publisher
         self.cache = cache
         self.registry = registry
         self.locations, self.branches, self.customers, self.accounts, self.transactions = repos
         self.settings = settings
+        self.fx_cache_service = fx_cache_service
+        self.fx_repo = fx_repo
 
 
-def build(*, cache=None, accounts=None, branches=None, transactions=None) -> Harness:
+def build(
+    *,
+    cache=None,
+    accounts=None,
+    branches=None,
+    transactions=None,
+    fx_repo=None,
+    fx_cache_service=None,
+) -> Harness:
+    # lazy imports to avoid circular deps during app wiring
+    from openbankapi.infra.cache.services.foreign_exchange_cache_service import (
+        ForeignExchangeCacheService,
+    )
+
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     publisher = FakePublisher()
     cache = cache or FakeCache()
@@ -50,21 +66,38 @@ def build(*, cache=None, accounts=None, branches=None, transactions=None) -> Har
     accounts = accounts or FakeAccountRepository()
     transactions = transactions or FakeTransactionRepository()
 
-    app = create_app(
-        settings=settings,
-        cache=cache,
-        publisher=publisher,
-        sessionmaker=None,  # unused: every repository dependency is overridden below
-        status_registry=registry,
-    )
+    fx_repo = fx_repo or FakeForeignExchangeRepository()
+    fx_cache_service = fx_cache_service or ForeignExchangeCacheService(cache, fx_repo)
+
+    try:
+        app = create_app(
+            settings=settings,
+            cache=cache,
+            publisher=publisher,
+            sessionmaker=None,  # unused: every repository dependency is overridden below
+            status_registry=registry,
+            foreign_exchange_cache_service=fx_cache_service,  # type: ignore[call-arg]
+        )
+    except TypeError:
+        # Work unit 2 runs before app.py gains the param — fall back to direct state injection
+        app = create_app(
+            settings=settings,
+            cache=cache,
+            publisher=publisher,
+            sessionmaker=None,
+            status_registry=registry,
+        )
+        app.state.foreign_exchange_cache_service = fx_cache_service  # type: ignore[attr-defined]
     app.dependency_overrides[get_location_repository] = lambda: locations
     app.dependency_overrides[get_branch_repository] = lambda: branches
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
     app.dependency_overrides[get_transaction_repository] = lambda: transactions
     client = TestClient(app)
+    # also attach for router tests that use app.state directly
+    app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
-                   (locations, branches, customers, accounts, transactions), settings)
+                   (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo)
 
 
 @pytest.fixture
