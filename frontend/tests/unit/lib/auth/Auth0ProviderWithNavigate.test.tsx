@@ -29,7 +29,7 @@ describe("Auth0ProviderWithNavigate", () => {
       </Auth0ProviderWithNavigate>,
     );
 
-    const props = mockedAuth0Provider.mock.calls[0][0];
+    const props = mockedAuth0Provider.mock.calls[0]![0] as unknown as { authorizationParams?: { audience?: string } };
     expect(props.authorizationParams?.audience).toBeTruthy();
     expect(typeof props.authorizationParams?.audience).toBe("string");
   });

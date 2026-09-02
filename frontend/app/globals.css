@@ -370,3 +370,8 @@
   --sidebar-border: var(--color-divider);
   --sidebar-ring: var(--color-accent);
 }
+
+@keyframes ob-spin{to{transform:rotate(360deg)}}
+@keyframes ob-sweep{0%{transform:translateX(-100%)}50%{transform:translateX(240%)}100%{transform:translateX(-100%)}}
+@keyframes ob-fade-in{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){[data-slot="loading-screen"] *,[data-slot="loading-screen"] *::before,[data-slot="loading-screen"] *::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}
