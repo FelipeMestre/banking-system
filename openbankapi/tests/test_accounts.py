@@ -6,8 +6,20 @@ import uuid
 import pytest
 
 from openbankapi.api.v1.dtos.account_dto import AccountUpdateDTO
+from openbankapi.config.dependencies import get_current_user
 from openbankapi.tests.conftest import build
 from openbankapi.tests.fakes import FakeAccountRepository
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(wired):
+    """GET /accounts/{account_number} requires CurrentUserDep; any valid
+    claims satisfy it since this route never checks ownership (that's
+    deliberate — it also backs the transfer recipient-preview lookup, which
+    must resolve someone else's account)."""
+    wired.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|test"}
+    yield
+    wired.client.app.dependency_overrides.pop(get_current_user, None)
 
 
 def _create(wired):
@@ -118,3 +130,16 @@ def test_deleting_an_account_closes_it_rather_than_removing_it(wired):
 
 def test_an_unknown_account_is_404(wired):
     assert wired.client.get("/accounts/1111111111111111").status_code == 404
+
+
+# --- CurrentUserDep guard ----------------------------------------------------
+
+
+def test_get_by_account_number_requires_auth(wired):
+    # Undo the module's autouse override for this one test — no override for
+    # get_current_user -> Auth0FastAPI is unconfigured -> 503, the documented
+    # degrade path (config/dependencies._require_auth0), same convention as
+    # test_customer_auth_link.py's CurrentCustomerDep coverage.
+    wired.client.app.dependency_overrides.pop(get_current_user, None)
+    response = wired.client.get("/accounts/1111111111111111")
+    assert response.status_code == 503

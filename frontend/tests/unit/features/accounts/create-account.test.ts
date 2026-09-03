@@ -21,7 +21,7 @@ describe("createAccount", () => {
     const account = await createAccount();
 
     expect(account).toEqual(ACCOUNT_BODY);
-    const [url, init] = fetchSpy.mock.calls[0];
+    const [url, init] = fetchSpy.mock.calls[0]!;
     expect(String(url)).toContain("/accounts/me");
     expect(init?.method).toBe("POST");
   });

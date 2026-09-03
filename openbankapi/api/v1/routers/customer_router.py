@@ -19,6 +19,7 @@ from openbankapi.api.v1.services.cache_aside import read_through
 from openbankapi.config.dependencies import (
     CacheDep,
     CurrentCustomerDep,
+    CurrentUserDep,
     CustomerRepositoryDep,
     CustomerServiceDep,
     SettingsDep,
@@ -83,8 +84,16 @@ async def link_auth0(
 
 @router.get("/{customer_id}", response_model=CustomerResponseDTO)
 async def get(
-    customer_id: UUID, repository: CustomerRepositoryDep, cache: CacheDep, settings: SettingsDep
+    customer_id: UUID,
+    repository: CustomerRepositoryDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    claims: CurrentUserDep,
 ):
+    """Guarded by `CurrentUserDep` (bare authentication), same reasoning as
+    `account_router.get()`: the transfer recipient-preview lookup resolves
+    the recipient's name here after resolving their account, and a recipient
+    is by definition someone other than the caller."""
     found = await read_through(
         cache, cache_key(ENTITY, customer_id),
         lambda: repository.get(customer_id), _dto, settings.cache_ttl_seconds,
