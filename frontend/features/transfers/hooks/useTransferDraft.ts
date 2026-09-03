@@ -1,34 +1,84 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { DIRECTORY, type DirectoryEntry } from "../fixtures/directory";
-import { ACCOUNTS } from "../fixtures/accounts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { parseAmountToCents } from "@/lib/money";
+import { findRecipient } from "../api/find-recipient";
+import { getTransferStatus } from "../api/get-transfer-status";
+import { requestTransfer } from "../api/request-transfer";
+import { watchTransferStatus } from "../api/watch-transfer-status";
+import type { Account } from "@/features/accounts";
+import type { RecipientPreview, TransferStatus } from "../types";
+
+type RecipientState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "found"; recipient: RecipientPreview }
+  | { kind: "not-found" }
+  | { kind: "error"; message: string };
 
 export type TransferResult = { kind: "success" } | { kind: "error"; message: string } | null;
 
-export function findRecipient(raw: string): DirectoryEntry | null {
-  const trimmed = raw.trim();
-  if (trimmed.length < 6) return null;
-  return DIRECTORY.find((e) => e.account_number === trimmed) ?? null;
+function describeError(error: unknown): string {
+  if (error instanceof TypeError) {
+    return "Could not reach the gateway. Is the stack running?";
+  }
+  return error instanceof Error ? error.message : "Transfer failed.";
 }
 
-export function useTransferDraft() {
-  const [fromId, setFromId] = useState<string>(ACCOUNTS[0]?.id ?? "acc-1");
+/** Maps a ledger verdict onto the flat success/error shape this hook exposes. */
+function resultFromStatus(status: TransferStatus): TransferResult {
+  if (status.status === "approved") return { kind: "success" };
+  if (status.status === "declined") {
+    return { kind: "error", message: status.reason ?? "Transfer declined." };
+  }
+  // A delivered-but-still-"pending" verdict is inconclusive, not a crash.
+  return {
+    kind: "error",
+    message: "We couldn't confirm this transfer yet. Check its status shortly.",
+  };
+}
+
+export function useTransferDraft(accounts: Account[] = []) {
+  const [fromId, setFromId] = useState<string>("");
   const [toNumber, setToNumber] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<TransferResult>(null);
+  const [recipientState, setRecipientState] = useState<RecipientState>({ kind: "idle" });
 
-  const recipient = useMemo(() => findRecipient(toNumber), [toNumber]);
-  const hasRecipient = recipient !== null;
-  const recipientNotFound = useMemo(() => {
+  useEffect(() => {
     const trimmed = toNumber.trim();
-    return trimmed.length >= 6 && recipient === null;
-  }, [toNumber, recipient]);
+    if (trimmed.length < 6) {
+      setRecipientState({ kind: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setRecipientState({ kind: "loading" });
+
+    findRecipient(trimmed)
+      .then((preview) => {
+        if (cancelled) return;
+        setRecipientState(preview ? { kind: "found", recipient: preview } : { kind: "not-found" });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setRecipientState({ kind: "error", message: describeError(error) });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [toNumber]);
+
+  const recipient = recipientState.kind === "found" ? recipientState.recipient : null;
+  const hasRecipient = recipientState.kind === "found";
+  const recipientNotFound = recipientState.kind === "not-found";
+  const recipientIsLoading = recipientState.kind === "loading";
+  const recipientError = recipientState.kind === "error" ? recipientState.message : null;
 
   const fromAccount = useMemo(
-    () => ACCOUNTS.find((a) => a.id === fromId) ?? null,
-    [fromId],
+    () => accounts.find((a) => a.account_number === fromId) ?? null,
+    [accounts, fromId],
   );
 
   const showExchangeWarning = useMemo(() => {
@@ -40,33 +90,63 @@ export function useTransferDraft() {
     return hasRecipient && amount.trim().length > 0 && !isLoading && result === null;
   }, [hasRecipient, amount, isLoading, result]);
 
+  // Holds the active WebSocket's cleanup so reset()/unmount can stop
+  // listening for a verdict on a transfer the user has already left behind.
+  const stopWatchingRef = useRef<(() => void) | null>(null);
+
+  const stopWatching = useCallback(() => {
+    stopWatchingRef.current?.();
+    stopWatchingRef.current = null;
+  }, []);
+
+  useEffect(() => stopWatching, [stopWatching]);
+
   const submit = useCallback(async () => {
     if (!hasRecipient) return;
-    if (amount.trim().length === 0) return;
-    const mockEnabled = process.env.NEXT_PUBLIC_MOCK_TRANSFERS !== "false";
+    const cents = parseAmountToCents(amount);
+    if (cents === null) return;
+
+    stopWatching();
     setIsLoading(true);
     setResult(null);
-    await new Promise((resolve) => setTimeout(resolve, 1400));
-    if (mockEnabled) {
-      const digits = toNumber.trim();
-      if (digits === "7723490011") {
-        setResult({ kind: "error", message: "Transfer failed: insufficient funds" });
-      } else {
-        setResult({ kind: "success" });
-      }
+
+    try {
+      const accepted = await requestTransfer({
+        source_account: fromId,
+        destination_account: toNumber.trim(),
+        amount: cents,
+      });
+
+      await new Promise<void>((resolve) => {
+        stopWatchingRef.current = watchTransferStatus(accepted.request_id, {
+          onStatus: (status) => {
+            stopWatching();
+            setResult(resultFromStatus(status));
+            resolve();
+          },
+          onUnavailable: () => {
+            stopWatching();
+            // The socket closed without a verdict — fall back to the pull
+            // endpoint the gateway offers for exactly this case (spec §6).
+            getTransferStatus(accepted.request_id)
+              .then((status) => setResult(resultFromStatus(status)))
+              .catch((error: unknown) => setResult({ kind: "error", message: describeError(error) }))
+              .finally(resolve);
+          },
+        });
+      });
+    } catch (error) {
+      setResult({ kind: "error", message: describeError(error) });
+    } finally {
       setIsLoading(false);
-      return;
     }
-    // Real path: delegate to requestTransfer + watch — not exercised in unit tests
-    // Fallback to success for now to keep build passing
-    setResult({ kind: "success" });
-    setIsLoading(false);
-  }, [hasRecipient, amount, toNumber]);
+  }, [hasRecipient, amount, fromId, toNumber, stopWatching]);
 
   const reset = useCallback(() => {
+    stopWatching();
     setResult(null);
     setIsLoading(false);
-  }, []);
+  }, [stopWatching]);
 
   return {
     fromId,
@@ -77,6 +157,8 @@ export function useTransferDraft() {
     recipient,
     hasRecipient,
     recipientNotFound,
+    recipientIsLoading,
+    recipientError,
     showExchangeWarning,
     canConfirm,
     fromAccount,

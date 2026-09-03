@@ -141,11 +141,22 @@ async def list_transactions(
 
 @router.get("/{account_number}", response_model=AccountResponseDTO)
 async def get(
-    account_number: str, repository: AccountRepositoryDep, cache: CacheDep, settings: SettingsDep
+    account_number: str,
+    repository: AccountRepositoryDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    claims: CurrentUserDep,
 ):
     """`balance` here is eventually consistent (spec §3.6): it lags the ledger
     by however long the account-balances consumer takes, typically a few
-    hundred milliseconds. Stale is acceptable; wrong is not."""
+    hundred milliseconds. Stale is acceptable; wrong is not.
+
+    Guarded by `CurrentUserDep` (bare authentication), not `CurrentCustomerDep`:
+    this is also how the transfer recipient-preview lookup resolves any
+    account by number (frontend's find-recipient.ts), which must work for a
+    caller with no linked Customer yet, and must not restrict lookup to the
+    caller's own accounts — a recipient is, by definition, someone else's.
+    """
     found = await read_through(
         cache, cache_key(ENTITY, account_number),
         lambda: repository.get_by_account_number(account_number), _dto, settings.cache_ttl_seconds,

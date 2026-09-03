@@ -2,24 +2,25 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DIRECTORY } from "../fixtures/directory";
-import { findRecipient } from "../hooks/useTransferDraft";
+import type { RecipientPreview } from "../types";
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  recipient: RecipientPreview | null;
+  isLoading: boolean;
+  notFound: boolean;
+  error: string | null;
 }
 
-export function ToAccountField({ value, onChange }: Props) {
+export function ToAccountField({ value, onChange, recipient, isLoading, notFound, error }: Props) {
   const trimmed = value.trim();
   const showPreview = trimmed.length >= 6;
-  const recipient = showPreview ? (findRecipient(value) ?? null) : null;
-  const notFound = showPreview && recipient === null;
 
   return (
     <div className="flex flex-col gap-ds-1">
       <Label htmlFor="to-account" className="text-[12px] font-normal leading-none text-neutral-700">
-        To account
+        To account number
       </Label>
       <Input
         id="to-account"
@@ -36,7 +37,9 @@ export function ToAccountField({ value, onChange }: Props) {
           aria-live="polite"
           className="min-h-[40px]"
         >
-          {recipient ? (
+          {isLoading ? (
+            <p className="text-sm text-neutral-600">Looking up account…</p>
+          ) : recipient ? (
             <div className="flex items-center gap-ds-2">
               <div className="flex h-[28px] w-[28px] items-center justify-center bg-neutral-200 text-[11px] font-semibold">
                 {recipient.initials}
@@ -50,6 +53,8 @@ export function ToAccountField({ value, onChange }: Props) {
                 </span>
               </div>
             </div>
+          ) : error ? (
+            <p className="text-sm text-neutral-600">{error}</p>
           ) : notFound ? (
             <p className="text-sm text-neutral-600">No account found</p>
           ) : null}

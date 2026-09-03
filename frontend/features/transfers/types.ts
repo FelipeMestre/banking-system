@@ -22,6 +22,14 @@ export interface TransferStatus {
   ts?: string;
 }
 
+/** A recipient looked up by account number via GET /accounts/{n} + GET /customers/{id}. */
+export interface RecipientPreview {
+  account_number: string;
+  currency: string;
+  name: string;
+  initials: string;
+}
+
 /** What the UI is currently showing for a single transfer attempt. */
 export type Phase =
   | { kind: "idle" }
