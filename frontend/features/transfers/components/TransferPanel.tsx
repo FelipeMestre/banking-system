@@ -9,12 +9,16 @@ import { ToAccountField } from "./ToAccountField";
 import { AmountField } from "./AmountField";
 import { ExchangeWarningBanner } from "./ExchangeWarningBanner";
 
+type Draft = ReturnType<typeof useTransferDraft>;
+
 interface Props {
   initialFromId?: string;
+  draft?: Draft;
 }
 
-export function TransferPanel({ initialFromId }: Props) {
-  const draft = useTransferDraft();
+export function TransferPanel({ initialFromId, draft: externalDraft }: Props) {
+  const internalDraft = useTransferDraft();
+  const draft = externalDraft ?? internalDraft;
 
   useEffect(() => {
     if (initialFromId && initialFromId !== draft.fromId) {
