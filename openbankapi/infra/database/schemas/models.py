@@ -157,3 +157,9 @@ class TransactionORM(Base):
     decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[dt.datetime] = _created()
+    # Nullable, additive (FX-16): only a settled leg that carried a currency
+    # conversion links to its audit row; same-currency legs and outgoing/
+    # declined rows always leave this NULL.
+    applied_rate_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("applied_rates.id"), nullable=True
+    )

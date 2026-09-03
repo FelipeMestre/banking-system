@@ -373,6 +373,72 @@ def test_declined_payment_event_carries_destination_account_and_amount():
     assert declined["amount"] == 1100
 
 
+# --- FX-18: additive resolved-amount passthrough on the transfer legs -------
+
+
+def test_destination_leg_reads_destination_amount_when_present():
+    event = transfer_requested(amount=1100, fee_amount=25)
+    event["destination_amount"] = 942
+    event["applied_rate"] = {"pair": "EUR_USD", "direction": "credit"}
+
+    decision = decide("acc-src", event, empty(balance=5000), now=TS)
+
+    destination_credit = next(
+        e for e in decision.account_events
+        if e["type"] == "incoming_payment" and e["leg"] == LEG_CREDIT_DESTINATION
+    )
+    assert destination_credit["amount"] == 942
+    assert destination_credit["conversion"] == {"pair": "EUR_USD", "direction": "credit"}
+
+
+def test_fees_leg_reads_fee_amount_usd_when_present():
+    event = transfer_requested(amount=1100, fee_amount=25)
+    event["fee_amount_usd"] = 21
+    event["fee_applied_rate"] = {"pair": "EUR_USD", "direction": "debit"}
+
+    decision = decide("acc-src", event, empty(balance=5000), now=TS)
+
+    fees_credit = next(
+        e for e in decision.account_events
+        if e["type"] == "incoming_payment" and e["leg"] == "credit:fees"
+    )
+    assert fees_credit["amount"] == 21
+    assert fees_credit["conversion"] == {"pair": "EUR_USD", "direction": "debit"}
+
+
+def test_no_conversion_present_leaves_both_legs_on_raw_amounts_with_no_conversion_key():
+    event = transfer_requested(amount=1100, fee_amount=25)
+
+    decision = decide("acc-src", event, empty(balance=5000), now=TS)
+
+    destination_credit = next(
+        e for e in decision.account_events
+        if e["type"] == "incoming_payment" and e["leg"] == LEG_CREDIT_DESTINATION
+    )
+    fees_credit = next(
+        e for e in decision.account_events
+        if e["type"] == "incoming_payment" and e["leg"] == "credit:fees"
+    )
+    assert destination_credit["amount"] == 1100
+    assert fees_credit["amount"] == 25
+    assert "conversion" not in destination_credit
+    assert "conversion" not in fees_credit
+
+
+def test_outgoing_payment_and_balance_check_use_source_currency_amounts_unchanged():
+    """`total_debit`/the reservation must never see the resolved destination
+    or fee-USD amounts — only the original source-currency `amount`/`fee_amount`."""
+    event = transfer_requested(amount=1100, fee_amount=25)
+    event["destination_amount"] = 942
+    event["fee_amount_usd"] = 21
+
+    decision = decide("acc-src", event, empty(balance=5000), now=TS)
+    assert decision.new_balance == 5000 - 1100 - 25
+
+    declined = decide("acc-src", event, empty(balance=1124), now=TS)
+    assert [e["type"] for e in declined.account_events] == ["declined_payment"]
+
+
 def test_every_balance_change_is_announced_exactly_once():
     """The invariant the read model depends on, checked across every branch."""
     cases = [

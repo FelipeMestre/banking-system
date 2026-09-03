@@ -35,6 +35,35 @@ def test_insert_is_idempotent_on_redelivery():
     assert rows[0].amount == 1125
 
 
+def test_insert_accepts_and_persists_an_applied_rate_id():
+    rate_id = uuid.uuid4()
+
+    async def scenario():
+        repo = FakeTransactionRepository()
+        await repo.insert(
+            request_id=uuid.uuid4(), account_number=ACCOUNT_A, type="credit",
+            amount=1074, counterparty_account=ACCOUNT_B, decline_reason=None, ts=_ts(),
+            applied_rate_id=rate_id,
+        )
+        return await repo.list_by_account(ACCOUNT_A, limit=10)
+
+    rows = asyncio.run(scenario())
+    assert rows[0].applied_rate_id == rate_id
+
+
+def test_insert_defaults_applied_rate_id_to_none():
+    async def scenario():
+        repo = FakeTransactionRepository()
+        await repo.insert(
+            request_id=uuid.uuid4(), account_number=ACCOUNT_A, type="debit",
+            amount=1125, counterparty_account=ACCOUNT_B, decline_reason=None, ts=_ts(),
+        )
+        return await repo.list_by_account(ACCOUNT_A, limit=10)
+
+    rows = asyncio.run(scenario())
+    assert rows[0].applied_rate_id is None
+
+
 def test_a_different_type_for_the_same_request_and_account_is_a_distinct_row():
     """`(request_id, account_number, type)` is the identity — not just `request_id`."""
     async def scenario():

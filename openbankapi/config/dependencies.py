@@ -211,8 +211,13 @@ def get_account_service(
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
 
 
-def get_transfer_service(settings: SettingsDep, publisher: PublisherDep) -> TransferService:
-    return TransferService(settings, publisher)
+def get_transfer_service(
+    settings: SettingsDep,
+    publisher: PublisherDep,
+    account_repository: AccountRepositoryDep,
+    foreign_exchange_cache_service: ForeignExchangeCacheServiceDep,
+) -> TransferService:
+    return TransferService(settings, publisher, account_repository, foreign_exchange_cache_service)
 
 
 TransferServiceDep = Annotated[TransferService, Depends(get_transfer_service)]

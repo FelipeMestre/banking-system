@@ -96,6 +96,17 @@ def downgrade_one(dsn: str = TEST_DATABASE_DSN) -> None:
     _run_alembic("downgrade", "-1", dsn)
 
 
+def downgrade_to(revision: str, dsn: str = TEST_DATABASE_DSN) -> None:
+    """Downgrade straight to `revision`, rather than one step at a time.
+
+    Needed once the chain has a merge point: `downgrade -1` from a
+    post-merge head is ambiguous about which branch to unwind, so a target
+    revision is the only unambiguous way to land on a specific pre-merge
+    state (FX-16).
+    """
+    _run_alembic("downgrade", revision, dsn)
+
+
 @asynccontextmanager
 async def rollback_session(dsn: str = TEST_DATABASE_DSN) -> AsyncIterator[AsyncSession]:
     """One real Postgres session per test, wrapped in a transaction that is

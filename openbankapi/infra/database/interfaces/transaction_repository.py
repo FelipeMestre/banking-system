@@ -25,9 +25,14 @@ class ITransactionRepository(Protocol):
         counterparty_account: str,
         decline_reason: Optional[str],
         ts: datetime,
+        applied_rate_id: Optional[UUID] = None,
     ) -> None:
         """Insert one row. A redelivered `(request_id, account_number, type)`
-        is a silent no-op, not an error (spec §3.2)."""
+        is a silent no-op, not an error (spec §3.2).
+
+        `applied_rate_id` links to the `applied_rates` audit row for a leg
+        that carried a currency conversion (FX-16); `None` for every
+        same-currency, outgoing, or declined row."""
         ...
 
     async def list_by_account(
