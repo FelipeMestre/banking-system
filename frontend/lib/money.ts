@@ -64,3 +64,22 @@ export function parseCentsInput(raw: string): number | null {
   if (!Number.isSafeInteger(cents) || cents <= 0) return null;
   return cents;
 }
+
+/**
+ * Parses a human decimal amount (e.g. "1,250.00") into integer cents without
+ * using floats. Returns null for anything not a positive amount with at most
+ * two decimal places.
+ */
+export function parseAmountToCents(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const stripped = trimmed.replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(stripped)) return null;
+  const [wholePart, fracPart = ""] = stripped.split(".");
+  const whole = Number(wholePart);
+  const frac = fracPart ? Number(fracPart.padEnd(2, "0")) : 0;
+  if (!Number.isSafeInteger(whole) || !Number.isSafeInteger(frac)) return null;
+  const cents = whole * 100 + frac;
+  if (!Number.isSafeInteger(cents) || cents <= 0) return null;
+  return cents;
+}
