@@ -26,7 +26,7 @@ describe("getTransactions", () => {
     const page = await getTransactions("1111111111111111", { limit: 20 });
 
     expect(page).toEqual(PAGE_BODY);
-    const [url] = fetchSpy.mock.calls[0];
+    const [url] = fetchSpy.mock.calls[0]!;
     expect(String(url)).toContain("/accounts/1111111111111111/transactions");
     expect(String(url)).toContain("limit=20");
   });
@@ -38,7 +38,7 @@ describe("getTransactions", () => {
 
     await getTransactions("1111111111111111", { limit: 20, cursor: "abc_def" });
 
-    const [url] = fetchSpy.mock.calls[0];
+    const [url] = fetchSpy.mock.calls[0]!;
     expect(String(url)).toContain("cursor=abc_def");
   });
 

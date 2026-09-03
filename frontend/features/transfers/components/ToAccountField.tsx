@@ -18,7 +18,9 @@ export function ToAccountField({ value, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-ds-1">
-      <Label htmlFor="to-account">To account</Label>
+      <Label htmlFor="to-account" className="text-[12px] font-normal leading-none text-neutral-700">
+        To account
+      </Label>
       <Input
         id="to-account"
         placeholder="Enter the recipient's account number"
@@ -26,6 +28,7 @@ export function ToAccountField({ value, onChange }: Props) {
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
         inputMode="numeric"
+        className="h-9 min-h-9 rounded-none border border-divider bg-surface px-3 py-2 text-[14px] text-text placeholder:text-neutral-500 shadow-none focus-visible:border-divider focus-visible:ring-0"
       />
       {showPreview ? (
         <div
