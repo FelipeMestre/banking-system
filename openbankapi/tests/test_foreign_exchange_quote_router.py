@@ -136,7 +136,7 @@ def test_usd_to_eur_credit_matches_conversion_service_and_differs_from_debit():
 
 
 def test_same_currency_passthrough_via_http():
-    app, fx = _build_app()
+    app, cache_service = _build_app()
     resp = asyncio.run(
         _post_quote(
             app,
@@ -147,11 +147,11 @@ def test_same_currency_passthrough_via_http():
     body = resp.json()
     assert body["final_amount"] == 5000
     assert body["applied_rate"] is None
-    assert fx.calls == 1
+    assert cache_service.calls == 1
 
 
 def test_non_positive_amount_rejected_before_any_cache_call():
-    app, fx = _build_app()
+    app, cache_service = _build_app()
     resp = asyncio.run(
         _post_quote(
             app,
@@ -159,11 +159,11 @@ def test_non_positive_amount_rejected_before_any_cache_call():
         )
     )
     assert resp.status_code == 422
-    assert fx.calls == 0
+    assert cache_service.calls == 0
 
 
 def test_negative_amount_rejected():
-    app, fx = _build_app()
+    app, cache_service = _build_app()
     resp = asyncio.run(
         _post_quote(
             app,
@@ -171,7 +171,7 @@ def test_negative_amount_rejected():
         )
     )
     assert resp.status_code == 422
-    assert fx.calls == 0
+    assert cache_service.calls == 0
 
 
 def test_rate_unavailable_maps_to_503_not_the_global_502():

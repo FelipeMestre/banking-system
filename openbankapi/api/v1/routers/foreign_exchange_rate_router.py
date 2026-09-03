@@ -1,4 +1,4 @@
-"""Thin router for FX display rates (FX-7) and margin-adjusted quotes (FX-13).
+"""Thin router for foreign exchange display rates (FX-7) and margin-adjusted quotes (FX-13).
 
 Only margin + shaping. No Redis, no HTTP, no TTL. `POST /quote` never writes
 an applied-rate audit row — this phase only builds that repository, it does
