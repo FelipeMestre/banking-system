@@ -1,4 +1,4 @@
-"""Cache-aside for FX mid rates — FX-5/FX-6.
+"""Cache-aside for foreign exchange mid rates — FX-5/FX-6.
 
 Only place that touches foreign_exchange:mid_rate:* keys.
 Reuses ICacheService single pool, no second client, no HTTP.

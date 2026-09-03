@@ -13,7 +13,7 @@ import uuid
 from openbankapi.config import Settings
 from openbankapi.infra.kafka.consumers.transaction_consumer import TransactionConsumer
 
-from .fakes import FakeTransactionRepository
+from .fakes import FakeAppliedRateRepository, FakeTransactionRepository
 
 ACCOUNT_A = "1111111111111111"
 ACCOUNT_B = "2222222222222222"

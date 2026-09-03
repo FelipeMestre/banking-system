@@ -167,8 +167,16 @@ def _on_transfer_requested(
         dedup_keys=(debit_key,),
         account_events=(
             _outgoing(event, account, total, fee_amount, now),
-            _incoming(event, event["destination_account"], amount, LEG_CREDIT_DESTINATION, now),
-            _incoming(event, event["fees_account"], fee_amount, LEG_CREDIT_FEES, now),
+            _incoming(
+                event, event["destination_account"],
+                event.get("destination_amount", amount), LEG_CREDIT_DESTINATION, now,
+                conversion=event.get("applied_rate"),
+            ),
+            _incoming(
+                event, event["fees_account"],
+                event.get("fee_amount_usd", fee_amount), LEG_CREDIT_FEES, now,
+                conversion=event.get("fee_applied_rate"),
+            ),
         ),
         balance_events=(_balance_updated(account, reserved, now),),
     )
@@ -218,9 +226,17 @@ def _outgoing(
 
 
 def _incoming(
-    event: Dict[str, Any], account: str, amount: int, leg: str, now: str
+    event: Dict[str, Any],
+    account: str,
+    amount: int,
+    leg: str,
+    now: str,
+    conversion: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
+    """`amount` is already the resolved, target-currency value the caller
+    picked (raw or converted); this function itself performs no currency
+    logic — see `account-service`'s zero-currency-import guard."""
+    payload = {
         "type": INCOMING_PAYMENT,
         "request_id": event["request_id"],
         "account_id": account,
@@ -229,6 +245,9 @@ def _incoming(
         "leg": leg,
         "ts": now,
     }
+    if conversion is not None:
+        payload["conversion"] = conversion
+    return payload
 
 
 def _declined(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Numeric,
     String,
     UniqueConstraint,
     func,
@@ -110,6 +112,26 @@ class AccountORM(Base):
     updated_at: Mapped[dt.datetime] = _created()
 
 
+class AppliedRateORM(Base):
+    """Passive audit row for a margin-adjusted quote (FX-14).
+
+    Built and migrated in this phase, but nothing writes to it yet — no
+    route calls `IAppliedRateRepository.insert()` (FX-13/FX-15 scope guard).
+    """
+
+    __tablename__ = "applied_rates"
+    __table_args__ = (
+        CheckConstraint("direction IN ('credit', 'debit')", name="applied_rates_direction_check"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    pair: Mapped[str] = mapped_column(String(7), nullable=False)
+    mid_rate: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    applied_rate: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    margin: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    direction: Mapped[str] = mapped_column(String(10), nullable=False)
+    source_ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    
 class TransactionORM(Base):
     """The transactions read model (spec §3). Written only by `TransactionConsumer`.
 
@@ -135,3 +157,9 @@ class TransactionORM(Base):
     decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[dt.datetime] = _created()
+    # Nullable, additive (FX-16): only a settled leg that carried a currency
+    # conversion links to its audit row; same-currency legs and outgoing/
+    # declined rows always leave this NULL.
+    applied_rate_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("applied_rates.id"), nullable=True
+    )

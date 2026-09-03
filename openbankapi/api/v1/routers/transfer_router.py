@@ -28,8 +28,8 @@ router = APIRouter(tags=["transfer"])
 
 
 @router.post("/transfer", status_code=202, response_model=TransferAcceptedDTO)
-def request_transfer(body: TransferRequestDTO, service: TransferServiceDep):
-    event = service.request_transfer(
+async def request_transfer(body: TransferRequestDTO, service: TransferServiceDep):
+    event = await service.request_transfer(
         source_account=body.source_account,
         destination_account=body.destination_account,
         amount=body.amount,

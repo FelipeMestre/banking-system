@@ -24,3 +24,4 @@ class Transaction:
     counterparty_account: str
     decline_reason: Optional[str]
     ts: datetime
+    applied_rate_id: Optional[UUID] = None

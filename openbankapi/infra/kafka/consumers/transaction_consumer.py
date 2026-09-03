@@ -9,6 +9,12 @@ fan-out, so splitting partitions across instances is the right thing to do.
 resolved outcome (spec §3.1). `insert` on `ITransactionRepository` is
 idempotent by construction (`ON CONFLICT DO NOTHING`), so at-least-once
 redelivery here never needs its own dedup check.
+
+FX-19: an `incoming_payment` event that carries a `conversion` dict (attached
+by `account-service/domain.py`'s `_incoming` when the transfer needed a
+currency conversion) is persisted to `applied_rates` first, and the returned
+id threaded into the transaction row as `applied_rate_id`. `outgoing_payment`
+and `declined_payment` never carry `conversion` and always link `None`.
 """
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ from typing import Any, Dict, Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
+from ...database.interfaces.applied_rate_repository import IAppliedRateRepository
 from ...database.interfaces.transaction_repository import ITransactionRepository
 
 LOG = logging.getLogger("openbankapi.kafka.transactions")
@@ -37,9 +44,17 @@ _EVENT_TO_ROW_TYPE = {
 
 
 class TransactionConsumer:
-    def __init__(self, settings: Settings, repository: ITransactionRepository):
+    def __init__(
+        self,
+        settings: Settings,
+        repository: ITransactionRepository,
+        applied_rate_repository: Optional[IAppliedRateRepository] = None,
+    ):
         self._settings = settings
         self._repository = repository
+        # Optional, default None: a caller that predates FX-19 keeps working
+        # unmodified — it just never links an applied-rate row.
+        self._applied_rate_repository = applied_rate_repository
         self._stopping = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -123,6 +138,8 @@ class TransactionConsumer:
         else:
             counterparty = event["destination_account"]
 
+        applied_rate_id = await self._resolve_applied_rate_id(row_type, event)
+
         await self._repository.insert(
             request_id=uuid.UUID(str(event["request_id"])),
             account_number=event["account_id"],
@@ -131,7 +148,28 @@ class TransactionConsumer:
             counterparty_account=counterparty,
             decline_reason=event.get("reason") if row_type == "declined" else None,
             ts=self._parse_ts(event.get("ts")),
+            applied_rate_id=applied_rate_id,
         )
+
+    async def _resolve_applied_rate_id(
+        self, row_type: str, event: Dict[str, Any]
+    ) -> Optional[uuid.UUID]:
+        """Only a `credit` row (an `incoming_payment` leg) ever carries
+        `conversion`; `debit`/`declined` always link `None` (FX-19)."""
+        if row_type != "credit" or self._applied_rate_repository is None:
+            return None
+        conversion = event.get("conversion")
+        if conversion is None:
+            return None
+        new_id = await self._applied_rate_repository.insert(
+            pair=conversion["pair"],
+            mid_rate=conversion["mid_rate"],
+            applied_rate=conversion["applied_rate"],
+            margin=conversion["margin"],
+            direction=conversion["direction"],
+            source_ts=self._parse_ts(conversion["source_ts"]),
+        )
+        return uuid.UUID(str(new_id))
 
     @staticmethod
     def _parse_ts(raw_ts: Any) -> datetime:
