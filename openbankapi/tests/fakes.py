@@ -329,6 +329,7 @@ class FakeTransactionRepository:
         counterparty_account: str,
         decline_reason: Optional[str],
         ts: dt.datetime,
+        applied_rate_id: Optional[UUID] = None,
     ) -> None:
         key = (request_id, account_number, type)
         if key in self._seen:
@@ -339,6 +340,7 @@ class FakeTransactionRepository:
                 id=uuid.uuid4(), request_id=request_id, account_number=account_number,
                 type=TransactionType(type), amount=amount,
                 counterparty_account=counterparty_account, decline_reason=decline_reason, ts=ts,
+                applied_rate_id=applied_rate_id,
             )
         )
 
@@ -354,6 +356,37 @@ class FakeTransactionRepository:
             ]
         candidates.sort(key=lambda row: (row.ts, row.id), reverse=True)
         return candidates[:limit]
+
+
+class FakeAppliedRateRepository:
+    """In-memory double for IAppliedRateRepository (FX-16)."""
+
+    def __init__(self):
+        self.rows: List[Dict[str, Any]] = []
+
+    async def insert(
+        self,
+        *,
+        pair: str,
+        mid_rate: float,
+        applied_rate: float,
+        margin: float,
+        direction: str,
+        source_ts: dt.datetime,
+    ) -> str:
+        new_id = uuid.uuid4()
+        self.rows.append(
+            {
+                "id": new_id,
+                "pair": pair,
+                "mid_rate": mid_rate,
+                "applied_rate": applied_rate,
+                "margin": margin,
+                "direction": direction,
+                "source_ts": source_ts,
+            }
+        )
+        return str(new_id)
 
 
 class FakeForeignExchangeRepository:

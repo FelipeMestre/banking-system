@@ -29,6 +29,7 @@ def _to_domain(row: TransactionORM) -> Transaction:
         counterparty_account=row.counterparty_account,
         decline_reason=row.decline_reason,
         ts=row.ts,
+        applied_rate_id=row.applied_rate_id,
     )
 
 
@@ -43,6 +44,7 @@ class PostgresTransactionRepository(PostgresRepository):
         counterparty_account: str,
         decline_reason: Optional[str],
         ts: datetime,
+        applied_rate_id: Optional[UUID] = None,
     ) -> None:
         statement = (
             pg_insert(TransactionORM)
@@ -54,6 +56,7 @@ class PostgresTransactionRepository(PostgresRepository):
                 counterparty_account=counterparty_account,
                 decline_reason=decline_reason,
                 ts=ts,
+                applied_rate_id=applied_rate_id,
             )
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]
@@ -112,6 +115,7 @@ class PostgresTransactionWriter:
         counterparty_account: str,
         decline_reason: Optional[str],
         ts: datetime,
+        applied_rate_id: Optional[UUID] = None,
     ) -> None:
         statement = (
             pg_insert(TransactionORM)
@@ -123,6 +127,7 @@ class PostgresTransactionWriter:
                 counterparty_account=counterparty_account,
                 decline_reason=decline_reason,
                 ts=ts,
+                applied_rate_id=applied_rate_id,
             )
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]

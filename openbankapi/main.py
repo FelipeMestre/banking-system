@@ -14,7 +14,11 @@ from .app import create_app
 from .config import Settings
 from .infra.cache.repositories import get_null_cache_repository, get_redis_cache_repository
 from .infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
-from .infra.database.repositories import PostgresAccountBalanceProjection, PostgresTransactionWriter
+from .infra.database.repositories import (
+    PostgresAccountBalanceProjection,
+    PostgresAppliedRateWriter,
+    PostgresTransactionWriter,
+)
 from .infra.database.config.session import create_engine, create_sessionmaker
 from .infra.foreign_exchange_service.config.foreign_exchange_config import ForeignExchangeConfig
 from .infra.foreign_exchange_service.repository.frankfurter_repository import FrankfurterRepository
@@ -37,6 +41,9 @@ balance_projection = PostgresAccountBalanceProjection(sessionmaker)
 # thread, not an HTTP request, so it keeps its own sessionmaker rather than
 # sharing the request-scoped session `TransactionRepositoryDep` uses.
 transaction_writer = PostgresTransactionWriter(sessionmaker)
+# Same reasoning again, FX-19: the applied-rate audit row a converted leg
+# links to is written off the same Kafka thread, not a request.
+applied_rate_writer = PostgresAppliedRateWriter(sessionmaker)
 
 cache = get_redis_cache_repository(settings.redis_url) if settings.redis_url else get_null_cache_repository()
 
@@ -48,7 +55,7 @@ publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
-transaction_consumer = TransactionConsumer(settings, transaction_writer)
+transaction_consumer = TransactionConsumer(settings, transaction_writer, applied_rate_writer)
 
 # None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
 # to exist first — see config/dependencies.py for how routes degrade to a

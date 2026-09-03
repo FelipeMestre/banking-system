@@ -45,6 +45,7 @@ from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
 from ..infra.database.interfaces import (
     IAccountRepository,
+    IAppliedRateRepository,
     IBranchRepository,
     ICustomerRepository,
     ILocationRepository,
@@ -52,6 +53,7 @@ from ..infra.database.interfaces import (
 )
 from ..infra.database.repositories import (
     PostgresAccountRepository,
+    PostgresAppliedRateRepository,
     PostgresBranchRepository,
     PostgresCustomerRepository,
     PostgresLocationRepository,
@@ -163,6 +165,12 @@ def get_account_repository(session: DbSession) -> IAccountRepository:
 AccountRepositoryDep = Annotated[IAccountRepository, Depends(get_account_repository)]
 
 
+def get_applied_rate_repository(session: DbSession) -> IAppliedRateRepository:
+    return PostgresAppliedRateRepository(session)
+
+
+AppliedRateRepositoryDep = Annotated[IAppliedRateRepository, Depends(get_applied_rate_repository)]
+
 def get_transaction_repository(session: DbSession) -> ITransactionRepository:
     return PostgresTransactionRepository(session)
 
@@ -203,8 +211,13 @@ def get_account_service(
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
 
 
-def get_transfer_service(settings: SettingsDep, publisher: PublisherDep) -> TransferService:
-    return TransferService(settings, publisher)
+def get_transfer_service(
+    settings: SettingsDep,
+    publisher: PublisherDep,
+    account_repository: AccountRepositoryDep,
+    foreign_exchange_cache_service: ForeignExchangeCacheServiceDep,
+) -> TransferService:
+    return TransferService(settings, publisher, account_repository, foreign_exchange_cache_service)
 
 
 TransferServiceDep = Annotated[TransferService, Depends(get_transfer_service)]
