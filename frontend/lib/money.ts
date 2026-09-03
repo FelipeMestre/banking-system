@@ -42,6 +42,22 @@ export function maskAccountNumber(accountNumber: string): string {
   return `•••• ${lastFour}`;
 }
 
+/**
+ * Groups a revealed account number into 4-digit chunks separated by a dash
+ * (e.g. "1111222233334444" -> "1111-2222-3333-4444"), for readability.
+ *
+ * Purely a display grouping — this only runs on the already-revealed number,
+ * never the masked placeholder, and the raw ungrouped value is what actually
+ * gets copied to the clipboard, not this formatted string.
+ *
+ * Total like `maskAccountNumber`: a trailing partial group (anything not a
+ * multiple of 4 characters) is kept as-is rather than dropped, so this never
+ * throws or silently truncates a malformed value.
+ */
+export function formatAccountNumber(accountNumber: string): string {
+  return accountNumber.replace(/(.{4})(?=.)/g, "$1-");
+}
+
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 
 /**

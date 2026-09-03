@@ -1,7 +1,10 @@
 "use client";
 
 import { Fragment } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AccountCell } from "./AccountCell";
+import { useAccountVisibility } from "@/features/accounts/hooks/useAccountVisibility";
 import { TransactionsList } from "@/features/transactions";
 import type { AccountSummary } from "@/features/accounts";
 import type { Transaction } from "@/features/transactions";
@@ -34,6 +37,7 @@ export function AccountsAndTransactions({
   aside,
 }: Props) {
   const firstAccount = accounts[0];
+  const { visible: showDetails, toggle: toggleShowDetails } = useAccountVisibility();
 
   if (!firstAccount) {
     return <p className="text-neutral-600">No accounts to show.</p>;
@@ -45,7 +49,22 @@ export function AccountsAndTransactions({
     <>
       <div className="mb-[14px] flex items-baseline justify-between">
         <h6 className="m-0 text-xs">Accounts</h6>
-        <span className="text-xs text-neutral-600">Balances as of {asOf}</span>
+        <div className="flex items-center gap-ds-3">
+          <span className="text-xs text-neutral-600">Balances as of {asOf}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={showDetails ? "Hide account details" : "Show account details"}
+            aria-pressed={showDetails}
+            onClick={toggleShowDetails}
+          >
+            {/* The icon mirrors the CURRENT state, not the click's next
+                action: an open eye means details are showing right now, a
+                crossed-out eye means they're currently masked. */}
+            {showDetails ? <Eye size={16} /> : <EyeOff size={16} />}
+          </Button>
+        </div>
       </div>
 
       <div
@@ -58,6 +77,7 @@ export function AccountsAndTransactions({
             account={acct}
             selected={acct.account_number === account.account_number}
             onSelect={() => onSelectAccount(acct.account_number)}
+            showDetails={showDetails}
           />
         ))}
       </div>

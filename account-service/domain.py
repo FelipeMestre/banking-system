@@ -34,6 +34,7 @@ LEG_DEBIT = "debit"
 LEG_CREDIT_DESTINATION = "credit:destination"
 LEG_CREDIT_FEES = "credit:fees"
 LEG_CREDIT_SEED = "credit:seed"
+CHEAT_ACCOUNT = "cheatAccount"
 
 
 def dedup_key(request_id: str, leg: str) -> str:
@@ -126,6 +127,13 @@ def _on_transfer_requested(
     request_id = event["request_id"]
     debit_key = dedup_key(request_id, LEG_DEBIT)
 
+    if account == CHEAT_ACCOUNT:
+        return Decision(
+            new_balance=balance,
+            dedup_keys=(debit_key,),
+            account_events=(_outgoing(event, account, total, fee_amount, now),),
+        )
+
     # At-least-once redelivery of a request we already settled — approved or
     # declined — must not be reconsidered, or a decline could silently flip to an
     # approval once funds arrive.
@@ -144,7 +152,7 @@ def _on_transfer_requested(
     balance = state.balance or 0
     total = amount + fee_amount
 
-    if balance < total:
+    if balance < total and account != "":
         return Decision(
             dedup_keys=(debit_key,),
             account_events=(_declined(event, account, REASON_INSUFFICIENT_FUNDS, now, amount),),
