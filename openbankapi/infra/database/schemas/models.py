@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Numeric,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -130,4 +131,29 @@ class AppliedRateORM(Base):
     margin: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     source_ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    
+class TransactionORM(Base):
+    """The transactions read model (spec §3). Written only by `TransactionConsumer`.
+
+    `UNIQUE(request_id, account_number, type)` is what makes at-least-once
+    Kafka redelivery idempotent: a redelivered event maps to the exact same
+    three values, so `INSERT ... ON CONFLICT DO NOTHING` is a true no-op.
+    """
+
+    __tablename__ = "transactions"
+    __table_args__ = (
+        CheckConstraint("type IN ('debit', 'credit', 'declined')", name="transactions_type_check"),
+        UniqueConstraint(
+            "request_id", "account_number", "type", name="transactions_request_id_account_number_type_key"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    request_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    account_number: Mapped[str] = mapped_column(String(16), nullable=False)
+    type: Mapped[str] = mapped_column(String(10), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    counterparty_account: Mapped[str] = mapped_column(String(16), nullable=False)
+    decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[dt.datetime] = _created()

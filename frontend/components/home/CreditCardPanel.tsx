@@ -1,6 +1,6 @@
 import { CreditCard } from "lucide-react";
 import { formatCents } from "@/lib/money";
-import type { CREDIT_CARD } from "@/lib/placeholder-home";
+import type { CREDIT_CARD } from "./credit-card-fixture";
 import { DS_ICON_PROPS } from "@/lib/icon-props";
 
 interface Props {

@@ -13,6 +13,7 @@ from openbankapi.config.dependencies import (
     get_branch_repository,
     get_customer_repository,
     get_location_repository,
+    get_transaction_repository,
 )
 from openbankapi.infra.kafka.status_registry import StatusRegistry
 
@@ -23,6 +24,7 @@ from .fakes import (
     FakePublisher,
     FakeBranchRepository,
     FakeCache,
+    FakeTransactionRepository,
     FakeForeignExchangeRepository,
 )
 from .db_fixtures import TEST_DATABASE_DSN, migrate_to_head
@@ -34,13 +36,21 @@ class Harness:
         self.publisher = publisher
         self.cache = cache
         self.registry = registry
-        self.locations, self.branches, self.customers, self.accounts = repos
+        self.locations, self.branches, self.customers, self.accounts, self.transactions = repos
         self.settings = settings
         self.fx_cache_service = fx_cache_service
         self.fx_repo = fx_repo
 
 
-def build(*, cache=None, accounts=None, branches=None, fx_repo=None, fx_cache_service=None) -> Harness:
+def build(
+    *,
+    cache=None,
+    accounts=None,
+    branches=None,
+    transactions=None,
+    fx_repo=None,
+    fx_cache_service=None,
+) -> Harness:
     # lazy imports to avoid circular deps during app wiring
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import (
         ForeignExchangeCacheService,
@@ -55,6 +65,7 @@ def build(*, cache=None, accounts=None, branches=None, fx_repo=None, fx_cache_se
     branches = branches or FakeBranchRepository()
     customers = FakeCustomerRepository()
     accounts = accounts or FakeAccountRepository()
+    transactions = transactions or FakeTransactionRepository()
 
     fx_repo = fx_repo or FakeForeignExchangeRepository()
     fx_cache_service = fx_cache_service or ForeignExchangeCacheService(cache, fx_repo)
@@ -82,11 +93,12 @@ def build(*, cache=None, accounts=None, branches=None, fx_repo=None, fx_cache_se
     app.dependency_overrides[get_branch_repository] = lambda: branches
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
+    app.dependency_overrides[get_transaction_repository] = lambda: transactions
     client = TestClient(app)
     # also attach for router tests that use app.state directly
     app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
-                   (locations, branches, customers, accounts), settings, fx_cache_service, fx_repo)
+                   (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo)
 
 
 @pytest.fixture

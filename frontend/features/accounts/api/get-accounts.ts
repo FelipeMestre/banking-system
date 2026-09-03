@@ -1,4 +1,4 @@
-import { authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
+import { ApiError, authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type { Account } from "../types";
 
@@ -9,7 +9,7 @@ export async function getAccounts(params: { limit: number; offset: number }): Pr
   });
   const response = await authorizedFetch(`${gatewayOrigin()}/accounts?${query}`);
   if (!response.ok) {
-    throw new Error(await describeFailure(response));
+    throw new ApiError(await describeFailure(response), response.status);
   }
   return (await response.json()) as Page<Account>;
 }

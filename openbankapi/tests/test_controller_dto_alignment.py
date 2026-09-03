@@ -23,11 +23,18 @@ CONTROLLERS = [
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+# Pydantic's own model methods, not a field access — `body.model_dump()` is a
+# legitimate way to hand the whole body to a second, stricter DTO (see
+# `account_router.create_first_account`'s re-validation against
+# `FirstAccountKycDTO`), not the kind of field-name typo this test guards
+# against.
+_PYDANTIC_METHODS = {"model_dump", "model_dump_json", "model_copy", "model_validate"}
+
 
 @pytest.mark.parametrize("controller,dto_module,dto_names", CONTROLLERS, ids=lambda v: v if isinstance(v, str) else "")
 def test_every_body_field_a_controller_reads_exists_on_its_dto(controller, dto_module, dto_names):
     source = (ROOT / "api" / "v1" / "routers" / f"{controller}.py").read_text()
-    read = set(re.findall(r"body\.(\w+)", source))
+    read = set(re.findall(r"body\.(\w+)", source)) - _PYDANTIC_METHODS
 
     module = importlib.import_module(f"openbankapi.api.v1.dtos.{dto_module}")
     declared: set[str] = set()

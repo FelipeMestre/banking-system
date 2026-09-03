@@ -1,15 +1,21 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { AccountCell } from "./AccountCell";
-import { TransactionsTable } from "./TransactionsTable";
-import type { AccountSummary } from "@/lib/placeholder-home";
-import type { Transaction } from "@/lib/types";
+import { TransactionsList } from "@/features/transactions";
+import type { AccountSummary } from "@/features/accounts";
+import type { Transaction } from "@/features/transactions";
 
 interface Props {
   accounts: AccountSummary[];
   transactionsByAccount: Record<string, Transaction[]>;
   asOf: string;
+  /** Controlled: the parent owns which account is selected, since selecting
+   * a different account has to trigger a real fetch of that account's
+   * transactions (spec §3.3) — a fetch this component has no business
+   * starting itself. */
+  selectedAccountNumber: string;
+  onSelectAccount: (accountNumber: string) => void;
   /**
    * The aside (credit card panel, quick actions, total position) — passed in
    * rather than imported here so those purely-presentational pieces stay
@@ -19,25 +25,21 @@ interface Props {
   aside: React.ReactNode;
 }
 
-/**
- * Owns the one real interaction on this screen: which account is selected.
- * The accounts strip and the transactions table below it both react to the
- * same selection, so the state has to live above both of them — same
- * pattern as `TransferConsole` owning `Phase` for its child form/outcome.
- */
-export function AccountsAndTransactions({ accounts, transactionsByAccount, asOf, aside }: Props) {
-  const [selected, setSelected] = useState(0);
+export function AccountsAndTransactions({
+  accounts,
+  transactionsByAccount,
+  asOf,
+  selectedAccountNumber,
+  onSelectAccount,
+  aside,
+}: Props) {
   const firstAccount = accounts[0];
 
   if (!firstAccount) {
     return <p className="text-neutral-600">No accounts to show.</p>;
   }
 
-  // `selected` only ever moves to indexes AccountCell.onSelect hands it, which
-  // only ever come from mapping over this same `accounts` array — but that
-  // isn't visible to the type checker, so fall back to the account already
-  // proven to exist above rather than asserting the index is always in range.
-  const account = accounts[selected] ?? firstAccount;
+  const account = accounts.find((a) => a.account_number === selectedAccountNumber) ?? firstAccount;
 
   return (
     <>
@@ -50,19 +52,18 @@ export function AccountsAndTransactions({ accounts, transactionsByAccount, asOf,
         className="grid border-2 border-divider border-r-0"
         style={{ gridTemplateColumns: `repeat(${accounts.length}, minmax(0, 1fr))` }}
       >
-        {accounts.map((acct, index) => (
+        {accounts.map((acct) => (
           <AccountCell
             key={acct.account_number}
             account={acct}
-            selected={index === selected}
-            onSelect={() => setSelected(index)}
+            selected={acct.account_number === account.account_number}
+            onSelect={() => onSelectAccount(acct.account_number)}
           />
         ))}
       </div>
 
       <div className="mt-[36px] grid grid-cols-[minmax(0,1fr)_300px] items-start gap-ds-8">
-        <TransactionsTable
-          accountLabel={account.label}
+        <TransactionsList
           currencyCode={account.currency}
           transactions={transactionsByAccount[account.account_number] ?? []}
         />

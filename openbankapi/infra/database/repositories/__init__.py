@@ -7,6 +7,7 @@ from .postgres_account_repository import (
 from .postgres_location_repository import PostgresLocationRepository
 from .postgres_branch_repository import PostgresBranchRepository
 from .postgres_applied_rate_repository import PostgresAppliedRateRepository
+from .postgres_transaction_repository import PostgresTransactionRepository, PostgresTransactionWriter
 
 __all__ = [
     "PostgresCustomerRepository",
@@ -15,5 +16,7 @@ __all__ = [
     "PostgresLocationRepository",
     "PostgresBranchRepository",
     "PostgresAppliedRateRepository",
+    "PostgresTransactionRepository",
+    "PostgresTransactionWriter",
     "generate_account_number",
 ]

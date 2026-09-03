@@ -16,7 +16,7 @@ from openbankapi.domain.exceptions import (
     DuplicateError,
     ReferencedEntityNotFoundError,
 )
-from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch
+from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch, Transaction, TransactionType
 from openbankapi.infra.database.interfaces.common import Page
 
 
@@ -147,12 +147,27 @@ class FakeBranchRepository:
     async def deactivate(self, branch_id: UUID) -> Optional[Branch]:
         return await self.update(branch_id, active=False)
 
+    async def get_oldest_active(self) -> Optional[Branch]:
+        # `min` returns the first element on a tie, and `self.rows.values()`
+        # iterates in insertion order — that is the fake's tie-break.
+        active = [branch for branch in self.rows.values() if branch.active]
+        if not active:
+            return None
+        return min(active, key=lambda branch: branch.created_at)
+
 
 class FakeCustomerRepository:
     def __init__(self):
         self.rows: Dict[UUID, Customer] = {}
 
     async def create(self, **kwargs) -> Customer:
+        sub = kwargs.get("auth0_sub")
+        if sub is not None and any(c.auth0_sub == sub for c in self.rows.values()):
+            # Stands in for the real UNIQUE(auth0_sub) violation (translated
+            # via errors.py's `_UNIQUE_KEYS`): simulates a lost race where
+            # another request created the Customer between the caller's
+            # existence check and this insert (amendment).
+            raise DuplicateError("auth0_sub", sub)
         entity = Customer(id=uuid.uuid4(), active=True, created_at=_now(),
                          updated_at=_now(), **kwargs)
         self.rows[entity.id] = entity
@@ -274,6 +289,71 @@ class FakeAccountRepository:
             created_at=current.created_at, updated_at=_now(),
         )
         return True
+
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page:
+        items = [a for a in self.rows.values() if a.customer_id == customer_id][offset : offset + limit]
+        total = sum(1 for a in self.rows.values() if a.customer_id == customer_id)
+        return Page(items=items, total=total, limit=limit, offset=offset)
+
+    async def has_any_account_for_customer(self, customer_id: UUID) -> bool:
+        return any(account.customer_id == customer_id for account in self.rows.values())
+
+    async def lock_customer_for_account_creation(self, customer_id: UUID) -> None:
+        """No-op here: the fake test suite runs single-threaded (`asyncio.run`
+        per scenario), so there is no concurrent session to block against.
+        The real advisory lock only matters under genuine Postgres concurrency."""
+        return None
+
+    async def lock_identity_for_account_creation(self, auth0_sub: str) -> None:
+        """No-op, same rationale as `lock_customer_for_account_creation` above
+        (amendment — never-linked-identity path)."""
+        return None
+
+
+class FakeTransactionRepository:
+    """Identity is `(request_id, account_number, type)` — the same tuple the
+    real `UNIQUE` constraint and `ON CONFLICT DO NOTHING` enforce (spec §3.2).
+    """
+
+    def __init__(self):
+        self.rows: List[Transaction] = []
+        self._seen: set = set()
+
+    async def insert(
+        self,
+        *,
+        request_id: UUID,
+        account_number: str,
+        type: str,
+        amount: int,
+        counterparty_account: str,
+        decline_reason: Optional[str],
+        ts: dt.datetime,
+    ) -> None:
+        key = (request_id, account_number, type)
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        self.rows.append(
+            Transaction(
+                id=uuid.uuid4(), request_id=request_id, account_number=account_number,
+                type=TransactionType(type), amount=amount,
+                counterparty_account=counterparty_account, decline_reason=decline_reason, ts=ts,
+            )
+        )
+
+    async def list_by_account(
+        self, account_number: str, *, limit: int, before: Optional[tuple] = None
+    ) -> List[Transaction]:
+        candidates = [row for row in self.rows if row.account_number == account_number]
+        if before is not None:
+            before_ts, before_id = before
+            candidates = [
+                row for row in candidates
+                if (row.ts, row.id) < (before_ts, before_id)
+            ]
+        candidates.sort(key=lambda row: (row.ts, row.id), reverse=True)
+        return candidates[:limit]
 
 
 class FakeForeignExchangeRepository:

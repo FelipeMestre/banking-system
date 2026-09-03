@@ -40,6 +40,7 @@ from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
 from ..domain.service.customer_service import CustomerService
+from ..domain.service.transaction_service import TransactionService
 from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
 from ..infra.database.interfaces import (
@@ -48,6 +49,7 @@ from ..infra.database.interfaces import (
     IBranchRepository,
     ICustomerRepository,
     ILocationRepository,
+    ITransactionRepository,
 )
 from ..infra.database.repositories import (
     PostgresAccountRepository,
@@ -55,6 +57,7 @@ from ..infra.database.repositories import (
     PostgresBranchRepository,
     PostgresCustomerRepository,
     PostgresLocationRepository,
+    PostgresTransactionRepository,
 )
 from ..infra.database.config.session import DbSession
 from ..infra.kafka.interfaces.event_publisher import IEventPublisher
@@ -168,6 +171,12 @@ def get_applied_rate_repository(session: DbSession) -> IAppliedRateRepository:
 
 AppliedRateRepositoryDep = Annotated[IAppliedRateRepository, Depends(get_applied_rate_repository)]
 
+def get_transaction_repository(session: DbSession) -> ITransactionRepository:
+    return PostgresTransactionRepository(session)
+
+
+TransactionRepositoryDep = Annotated[ITransactionRepository, Depends(get_transaction_repository)]
+
 
 async def get_current_customer(
     claims: CurrentUserDep, customer_repository: CustomerRepositoryDep
@@ -193,8 +202,10 @@ def get_account_service(
     settings: SettingsDep,
     repository: AccountRepositoryDep,
     publisher: PublisherDep,
+    branch_repository: BranchRepositoryDep,
+    customer_repository: CustomerRepositoryDep,
 ) -> AccountService:
-    return AccountService(settings, repository, publisher)
+    return AccountService(settings, repository, publisher, branch_repository, customer_repository)
 
 
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
@@ -225,3 +236,10 @@ def get_branch_service(
 
 
 BranchServiceDep = Annotated[BranchService, Depends(get_branch_service)]
+
+
+def get_transaction_service(repository: TransactionRepositoryDep) -> TransactionService:
+    return TransactionService(repository)
+
+
+TransactionServiceDep = Annotated[TransactionService, Depends(get_transaction_service)]

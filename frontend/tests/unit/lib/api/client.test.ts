@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { authorizedFetch, setAccessTokenGetter, toWebSocketUrl } from "../../../../lib/api/client";
+import { ApiError, authorizedFetch, setAccessTokenGetter, toWebSocketUrl } from "../../../../lib/api/client";
 
 describe("toWebSocketUrl", () => {
   it("maps http to ws and https to wss", () => {
@@ -9,6 +9,15 @@ describe("toWebSocketUrl", () => {
     expect(toWebSocketUrl("https://gw.example", "/ws/transfer/abc")).toBe(
       "wss://gw.example/ws/transfer/abc",
     );
+  });
+});
+
+describe("ApiError", () => {
+  it("carries the response status alongside the message", () => {
+    const error = new ApiError("not found", 404);
+    expect(error.message).toBe("not found");
+    expect(error.status).toBe(404);
+    expect(error).toBeInstanceOf(Error);
   });
 });
 
@@ -24,7 +33,7 @@ describe("authorizedFetch", () => {
 
     await authorizedFetch("http://gateway.example/accounts");
 
-    const [, init] = fetchSpy.mock.calls[0];
+    const [, init] = fetchSpy.mock.calls[0]!;
     const headers = new Headers(init?.headers);
     expect(headers.get("Authorization")).toBe("Bearer the-access-token");
   });
@@ -34,7 +43,7 @@ describe("authorizedFetch", () => {
 
     await authorizedFetch("http://gateway.example/accounts");
 
-    const [, init] = fetchSpy.mock.calls[0];
+    const [, init] = fetchSpy.mock.calls[0]!;
     const headers = new Headers(init?.headers);
     expect(headers.has("Authorization")).toBe(false);
   });

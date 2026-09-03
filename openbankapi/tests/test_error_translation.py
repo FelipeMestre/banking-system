@@ -75,6 +75,15 @@ def test_a_duplicate_business_key_is_a_conflict():
     assert not isinstance(error, DuplicateAccountNumberError)
 
 
+def test_a_duplicate_auth0_sub_is_a_conflict_not_a_500():
+    """`customers_auth0_sub_key` was missing from `_UNIQUE_KEYS` — a lost race
+    on auto-linking an unlinked identity fell to the `raise error` branch
+    below and leaked a raw 500 instead of a clean 409 (amendment bugfix)."""
+    error = translate(_nested("customers_auth0_sub_key"), values={"auth0_sub": "auth0|abc"})
+    assert isinstance(error, DuplicateError)
+    assert error.field == "auth0_sub"
+
+
 def test_an_unrecognised_constraint_is_re_raised_not_flattened():
     """An unknown constraint is a bug, not a client error."""
     original = _nested("something_we_never_declared")

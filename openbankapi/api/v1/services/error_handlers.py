@@ -13,14 +13,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ....domain.exceptions import (
+    AccountAccessForbiddenError,
     AccountNotOperableError,
     BranchHasActiveAccountsError,
     CustomerAccountsNotEmptyError,
+    CustomerAlreadyHasAccountError,
     CustomerNotLinkedError,
     DomainError,
     DuplicateError,
     InsufficientFundsError,
     InvalidAccountNumberError,
+    NoActiveBranchAvailableError,
     NotFoundError,
     RateNotAvailableError,
     ReferencedEntityNotFoundError,
@@ -39,6 +42,9 @@ _STATUS = [
     (InsufficientFundsError, 409),
     (CustomerAccountsNotEmptyError, 409),
     (BranchHasActiveAccountsError, 409),
+    (AccountAccessForbiddenError, 403),
+    (CustomerAlreadyHasAccountError, 409),
+    (NoActiveBranchAvailableError, 503),
 ]
 
 
