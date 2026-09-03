@@ -6,15 +6,8 @@ import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 import { DS_ICON_PROPS } from "@/lib/icon-props";
 
-/**
- * Only Home actually goes anywhere in this app today. The other four are
- * inert — rendering them as disabled buttons (rather than dead links, or
- * live-looking buttons that silently do nothing) is the honest state for a
- * nav item with no destination yet.
- */
 const INERT_ITEMS: { title: string; Icon: ComponentType<{ size?: number }> }[] = [
   { title: "Cards", Icon: CreditCard },
-  { title: "Payments", Icon: ArrowLeftRight },
   { title: "Support", Icon: Headphones },
   { title: "Settings", Icon: Settings },
 ];
@@ -22,6 +15,7 @@ const INERT_ITEMS: { title: string; Icon: ComponentType<{ size?: number }> }[] =
 export function Sidebar() {
   const pathname = usePathname();
   const isHome = pathname === "/";
+  const isTransfer = pathname === "/transfer" || pathname.startsWith("/transfer/");
 
   return (
     <nav className="flex h-full flex-col items-center border-r-2 border-divider bg-bg">
@@ -42,6 +36,20 @@ export function Sidebar() {
           }
         >
           <Home size={21} {...DS_ICON_PROPS} />
+        </Link>
+
+        <Link
+          href="/transfer"
+          title="Payments"
+          aria-current={isTransfer ? "page" : undefined}
+          className={
+            "flex h-[52px] w-[52px] items-center justify-center " +
+            (isTransfer
+              ? "bg-accent text-bg hover:bg-accent-600"
+              : "text-neutral-700 hover:bg-neutral-200 hover:text-text")
+          }
+        >
+          <ArrowLeftRight size={21} {...DS_ICON_PROPS} />
         </Link>
 
         {INERT_ITEMS.map(({ title, Icon }) => (
