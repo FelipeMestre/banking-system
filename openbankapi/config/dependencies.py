@@ -44,12 +44,14 @@ from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
 from ..infra.database.interfaces import (
     IAccountRepository,
+    IAppliedRateRepository,
     IBranchRepository,
     ICustomerRepository,
     ILocationRepository,
 )
 from ..infra.database.repositories import (
     PostgresAccountRepository,
+    PostgresAppliedRateRepository,
     PostgresBranchRepository,
     PostgresCustomerRepository,
     PostgresLocationRepository,
@@ -158,6 +160,13 @@ def get_account_repository(session: DbSession) -> IAccountRepository:
 
 
 AccountRepositoryDep = Annotated[IAccountRepository, Depends(get_account_repository)]
+
+
+def get_applied_rate_repository(session: DbSession) -> IAppliedRateRepository:
+    return PostgresAppliedRateRepository(session)
+
+
+AppliedRateRepositoryDep = Annotated[IAppliedRateRepository, Depends(get_applied_rate_repository)]
 
 
 async def get_current_customer(

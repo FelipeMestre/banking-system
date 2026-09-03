@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Numeric,
     String,
     func,
 )
@@ -107,3 +109,25 @@ class AccountORM(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
+
+
+class AppliedRateORM(Base):
+    """Passive audit row for a margin-adjusted quote (FX-14).
+
+    Built and migrated in this phase, but nothing writes to it yet — no
+    route calls `IAppliedRateRepository.insert()` (FX-13/FX-15 scope guard).
+    """
+
+    __tablename__ = "applied_rates"
+    __table_args__ = (
+        CheckConstraint("direction IN ('credit', 'debit')", name="applied_rates_direction_check"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    pair: Mapped[str] = mapped_column(String(7), nullable=False)
+    mid_rate: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    applied_rate: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    margin: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    direction: Mapped[str] = mapped_column(String(10), nullable=False)
+    source_ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[dt.datetime] = _created()

@@ -25,6 +25,7 @@ from .fakes import (
     FakeCache,
     FakeForeignExchangeRepository,
 )
+from .db_fixtures import TEST_DATABASE_DSN, migrate_to_head
 
 
 class Harness:
@@ -93,6 +94,15 @@ def harness():
     h = build()
     with h.client:
         yield h
+
+
+@pytest.fixture(scope="session")
+def fx_test_dsn() -> str:
+    """Dedicated real-Postgres test database, migrated to `head` once per
+    session — see `db_fixtures.py` for why this is a separate database from
+    the shared dev one (FX-14, "Known Gap" in the tasks artifact)."""
+    migrate_to_head(TEST_DATABASE_DSN)
+    return TEST_DATABASE_DSN
 
 
 @pytest.fixture
