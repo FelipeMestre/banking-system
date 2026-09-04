@@ -17,8 +17,9 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 
 from ..errors import translate
+from ..interfaces.common import Page
 from ..schemas.models import CardORM
-from ._base import PostgresRepository
+from ._base import PostgresRepository, page_of
 from ....domain.exceptions import DuplicateCardNumberError
 from ....domain.model import CARD_NUMBER_LENGTH, Card, CardStatus
 
@@ -82,6 +83,10 @@ class PostgresCardRepository(PostgresRepository):
     async def get_by_number(self, card_number: str) -> Optional[Card]:
         row = await self._fetch_one(CardORM, CardORM.card_number == card_number)
         return _to_domain(row) if row else None
+
+    async def list_all(self, *, limit: int, offset: int) -> Page[Card]:
+        rows, total = await self._fetch_page(CardORM, limit=limit, offset=offset)
+        return page_of([_to_domain(r) for r in rows], total, limit, offset)
 
     async def get_active_for_account(self, card_account_id: UUID) -> Optional[Card]:
         row = await self._fetch_one(

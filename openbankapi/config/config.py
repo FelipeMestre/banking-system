@@ -23,6 +23,10 @@ class Settings:
     status_consumer_group: str = ""          # empty -> unique per process
     balance_consumer_group: str = "openbankapi-balances"
     transaction_consumer_group: str = "openbankapi-transactions"
+    card_events_topic: str = "card-events"
+    purchase_status_topic: str = "purchase-status"
+    card_movement_consumer_group: str = "openbankapi-card-movements"
+    purchase_status_consumer_group: str = ""  # empty -> unique per process
 
     # --- Postgres / Redis ---
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
@@ -59,6 +63,12 @@ class Settings:
             transaction_consumer_group=os.getenv(
                 "TRANSACTION_CONSUMER_GROUP", "openbankapi-transactions"
             ),
+            card_events_topic=os.getenv("CARD_EVENTS_TOPIC", "card-events"),
+            purchase_status_topic=os.getenv("PURCHASE_STATUS_TOPIC", "purchase-status"),
+            card_movement_consumer_group=os.getenv(
+                "CARD_MOVEMENT_CONSUMER_GROUP", "openbankapi-card-movements"
+            ),
+            purchase_status_consumer_group=os.getenv("PURCHASE_STATUS_CONSUMER_GROUP", ""),
             database_dsn=os.getenv(
                 "DATABASE_DSN", "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
             ),

@@ -245,8 +245,11 @@ class CardMovementORM(Base):
     __table_args__ = (
         CheckConstraint(
             "movement_type IS NULL OR movement_type IN "
-            "('purchase','payment','fee','interest','refund')",
+            "('purchase','payment','fee','interest','refund','declined')",
             name="card_movements_movement_type_check",
+        ),
+        UniqueConstraint(
+            "request_id", "movement_type", name="card_movements_request_id_movement_type_key"
         ),
     )
 
@@ -261,6 +264,8 @@ class CardMovementORM(Base):
     amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     movement_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    request_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
     occurred_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = _created()
 
