@@ -49,8 +49,10 @@ from ..infra.database.interfaces import (
     IAppliedRateRepository,
     IBranchRepository,
     ICardAccountRepository,
+    ICardMovementRepository,
     ICardRepository,
     ICustomerRepository,
+    IInstallmentRepository,
     ILocationRepository,
     ITransactionRepository,
 )
@@ -59,8 +61,10 @@ from ..infra.database.repositories import (
     PostgresAppliedRateRepository,
     PostgresBranchRepository,
     PostgresCardAccountRepository,
+    PostgresCardMovementRepository,
     PostgresCardRepository,
     PostgresCustomerRepository,
+    PostgresInstallmentRepository,
     PostgresLocationRepository,
     PostgresTransactionRepository,
 )
@@ -97,6 +101,16 @@ def get_status_registry(conn: HTTPConnection) -> StatusRegistry:
 
 
 StatusRegistryDep = Annotated[StatusRegistry, Depends(get_status_registry)]
+
+
+def get_purchase_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A separate instance from `status_registry` (transfers): `request_id`
+    # is only unique within its own domain's Kafka topic, and a card
+    # purchase and a transfer could coincidentally share one.
+    return conn.app.state.purchase_status_registry
+
+
+PurchaseStatusRegistryDep = Annotated[StatusRegistry, Depends(get_purchase_status_registry)]
 
 
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
@@ -195,6 +209,22 @@ def get_card_repository(session: DbSession) -> ICardRepository:
 
 
 CardRepositoryDep = Annotated[ICardRepository, Depends(get_card_repository)]
+
+
+def get_card_movement_repository(session: DbSession) -> ICardMovementRepository:
+    return PostgresCardMovementRepository(session)
+
+
+CardMovementRepositoryDep = Annotated[
+    ICardMovementRepository, Depends(get_card_movement_repository)
+]
+
+
+def get_installment_repository(session: DbSession) -> IInstallmentRepository:
+    return PostgresInstallmentRepository(session)
+
+
+InstallmentRepositoryDep = Annotated[IInstallmentRepository, Depends(get_installment_repository)]
 
 
 async def get_current_customer(

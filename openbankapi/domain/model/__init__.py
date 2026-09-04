@@ -19,6 +19,8 @@ from .card import (
     CardStatus,
     is_valid_card_number,
 )
+from .card_movement import CardMovement, CardMovementType
+from .installment import Installment, InstallmentStatus
 
 __all__ = [
     "Customer",
@@ -40,4 +42,8 @@ __all__ = [
     "CARD_VALIDITY_YEARS",
     "CARD_NUMBER_LENGTH",
     "is_valid_card_number",
+    "CardMovement",
+    "CardMovementType",
+    "Installment",
+    "InstallmentStatus",
 ]

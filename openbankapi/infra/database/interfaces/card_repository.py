@@ -25,6 +25,12 @@ class ICardRepository(Protocol):
 
     async def get_by_number(self, card_number: str) -> Optional[Card]: ...
 
+    async def list_all(self, *, limit: int, offset: int) -> Page[Card]:
+        """All cards across every customer — admin-only listing (e.g. to pick a
+        card for a simulated purchase), never customer-scoped like the rest of
+        this interface."""
+        ...
+
     async def get_active_for_account(self, card_account_id: UUID) -> Optional[Card]:
         """The single currently-`active` card for a card account, if any."""
         ...

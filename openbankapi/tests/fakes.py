@@ -24,8 +24,11 @@ from openbankapi.domain.model import (
     Card,
     CardAccount,
     CardAccountStatus,
+    CardMovement,
+    CardMovementType,
     CardStatus,
     Customer,
+    Installment,
     Location,
     Transaction,
     TransactionType,
@@ -490,6 +493,10 @@ class FakeCardRepository:
         card_id = self.by_number.get(card_number)
         return self.rows.get(card_id) if card_id else None
 
+    async def list_all(self, *, limit: int, offset: int) -> Page:
+        items = list(self.rows.values())[offset : offset + limit]
+        return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
+
     async def get_active_for_account(self, card_account_id: UUID) -> Optional[Card]:
         return next(
             (c for c in self.rows.values() if c.card_account_id == card_account_id and c.is_active),
@@ -532,3 +539,39 @@ class FakeForeignExchangeRepository:
         if self.raise_error is not None:
             raise self.raise_error
         return dict(self.rates)
+
+
+class FakeCardMovementRepository:
+    """In-memory double for `ICardMovementRepository` — Credit Cards Phase 2.
+
+    Identity is `(request_id, movement_type)`, the same tuple the real
+    `UNIQUE` constraint and `ON CONFLICT DO NOTHING` enforce.
+    """
+
+    def __init__(self):
+        self.rows: List[CardMovement] = []
+        self._seen: set = set()
+
+    async def insert(self, movement: CardMovement) -> CardMovement:
+        key = (movement.request_id, movement.movement_type)
+        if key in self._seen:
+            return next(row for row in self.rows if (row.request_id, row.movement_type) == key)
+        self._seen.add(key)
+        self.rows.append(movement)
+        return movement
+
+    async def get_by_card_id(self, card_id: UUID) -> List[CardMovement]:
+        return [row for row in self.rows if row.card_id == card_id]
+
+
+class FakeInstallmentRepository:
+    """In-memory double for `IInstallmentRepository` — Credit Cards Phase 2."""
+
+    def __init__(self):
+        self.rows: List[Installment] = []
+
+    async def bulk_insert(self, installments: List[Installment]) -> None:
+        self.rows.extend(installments)
+
+    async def get_by_movement_id(self, movement_id: UUID) -> List[Installment]:
+        return [row for row in self.rows if row.card_movement_id == movement_id]
