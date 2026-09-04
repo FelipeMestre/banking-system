@@ -11,7 +11,9 @@ import pytest
 
 from openbankapi.domain.exceptions import (
     DuplicateAccountNumberError,
+    DuplicateCardNumberError,
     DuplicateError,
+    InvalidCardNumberError,
     ReferencedEntityNotFoundError,
 )
 from openbankapi.infra.database.errors import constraint_name_of, translate
@@ -87,6 +89,53 @@ def test_a_duplicate_auth0_sub_is_a_conflict_not_a_500():
 def test_an_unrecognised_constraint_is_re_raised_not_flattened():
     """An unknown constraint is a bug, not a client error."""
     original = _nested("something_we_never_declared")
+    with pytest.raises(Exception) as caught:
+        translate(original, values={})
+    assert caught.value is original
+
+
+# --- Credit Cards Phase 1: T11 -----------------------------------------------
+
+
+@pytest.mark.parametrize("constraint,field", [
+    ("card_accounts_customer_id_fkey", "customer_id"),
+    ("card_accounts_paying_account_id_fkey", "paying_account_id"),
+    ("cards_card_account_id_fkey", "card_account_id"),
+    ("statements_card_account_id_fkey", "card_account_id"),
+    ("card_movements_card_id_fkey", "card_id"),
+    ("card_movements_applied_rate_id_fkey", "applied_rate_id"),
+    ("installments_card_movement_id_fkey", "card_movement_id"),
+])
+def test_every_credit_card_foreign_key_is_mapped(constraint, field):
+    error = translate(_nested(constraint), values={field: "x"})
+    assert isinstance(error, ReferencedEntityNotFoundError)
+    assert error.field == field
+
+
+def test_a_duplicate_card_number_is_its_own_error():
+    """The card repository retries on this one and on nothing else."""
+    error = translate(_nested("cards_card_number_key"), values={"card_number": "1234567812345678"})
+    assert isinstance(error, DuplicateCardNumberError)
+    assert not isinstance(error, DuplicateAccountNumberError)
+
+
+def test_an_invalid_card_number_check_violation_is_its_own_error():
+    error = translate(_nested("cards_card_number_check"), values={"card_number": "abc"})
+    assert isinstance(error, InvalidCardNumberError)
+
+
+@pytest.mark.parametrize("constraint", [
+    "card_accounts_status_check",
+    "cards_status_check",
+    "statements_status_check",
+    "card_movements_movement_type_check",
+    "installments_status_check",
+])
+def test_status_check_constraints_are_not_mapped_and_re_raise(constraint):
+    """A status CHECK violation reaching Postgres is a real bug — the service
+    validates transitions before any write, so this must never be silently
+    swallowed into a domain error (design decision)."""
+    original = _nested(constraint)
     with pytest.raises(Exception) as caught:
         translate(original, values={})
     assert caught.value is original
