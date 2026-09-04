@@ -13,10 +13,23 @@ from uuid import UUID
 
 from openbankapi.domain.exceptions import (
     DuplicateAccountNumberError,
+    DuplicateCardNumberError,
     DuplicateError,
     ReferencedEntityNotFoundError,
 )
-from openbankapi.domain.model import Customer, Account, AccountStatus, Location, Branch, Transaction, TransactionType
+from openbankapi.domain.model import (
+    Account,
+    AccountStatus,
+    Branch,
+    Card,
+    CardAccount,
+    CardAccountStatus,
+    CardStatus,
+    Customer,
+    Location,
+    Transaction,
+    TransactionType,
+)
 from openbankapi.infra.database.interfaces.common import Page
 
 
@@ -387,6 +400,119 @@ class FakeAppliedRateRepository:
             }
         )
         return str(new_id)
+
+
+class FakeCardAccountRepository:
+    """In-memory double for ICardAccountRepository (Credit Cards Phase 1)."""
+
+    def __init__(self, *, known_customers=None, known_accounts=None):
+        self.rows: Dict[UUID, CardAccount] = {}
+        self.known_customers = known_customers if known_customers is not None else set()
+        self.known_accounts = known_accounts if known_accounts is not None else set()
+        self.create_calls = 0
+
+    async def create(self, *, customer_id, paying_account_id, credit_limit) -> CardAccount:
+        self.create_calls += 1
+        if customer_id not in self.known_customers:
+            raise ReferencedEntityNotFoundError("customer_id", customer_id)
+        if paying_account_id not in self.known_accounts:
+            raise ReferencedEntityNotFoundError("paying_account_id", paying_account_id)
+        entity = CardAccount(
+            id=uuid.uuid4(), customer_id=customer_id, paying_account_id=paying_account_id,
+            credit_limit=credit_limit, status=CardAccountStatus.ACTIVE,
+            created_at=_now(), updated_at=_now(),
+        )
+        self.rows[entity.id] = entity
+        return entity
+
+    async def get_by_id(self, card_account_id: UUID) -> Optional[CardAccount]:
+        return self.rows.get(card_account_id)
+
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page:
+        items = [a for a in self.rows.values() if a.customer_id == customer_id][offset : offset + limit]
+        total = sum(1 for a in self.rows.values() if a.customer_id == customer_id)
+        return Page(items=items, total=total, limit=limit, offset=offset)
+
+    async def update_status(self, card_account_id: UUID, *, status: str) -> Optional[CardAccount]:
+        current = self.rows.get(card_account_id)
+        if current is None:
+            return None
+        updated = CardAccount(
+            id=current.id, customer_id=current.customer_id,
+            paying_account_id=current.paying_account_id, credit_limit=current.credit_limit,
+            status=CardAccountStatus(status), created_at=current.created_at, updated_at=_now(),
+        )
+        self.rows[card_account_id] = updated
+        return updated
+
+    async def update_limit(self, card_account_id: UUID, *, credit_limit) -> Optional[CardAccount]:
+        current = self.rows.get(card_account_id)
+        if current is None:
+            return None
+        updated = CardAccount(
+            id=current.id, customer_id=current.customer_id,
+            paying_account_id=current.paying_account_id, credit_limit=credit_limit,
+            status=current.status, created_at=current.created_at, updated_at=_now(),
+        )
+        self.rows[card_account_id] = updated
+        return updated
+
+
+class FakeCardRepository:
+    """In-memory double for ICardRepository (Credit Cards Phase 1)."""
+
+    def __init__(self, *, collide_times: int = 0):
+        self.rows: Dict[UUID, Card] = {}
+        self.by_number: Dict[str, UUID] = {}
+        self.collide_times = collide_times
+        self.attempts = 0
+
+    async def create(self, *, card_account_id, expiration_date) -> Card:
+        from openbankapi.infra.database.repositories import generate_card_number
+
+        for _ in range(5):
+            self.attempts += 1
+            card_number = generate_card_number()
+            if self.collide_times > 0 or card_number in self.by_number:
+                self.collide_times = max(0, self.collide_times - 1)
+                continue
+            entity = Card(
+                id=uuid.uuid4(), card_account_id=card_account_id, card_number=card_number,
+                expiration_date=expiration_date, status=CardStatus.ACTIVE,
+                created_at=_now(), updated_at=_now(),
+            )
+            self.rows[entity.id] = entity
+            self.by_number[card_number] = entity.id
+            return entity
+        raise DuplicateCardNumberError("exhausted")
+
+    async def get_by_number(self, card_number: str) -> Optional[Card]:
+        card_id = self.by_number.get(card_number)
+        return self.rows.get(card_id) if card_id else None
+
+    async def get_active_for_account(self, card_account_id: UUID) -> Optional[Card]:
+        return next(
+            (c for c in self.rows.values() if c.card_account_id == card_account_id and c.is_active),
+            None,
+        )
+
+    async def mark_replaced(self, card_id: UUID) -> Optional[Card]:
+        return await self._set_status(card_id, CardStatus.REPLACED)
+
+    async def update_status(self, card_id: UUID, *, status: str) -> Optional[Card]:
+        return await self._set_status(card_id, CardStatus(status))
+
+    async def _set_status(self, card_id: UUID, status: CardStatus) -> Optional[Card]:
+        current = self.rows.get(card_id)
+        if current is None:
+            return None
+        updated = Card(
+            id=current.id, card_account_id=current.card_account_id,
+            card_number=current.card_number, expiration_date=current.expiration_date,
+            status=status, created_at=current.created_at, updated_at=_now(),
+        )
+        self.rows[card_id] = updated
+        return updated
 
 
 class FakeForeignExchangeRepository:

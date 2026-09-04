@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 
 from openbankapi.infra.database.config.session import create_engine
-from openbankapi.tests.db_fixtures import downgrade_one, downgrade_to, migrate_to_head
+from openbankapi.tests.db_fixtures import downgrade_to, migrate_to_head
 
 _ALEMBIC_INI = Path(__file__).resolve().parents[1] / "infra" / "database" / "config" / "alembic.ini"
 
@@ -153,7 +153,11 @@ def test_transactions_applied_rate_id_is_nullable_and_fk(fx_test_dsn):
 
 def test_downgrade_of_applied_rate_id_column_restores_prior_state(fx_test_dsn):
     assert asyncio.run(_transactions_applied_rate_id_exists(fx_test_dsn)) is True
-    downgrade_one(fx_test_dsn)
+    # Target the specific pre-column revision rather than a relative `-1`:
+    # later migrations (e.g. credit-cards-phase1) extend the chain past this
+    # one, so "one step back from head" no longer lands where this test
+    # needs it to.
+    downgrade_to("c92d5e8a17f3", fx_test_dsn)
     try:
         assert asyncio.run(_transactions_applied_rate_id_exists(fx_test_dsn)) is False
     finally:
