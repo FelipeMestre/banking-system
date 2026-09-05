@@ -1,4 +1,4 @@
-import { describeFailure, gatewayOrigin } from "@/lib/api/client";
+import { ApiError, authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type { Branch } from "../types";
 
@@ -7,9 +7,9 @@ export async function getBranches(params: { limit: number; offset: number }): Pr
     limit: String(params.limit),
     offset: String(params.offset),
   });
-  const response = await fetch(`${gatewayOrigin()}/branches?${query}`);
+  const response = await authorizedFetch(`${gatewayOrigin()}/branches?${query}`);
   if (!response.ok) {
-    throw new Error(await describeFailure(response));
+    throw new ApiError(await describeFailure(response), response.status);
   }
   return (await response.json()) as Page<Branch>;
 }

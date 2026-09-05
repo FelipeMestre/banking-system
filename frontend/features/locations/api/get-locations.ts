@@ -1,4 +1,4 @@
-import { describeFailure, gatewayOrigin } from "@/lib/api/client";
+import { ApiError, authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type { Location } from "../types";
 
@@ -7,9 +7,9 @@ export async function getLocations(params: { limit: number; offset: number }): P
     limit: String(params.limit),
     offset: String(params.offset),
   });
-  const response = await fetch(`${gatewayOrigin()}/locations?${query}`);
+  const response = await authorizedFetch(`${gatewayOrigin()}/locations?${query}`);
   if (!response.ok) {
-    throw new Error(await describeFailure(response));
+    throw new ApiError(await describeFailure(response), response.status);
   }
   return (await response.json()) as Page<Location>;
 }

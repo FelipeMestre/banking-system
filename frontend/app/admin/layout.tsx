@@ -1,5 +1,5 @@
-import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { RequireAdmin } from "@/lib/auth/RequireAdmin";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return <RequireAuth>{children}</RequireAuth>;
+  return <RequireAdmin>{children}</RequireAdmin>;
 }

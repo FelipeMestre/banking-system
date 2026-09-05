@@ -107,15 +107,19 @@ def test_get_by_customer_id_requires_auth():
     h = build()
     with h.client:
         customer_id = _create_customer(h.client, "ID-AUTH-001").json()["id"]
-        # No override for get_current_user -> Auth0FastAPI is unconfigured ->
-        # 503, the documented degrade path (config/dependencies._require_auth0).
+        # Clear admin to test unauthenticated path -> 503 when auth0 not configured
+        h.client.app.dependency_overrides.pop(get_current_user, None)
         response = h.client.get(f"/customers/{customer_id}")
         assert response.status_code == 503
 
 
 def test_get_by_customer_id_resolves_for_any_authenticated_caller():
     h = build()
-    h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|someone-else"}
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|someone-else",
+        "permissions": ["read:admin", "write:admin"],
+        "scope": "read:admin write:admin",
+    }
     with h.client:
         customer_id = _create_customer(h.client, "ID-AUTH-002").json()["id"]
         response = h.client.get(f"/customers/{customer_id}")
@@ -125,7 +129,11 @@ def test_get_by_customer_id_resolves_for_any_authenticated_caller():
 
 def test_get_by_customer_id_unknown_is_404():
     h = build()
-    h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|someone-else"}
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|someone-else",
+        "permissions": ["read:admin"],
+        "scope": "read:admin",
+    }
     with h.client:
         response = h.client.get(f"/customers/{uuid.uuid4()}")
         assert response.status_code == 404

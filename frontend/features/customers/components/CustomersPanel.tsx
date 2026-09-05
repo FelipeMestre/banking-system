@@ -7,10 +7,12 @@ import { AddCustomerDialog } from "./AddCustomerDialog";
 import { CustomersList } from "./CustomersList";
 import { DeleteCustomerDialog } from "./DeleteCustomerDialog";
 import { EditCustomerDialog } from "./EditCustomerDialog";
+import { usePermissions } from "@/lib/auth/usePermissions";
 import type { Customer } from "../types";
 
 /** What the Customers admin tab actually renders: the table plus the create/edit/delete/activate flows. */
 export function CustomersPanel() {
+  const { hasWriteAdmin } = usePermissions();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState<Customer | null>(null);
@@ -19,17 +21,19 @@ export function CustomersPanel() {
 
   return (
     <div className="flex flex-col gap-ds-3">
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => setAddOpen(true)}>
-          Add customer
-        </Button>
-      </div>
+      {hasWriteAdmin ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setAddOpen(true)}>
+            Add customer
+          </Button>
+        </div>
+      ) : null}
 
       <CustomersList
         refreshToken={refreshToken}
-        onEdit={setEditing}
-        onDelete={setDeleting}
-        onActivate={setActivating}
+        onEdit={hasWriteAdmin ? setEditing : undefined}
+        onDelete={hasWriteAdmin ? setDeleting : undefined}
+        onActivate={hasWriteAdmin ? setActivating : undefined}
       />
 
       {addOpen ? (

@@ -17,5 +17,11 @@ export function auth0ClientId(): string {
 }
 
 export function auth0Audience(): string {
-  return process.env.NEXT_PUBLIC_AUTH0_AUDIENCE ?? DEFAULT_AUTH0_AUDIENCE;
+  const audience = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE ?? DEFAULT_AUTH0_AUDIENCE;
+  if (typeof window !== "undefined" && audience.includes("api/v2/")) {
+    console.warn(
+      "NEXT_PUBLIC_AUTH0_AUDIENCE looks like Management API audience — expected https://openbank.api/com/auth",
+    );
+  }
+  return audience;
 }

@@ -2,9 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mockPathname = vi.fn();
+const mockUsePermissions = vi.fn();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
+}));
+
+vi.mock("@/lib/auth/usePermissions", () => ({
+  usePermissions: () => mockUsePermissions(),
 }));
 
 vi.mock("next/link", () => ({
@@ -21,6 +26,7 @@ import { Sidebar } from "@/components/home/Sidebar";
 describe("Sidebar — Payments active", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUsePermissions.mockReturnValue({ hasReadAdmin: false, hasWriteAdmin: false });
   });
 
   it("renders Payments as Link to /transfer with bg-accent and aria-current when pathname is /transfer", () => {
@@ -70,5 +76,36 @@ describe("Sidebar — Payments active", () => {
     mockPathname.mockReturnValue("/");
     render(<Sidebar />);
     // re-render? need fresh render after clearing, easier to check second scenario separately
+  });
+});
+
+describe("Sidebar — Admin visibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("hides Admin when no read:admin", () => {
+    mockUsePermissions.mockReturnValue({ hasReadAdmin: false, hasWriteAdmin: false });
+    mockPathname.mockReturnValue("/");
+    render(<Sidebar />);
+    expect(screen.queryByTitle("Admin")).not.toBeInTheDocument();
+  });
+
+  it("shows Admin link when read:admin", () => {
+    mockUsePermissions.mockReturnValue({ hasReadAdmin: true, hasWriteAdmin: false });
+    mockPathname.mockReturnValue("/");
+    render(<Sidebar />);
+    const admin = screen.getByTitle("Admin");
+    expect(admin).toBeInTheDocument();
+    expect(admin).toHaveAttribute("href", "/admin");
+  });
+
+  it("Admin active styling when on /admin", () => {
+    mockUsePermissions.mockReturnValue({ hasReadAdmin: true, hasWriteAdmin: true });
+    mockPathname.mockReturnValue("/admin");
+    render(<Sidebar />);
+    const admin = screen.getByTitle("Admin");
+    expect(admin).toHaveAttribute("aria-current", "page");
+    expect(admin.className).toContain("bg-accent");
   });
 });

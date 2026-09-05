@@ -33,7 +33,22 @@ from openbankapi.tests.fakes import (
 )
 
 
+_ADMIN_OVERRIDE = lambda: {"sub": "setup-admin", "permissions": ["read:admin", "write:admin"], "scope": "read:admin write:admin"}
+
+def _with_admin(h, fn):
+    """Run fn with admin claims, restoring previous override afterwards."""
+    original = h.client.app.dependency_overrides.get(get_current_user)
+    h.client.app.dependency_overrides[get_current_user] = _ADMIN_OVERRIDE
+    try:
+        return fn()
+    finally:
+        if original is not None:
+            h.client.app.dependency_overrides[get_current_user] = original
+        else:
+            h.client.app.dependency_overrides.pop(get_current_user, None)
+
 def _create_customer(client, identification_number: str = "ID-001"):
+    # if client is Harness client with admin default, this already has admin
     return client.post(
         "/customers",
         json={
@@ -44,21 +59,28 @@ def _create_customer(client, identification_number: str = "ID-001"):
         },
     )
 
+def _create_customer_admin(h, identification_number: str = "ID-001"):
+    return _with_admin(h, lambda: _create_customer(h.client, identification_number))
 
 def _link_current_customer(h, sub: str = "auth0|first-account"):
-    customer_id = _create_customer(h.client).json()["id"]
-    h.client.patch(f"/customers/{customer_id}/auth0-link", json={"sub": sub})
+    def _do():
+        customer_id = _create_customer(h.client).json()["id"]
+        h.client.patch(f"/customers/{customer_id}/auth0-link", json={"sub": sub})
+        return customer_id
+    customer_id = _with_admin(h, _do)
     h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": sub}
     return customer_id
 
 
 def _create_active_branch(h) -> str:
-    location_id = h.client.post("/locations", json={"name": "HQ"}).json()["id"]
-    h.branches.known_locations.add(uuid.UUID(location_id))
-    branch = h.client.post(
-        "/branches", json={"code": "B1", "name": "Main", "location_id": location_id}
-    ).json()
-    return branch["id"]
+    def _do():
+        location_id = h.client.post("/locations", json={"name": "HQ"}).json()["id"]
+        h.branches.known_locations.add(uuid.UUID(location_id))
+        branch = h.client.post(
+            "/branches", json={"code": "B1", "name": "Main", "location_id": location_id}
+        ).json()
+        return branch["id"]
+    return _with_admin(h, _do)
 
 
 # --- Phase 1.1 / 2.1: repository port contract checks (via fakes) ----------
@@ -360,10 +382,9 @@ def test_open_first_account_for_identity_lost_race_becomes_a_clean_409_not_a_500
 
 
 def test_post_accounts_me_503_without_a_token_override_present():
-    h = build()
+    h = build(with_admin=False)
     with h.client:
-        # No override for get_current_user -> Auth0FastAPI is unconfigured -> 503,
-        # the same documented degrade path used by test_customer_auth_link.py.
+        # No override + with_admin=False -> Auth0FastAPI is unconfigured -> 503
         response = h.client.post("/accounts/me")
         assert response.status_code == 503
 
