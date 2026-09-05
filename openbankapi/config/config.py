@@ -27,6 +27,8 @@ class Settings:
     purchase_status_topic: str = "purchase-status"
     card_movement_consumer_group: str = "openbankapi-card-movements"
     purchase_status_consumer_group: str = ""  # empty -> unique per process
+    card_payment_status_topic: str = "card-payment-status"
+    card_payment_status_consumer_group: str = ""  # empty -> unique per process
 
     # --- Postgres / Redis ---
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
@@ -69,6 +71,8 @@ class Settings:
                 "CARD_MOVEMENT_CONSUMER_GROUP", "openbankapi-card-movements"
             ),
             purchase_status_consumer_group=os.getenv("PURCHASE_STATUS_CONSUMER_GROUP", ""),
+            card_payment_status_topic=os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status"),
+            card_payment_status_consumer_group=os.getenv("CARD_PAYMENT_STATUS_CONSUMER_GROUP", ""),
             database_dsn=os.getenv(
                 "DATABASE_DSN", "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
             ),

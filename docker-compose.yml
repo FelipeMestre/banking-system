@@ -36,7 +36,7 @@ services:
       kafka:
         condition: service_healthy
     restart: "no"
-    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
+    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-payment-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
   flink-jobmanager:
     build:
@@ -58,6 +58,8 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -81,6 +83,8 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -102,6 +106,8 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/account_service/submit.sh"]
@@ -125,6 +131,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -147,6 +154,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -167,6 +175,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/card_service/submit.sh"]

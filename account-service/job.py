@@ -52,6 +52,12 @@ BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:19092")
 ACCOUNT_EVENTS_TOPIC = os.getenv("ACCOUNT_EVENTS_TOPIC", "account-events")
 TRANSFER_STATUS_TOPIC = os.getenv("TRANSFER_STATUS_TOPIC", "transfer-status")
 ACCOUNT_BALANCES_TOPIC = os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances")
+# Credit Cards Phase 3: `card_payment_received` fans out to card-service's own
+# `card-events` topic (a NEW topic for this job — it previously never wrote to
+# it), and the payment's own approval status fans out to `card-payment-status`
+# (spec: kafka-topics, account-service-payment-handling).
+CARD_EVENTS_TOPIC = os.getenv("CARD_EVENTS_TOPIC", "card-events")
+CARD_PAYMENT_STATUS_TOPIC = os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status")
 CONSUMER_GROUP = os.getenv("ACCOUNT_SERVICE_GROUP_ID", "account-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -67,6 +73,14 @@ STATUS_TAG = OutputTag("status-events", RECORD_TYPE)
 # ever names the source account, so a credit landing on a destination or fees
 # account would be invisible to OpenBankAPI (spec §3.6).
 BALANCES_TAG = OutputTag("balance-events", RECORD_TYPE)
+
+# Credit Cards Phase 3: a payment's `card_payment_received` leg is NOT an
+# account-events record — it belongs on card-service's own keyed stream
+# (`card_account_id`, not this account's own key), so it is a side output
+# sunk to a DIFFERENT topic entirely, mirroring `STATUS_TAG`/`BALANCES_TAG`'s
+# existing pattern exactly.
+CARD_TAG = OutputTag("card-events", RECORD_TYPE)
+CARD_STATUS_TAG = OutputTag("card-payment-status-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -147,6 +161,10 @@ class AccountProcessor(KeyedProcessFunction):
             yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
         for balance in decision.balance_events:
             yield BALANCES_TAG, Row(balance["account_id"], json.dumps(balance))
+        for card_event in decision.card_events:
+            yield CARD_TAG, Row(card_event["card_account_id"], json.dumps(card_event))
+        for card_status in decision.card_status_events:
+            yield CARD_STATUS_TAG, Row(card_status["request_id"], json.dumps(card_status))
 
 
 def _row_field_schema(field_index: int) -> SerializationSchema:
@@ -223,6 +241,12 @@ def build_job():
     processed.get_side_output(BALANCES_TAG).sink_to(
         _kafka_sink(ACCOUNT_BALANCES_TOPIC)
     ).name("account-balances-sink")
+    processed.get_side_output(CARD_TAG).sink_to(
+        _kafka_sink(CARD_EVENTS_TOPIC)
+    ).name("card-events-sink")
+    processed.get_side_output(CARD_STATUS_TAG).sink_to(
+        _kafka_sink(CARD_PAYMENT_STATUS_TOPIC)
+    ).name("card-payment-status-sink")
 
     env.execute(JOB_NAME)
 

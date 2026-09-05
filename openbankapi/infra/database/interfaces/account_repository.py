@@ -35,6 +35,12 @@ class IAccountRepository(Protocol):
 
     async def get_by_account_number(self, account_number: str) -> Optional[Account]: ...
 
+    async def get_by_id(self, account_id: UUID) -> Optional[Account]:
+        """Credit Cards Phase 3: `card_accounts.paying_account_id` names an
+        account by its UUID `id`, not its `account_number` — the payments
+        endpoint needs this to resolve the paying account's number/currency."""
+        ...
+
     async def list(self, *, limit: int, offset: int) -> Page[Account]: ...
 
     async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page[Account]:

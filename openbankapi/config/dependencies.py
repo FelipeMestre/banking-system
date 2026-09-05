@@ -113,6 +113,17 @@ def get_purchase_status_registry(conn: HTTPConnection) -> StatusRegistry:
 PurchaseStatusRegistryDep = Annotated[StatusRegistry, Depends(get_purchase_status_registry)]
 
 
+def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A THIRD separate instance (never `status_registry` or
+    # `purchase_status_registry`): `request_id` is only unique within its own
+    # domain's Kafka topic, and a card payment could coincidentally share one
+    # with a transfer or a purchase.
+    return conn.app.state.card_payment_status_registry
+
+
+CardPaymentStatusRegistryDep = Annotated[StatusRegistry, Depends(get_card_payment_status_registry)]
+
+
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
     return conn.app.state.foreign_exchange_cache_service
 

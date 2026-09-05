@@ -18,6 +18,8 @@ TRANSFER_REQUESTED = "transfer_requested"
 OUTGOING_PAYMENT = "outgoing_payment"
 INCOMING_PAYMENT = "incoming_payment"
 DECLINED_PAYMENT = "declined_payment"
+PAYMENT_REQUESTED = "payment_requested"
+CARD_PAYMENT_RECEIVED = "card_payment_received"
 
 STATUS_APPROVED = "approved"
 STATUS_DECLINED = "declined"
@@ -34,6 +36,7 @@ LEG_DEBIT = "debit"
 LEG_CREDIT_DESTINATION = "credit:destination"
 LEG_CREDIT_FEES = "credit:fees"
 LEG_CREDIT_SEED = "credit:seed"
+LEG_PAYMENT = "payment"
 CHEAT_ACCOUNT = "cheatAccount"
 
 
@@ -78,6 +81,15 @@ class Decision:
     account_events: Tuple[Dict[str, Any], ...] = ()
     status_events: Tuple[Dict[str, Any], ...] = ()
     balance_events: Tuple[Dict[str, Any], ...] = ()
+    # Credit Cards Phase 3: a payment success routes `card_payment_received`
+    # to the card-service's own `card-events` topic via a NEW side output
+    # (`CARD_TAG` in job.py), keyed by `card_account_id` — never by this
+    # account's own key. `card_status_events` similarly targets the NEW
+    # `card-payment-status` topic, never `transfer-status` (`status_events`).
+    # A decline emits neither: only the account-side `declined_payment` on
+    # `account_events` (spec: card-account-payments-api Insufficient funds).
+    card_events: Tuple[Dict[str, Any], ...] = ()
+    card_status_events: Tuple[Dict[str, Any], ...] = ()
 
     @staticmethod
     def noop() -> "Decision":
@@ -117,6 +129,8 @@ def decide(account: str, event: Dict[str, Any], state: LedgerState, now: str) ->
                 _status(event, STATUS_DECLINED, account, now, reason=event.get("reason")),
             )
         )
+    if event_type == PAYMENT_REQUESTED:
+        return _on_payment_requested(account, event, state, now)
 
     return Decision.noop()
 
@@ -201,6 +215,67 @@ def _on_incoming_payment(
     )
 
 
+def _on_payment_requested(
+    account: str, event: Dict[str, Any], state: LedgerState, now: str
+) -> Decision:
+    """Pay down a card account's `used_credit` from this account's balance
+    (Credit Cards Phase 3). Mirrors `_on_transfer_requested`'s reservation
+    shape exactly, but is a single debit with no destination/fees fan-out:
+    the credit side of this movement is card-service's concern, reached
+    through the NEW `card_events`/`card_status_events` Decision fields, not
+    through `account_events` (spec: account-service-payment-handling).
+    """
+    request_id = event["request_id"]
+    payment_key = dedup_key(request_id, LEG_PAYMENT)
+
+    if state.is_processed(payment_key):
+        return Decision.noop()
+
+    amount = event["amount"]
+
+    if not _is_valid_amount(amount):
+        return Decision(
+            dedup_keys=(payment_key,),
+            account_events=(_declined(event, account, REASON_INVALID_AMOUNT, now, amount),),
+        )
+
+    balance = state.balance or 0
+
+    if balance < amount:
+        return Decision(
+            dedup_keys=(payment_key,),
+            account_events=(_declined(event, account, REASON_INSUFFICIENT_FUNDS, now, amount),),
+        )
+
+    reserved = balance - amount
+    amount_usd = event.get("amount_usd", amount)
+    return Decision(
+        new_balance=reserved,
+        dedup_keys=(payment_key,),
+        account_events=(
+            _outgoing(event, account, amount, 0, now, conversion=event.get("conversion")),
+        ),
+        card_events=(_card_payment_received(event, amount_usd, now),),
+        card_status_events=(_status(event, STATUS_APPROVED, account, now),),
+        balance_events=(_balance_updated(account, reserved, now),),
+    )
+
+
+def _card_payment_received(event: Dict[str, Any], amount_usd: Any, now: str) -> Dict[str, Any]:
+    return {
+        "type": CARD_PAYMENT_RECEIVED,
+        "request_id": event["request_id"],
+        "card_account_id": event["card_account_id"],
+        # Threaded through unchanged all the way to `card_movements_consumer.py`
+        # (spec: card-movements-consumer) — `card_movements.card_id` is a
+        # NOT NULL FK, so the movement row needs the specific card, not just
+        # the credit line/account.
+        "card_id": event["card_id"],
+        "amount_usd": amount_usd,
+        "ts": now,
+    }
+
+
 def _is_valid_amount(value: Any, allow_zero: bool = False) -> bool:
     if not isinstance(value, int) or isinstance(value, bool):
         return False
@@ -211,9 +286,18 @@ def _is_valid_amount(value: Any, allow_zero: bool = False) -> bool:
 
 
 def _outgoing(
-    event: Dict[str, Any], account: str, amount: int, fee_amount: int, now: str
+    event: Dict[str, Any],
+    account: str,
+    amount: int,
+    fee_amount: int,
+    now: str,
+    conversion: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
+    """`conversion` is omitted by every existing caller (`_on_transfer_requested`
+    never passes it — an ordinary debit leg never carries one). Credit Cards
+    Phase 3's `_on_payment_requested` is the first caller to pass one, for a
+    cross-currency card payment's debit leg (spec: applied-rate-debit-linkage)."""
+    payload = {
         "type": OUTGOING_PAYMENT,
         "request_id": event["request_id"],
         "account_id": account,
@@ -223,6 +307,9 @@ def _outgoing(
         "leg": LEG_DEBIT,
         "ts": now,
     }
+    if conversion is not None:
+        payload["conversion"] = conversion
+    return payload
 
 
 def _incoming(

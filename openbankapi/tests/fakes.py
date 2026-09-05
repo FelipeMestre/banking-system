@@ -255,6 +255,9 @@ class FakeAccountRepository:
     async def get_by_account_number(self, account_number: str) -> Optional[Account]:
         return self.rows.get(account_number)
 
+    async def get_by_id(self, account_id: UUID) -> Optional[Account]:
+        return next((row for row in self.rows.values() if row.id == account_id), None)
+
     async def list(self, *, limit: int, offset: int) -> Page:
         items = list(self.rows.values())[offset : offset + limit]
         return Page(items=items, total=len(self.rows), limit=limit, offset=offset)

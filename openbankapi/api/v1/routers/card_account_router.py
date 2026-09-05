@@ -6,6 +6,9 @@ repository call and goes router -> repository directly.
 """
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -17,10 +20,20 @@ from openbankapi.api.v1.dtos.card_account_dto import (
     CardAccountUpdateDTO,
 )
 from openbankapi.api.v1.dtos.card_dto import CardIssuedDTO, CardMaskedDTO
+from openbankapi.api.v1.dtos.card_payment_dto import CardPaymentAcceptedDTO, CardPaymentRequestDTO
 from openbankapi.api.v1.dtos.common import PageParams
-from openbankapi.config.dependencies import CardAccountRepositoryDep, CardAccountServiceDep, CardRepositoryDep
+from openbankapi.config.dependencies import (
+    AccountRepositoryDep,
+    CardAccountRepositoryDep,
+    CardAccountServiceDep,
+    CardRepositoryDep,
+    ForeignExchangeCacheServiceDep,
+    PublisherDep,
+    SettingsDep,
+)
 from openbankapi.domain.exceptions import CardAccountNotFoundError, InvalidCardStatusError
 from openbankapi.domain.model import CARD_ACCOUNT_TRANSITIONS, CardAccountStatus
+from openbankapi.domain.service.conversion_service import convert
 
 router = APIRouter(prefix="/card-accounts", tags=["card-accounts"])
 
@@ -107,3 +120,75 @@ async def renew(card_account_id: UUID, service: CardAccountServiceDep):
     """Renews the account's active card; old card -> `replaced`, 409 if the
     account is not active (spec: "Renewal preserves account identity")."""
     return await service.renew_card(card_account_id)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+@router.post(
+    "/{card_account_id}/payments", status_code=202, response_model=CardPaymentAcceptedDTO
+)
+async def request_payment(
+    card_account_id: UUID,
+    body: CardPaymentRequestDTO,
+    card_accounts: CardAccountRepositoryDep,
+    cards: CardRepositoryDep,
+    accounts: AccountRepositoryDep,
+    publisher: PublisherDep,
+    settings: SettingsDep,
+    foreign_exchange_cache_service: ForeignExchangeCacheServiceDep,
+):
+    """Pays down a card account's balance from its FIXED paying account
+    (Credit Cards Phase 3, spec: card-account-payments-api). The paying
+    account is never a request field — it is resolved from
+    `card_accounts.paying_account_id`, set at issuance and immutable.
+
+    Structural checks only, mirroring `card_router.py::request_purchase`'s
+    own reasoning: no credit-limit check happens here or anywhere on the
+    payment path (spec: Non-Requirements) — the account-service Flink job is
+    the sole authority on whether the paying account can afford this.
+    """
+    card_account = await card_accounts.get_by_id(card_account_id)
+    if card_account is None:
+        raise CardAccountNotFoundError(card_account_id)
+
+    active_card = await cards.get_active_for_account(card_account_id)
+    if active_card is None:
+        raise InvalidCardStatusError("none", "payment")
+
+    paying_account = await accounts.get_by_id(card_account.paying_account_id)
+    if paying_account is None:
+        raise CardAccountNotFoundError(card_account.paying_account_id)
+
+    # `amount` (what the paying account is debited) stays in the account's own
+    # currency, unconverted — the account-service reservation is always in the
+    # account's own balance currency. `amount_usd` (what card-service's
+    # `used_credit` is reduced by) is the only value that ever needs
+    # converting, reusing `card_router.py::request_purchase`'s exact
+    # `convert(amount_cents, currency, "USD", "debit", rates)` call shape.
+    amount_usd = body.amount
+    conversion = None
+    if paying_account.currency != "USD":
+        rates = await foreign_exchange_cache_service.get_rates()
+        quote = convert(body.amount, paying_account.currency, "USD", "debit", rates)
+        amount_usd = quote["final_amount"]
+        conversion = quote["applied_rate"]
+
+    request_id = str(uuid.uuid4())
+    wire = {
+        "type": "payment_requested",
+        "request_id": request_id,
+        "destination_account": active_card.card_number,
+        "card_account_id": str(card_account_id),
+        "card_id": str(active_card.id),
+        "amount": body.amount,
+        "amount_usd": amount_usd,
+        "ts": _now(),
+    }
+    if conversion is not None:
+        wire["conversion"] = conversion
+    publisher.publish(
+        topic=settings.account_events_topic, key=paying_account.account_number, value=wire
+    )
+    return CardPaymentAcceptedDTO(request_id=request_id, status="pending")
