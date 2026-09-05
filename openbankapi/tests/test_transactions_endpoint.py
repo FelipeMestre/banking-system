@@ -32,7 +32,19 @@ def _linked_customer(h, sub: str = "auth0|owner"):
 
 
 def _as(h, sub: str):
-    h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": sub}
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": sub,
+        "permissions": ["read:admin", "write:admin"],
+        "scope": "read:admin write:admin",
+    }
+
+
+def _as_read(h, sub: str):
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": sub,
+        "permissions": ["read:admin"],
+        "scope": "read:admin",
+    }
 
 
 def _harness_with_two_customers_and_accounts():
@@ -145,7 +157,7 @@ def test_get_accounts_is_an_empty_list_for_a_customer_with_no_accounts():
 
 
 def test_get_accounts_requires_a_resolved_customer():
-    h = build()
+    h = build(with_admin=False)
     with h.client:
         response = h.client.get("/accounts")
         assert response.status_code == 503  # unconfigured Auth0 -> documented degrade path

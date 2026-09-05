@@ -13,11 +13,14 @@ from openbankapi.tests.fakes import FakeAccountRepository
 
 @pytest.fixture(autouse=True)
 def _authenticated(wired):
-    """GET /accounts/{account_number} requires CurrentUserDep; any valid
-    claims satisfy it since this route never checks ownership (that's
-    deliberate — it also backs the transfer recipient-preview lookup, which
-    must resolve someone else's account)."""
-    wired.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|test"}
+    """GET /accounts/{account_number} now requires read:admin on top of auth;
+    any valid admin claims satisfy it since this route never checks ownership
+    (transfer recipient-preview must resolve someone else's account)."""
+    wired.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|test",
+        "permissions": ["read:admin", "write:admin"],
+        "scope": "read:admin write:admin",
+    }
     yield
     wired.client.app.dependency_overrides.pop(get_current_user, None)
 

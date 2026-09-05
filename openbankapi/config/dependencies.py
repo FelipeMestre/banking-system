@@ -35,7 +35,7 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 from starlette.requests import HTTPConnection
 
 from .config import Settings
-from ..domain.exceptions import CustomerNotLinkedError
+from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsError
 from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
@@ -130,6 +130,34 @@ def require_scope(scope: str):
 
     async def _dependency(request: Request, auth0: Auth0Dep) -> dict:
         return await _require_auth0(auth0).require_auth(scopes=scope)(request)
+
+    return _dependency
+
+
+def _effective_permissions(claims: dict) -> list[str]:
+    """permissions[] primary, scope fallback (spec admin-authorization).
+
+    - If `permissions` is a non-empty list, use it verbatim.
+    - Otherwise, fall back to space-split `scope` string.
+    - Else empty.
+    """
+    perms = claims.get("permissions")
+    if isinstance(perms, list) and perms:
+        return [str(p) for p in perms]
+    scope = claims.get("scope")
+    if isinstance(scope, str) and scope.strip():
+        return scope.split()
+    return []
+
+
+def require_permissions(*required: str):
+    """Require all `required` permissions (401 handled by CurrentUserDep, 403 here)."""
+
+    async def _dependency(claims: CurrentUserDep) -> dict:
+        had = _effective_permissions(claims)
+        if not all(r in had for r in required):
+            raise InsufficientPermissionsError(list(required), had)
+        return claims
 
     return _dependency
 

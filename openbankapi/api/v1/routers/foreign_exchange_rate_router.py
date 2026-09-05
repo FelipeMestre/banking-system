@@ -7,7 +7,14 @@ not wire it into a route (FX-14/FX-15 scope guard).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from openbankapi.config.dependencies import require_permissions
+
+ReadAdminDep = Annotated[dict, Depends(require_permissions("read:admin"))]
+WriteAdminDep = Annotated[dict, Depends(require_permissions("write:admin"))]
 from openbankapi.api.v1.dtos.foreign_exchange_quote_dto import (
     ForeignExchangeQuoteRequestDTO,
     ForeignExchangeQuoteResponseDTO,
@@ -21,7 +28,7 @@ MARGIN: float = 0.01
 
 
 @router.get("/foreign-exchange-rates")
-async def get_foreign_exchange_rates(request: Request):
+async def get_foreign_exchange_rates(request: Request, _claims: ReadAdminDep):
     cache_service = request.app.state.foreign_exchange_cache_service
     rates = await cache_service.get_rates()
     result: list[dict[str, object]] = []
@@ -37,7 +44,9 @@ async def get_foreign_exchange_rates(request: Request):
 
 
 @router.post("/foreign-exchange-rates/quote", response_model=ForeignExchangeQuoteResponseDTO)
-async def quote_conversion(payload: ForeignExchangeQuoteRequestDTO, request: Request):
+async def quote_conversion(
+    payload: ForeignExchangeQuoteRequestDTO, request: Request, _claims: WriteAdminDep
+):
     # `payload` validation (amount > 0, a known `customer_effect` literal)
     # already raised a 422 via FastAPI before this body ever runs — no await
     # has happened yet at that point.

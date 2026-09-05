@@ -17,6 +17,8 @@ from openbankapi.api.v1.dtos.common import PageParams, PageResponse
 from openbankapi.api.v1.dtos.first_account_dto import FirstAccountCreateDTO, FirstAccountKycDTO
 from openbankapi.api.v1.dtos.transaction_dto import TransactionsPageDTO, TransactionsPageParams
 from openbankapi.api.v1.services.cache_aside import read_through
+from typing import Annotated
+
 from openbankapi.config.dependencies import (
     AccountRepositoryDep,
     AccountServiceDep,
@@ -26,9 +28,13 @@ from openbankapi.config.dependencies import (
     CustomerRepositoryDep,
     SettingsDep,
     TransactionServiceDep,
+    require_permissions,
 )
 from openbankapi.domain.exceptions import AccountAccessForbiddenError, AccountNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
+
+ReadAdminDep = Annotated[dict, Depends(require_permissions("read:admin"))]
+WriteAdminDep = Annotated[dict, Depends(require_permissions("write:admin"))]
 
 ENTITY = "account"
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -39,7 +45,7 @@ def _dto(entity) -> dict:
 
 
 @router.post("", status_code=201, response_model=AccountResponseDTO)
-async def create(body: AccountCreateDTO, service: AccountServiceDep):
+async def create(body: AccountCreateDTO, service: AccountServiceDep, _claims: WriteAdminDep):
     """`account_number` is generated server-side: it is the Kafka partition
     key, so it must be correct by construction (spec §8.2). A collision on
     the generated value is retried internally and never becomes a 500."""
@@ -109,9 +115,12 @@ async def create_first_account(
 
 @router.get("", response_model=PageResponse[AccountResponseDTO])
 async def list_all(
-    repository: AccountRepositoryDep, customer: CurrentCustomerDep, page: PageParams = Depends()
+    _claims: ReadAdminDep,
+    repository: AccountRepositoryDep,
+    customer: CurrentCustomerDep,
+    page: PageParams = Depends(),
 ):
-    """Scoped to the caller's own accounts (spec §2.1) — never the whole table."""
+    """Admin list — requires read:admin on top of customer scoping."""
     result = await repository.list_by_customer(customer.id, limit=page.limit, offset=page.offset)
     return PageResponse(
         items=[AccountResponseDTO.model_validate(i) for i in result.items],
@@ -121,15 +130,14 @@ async def list_all(
 
 @router.get("/{account_number}/transactions", response_model=TransactionsPageDTO)
 async def list_transactions(
+    _claims: ReadAdminDep,
     account_number: str,
     repository: AccountRepositoryDep,
     customer: CurrentCustomerDep,
     service: TransactionServiceDep,
     page: TransactionsPageParams = Depends(),
 ):
-    """Newest-first, keyset-paginated (spec §3.3). 403s rather than 404s when
-    the account exists but belongs to someone else (spec §3.4) — the caller
-    must never learn account_number existence from the status code alone."""
+    """Requires read:admin plus ownership check."""
     account = await repository.get_by_account_number(account_number)
     if account is None:
         raise AccountNotFoundError(account_number)
@@ -145,18 +153,9 @@ async def get(
     repository: AccountRepositoryDep,
     cache: CacheDep,
     settings: SettingsDep,
-    claims: CurrentUserDep,
+    _claims: ReadAdminDep,
 ):
-    """`balance` here is eventually consistent (spec §3.6): it lags the ledger
-    by however long the account-balances consumer takes, typically a few
-    hundred milliseconds. Stale is acceptable; wrong is not.
-
-    Guarded by `CurrentUserDep` (bare authentication), not `CurrentCustomerDep`:
-    this is also how the transfer recipient-preview lookup resolves any
-    account by number (frontend's find-recipient.ts), which must work for a
-    caller with no linked Customer yet, and must not restrict lookup to the
-    caller's own accounts — a recipient is, by definition, someone else's.
-    """
+    """Requires read:admin (admin preview)."""
     found = await read_through(
         cache, cache_key(ENTITY, account_number),
         lambda: repository.get_by_account_number(account_number), _dto, settings.cache_ttl_seconds,
@@ -172,6 +171,7 @@ async def update(
     body: AccountUpdateDTO,
     repository: AccountRepositoryDep,
     cache: CacheDep,
+    _claims: WriteAdminDep,
 ):
     updated = await repository.update(
         account_number, currency=body.currency,
@@ -184,7 +184,9 @@ async def update(
 
 
 @router.delete("/{account_number}", response_model=AccountResponseDTO)
-async def soft_delete(account_number: str, repository: AccountRepositoryDep, cache: CacheDep):
+async def soft_delete(
+    account_number: str, repository: AccountRepositoryDep, cache: CacheDep, _claims: WriteAdminDep
+):
     updated = await repository.close(account_number)
     if updated is None:
         raise AccountNotFoundError(account_number)

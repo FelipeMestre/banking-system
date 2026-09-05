@@ -1,9 +1,13 @@
 """OpenBankAPI configuration (spec §8, §10)."""
 from __future__ import annotations
 
+import logging
 import os
+import warnings
 from dataclasses import dataclass
 from typing import Tuple
+
+LOG = logging.getLogger("openbankapi.config")
 
 
 def _tuple_from_env(name: str, default: Tuple[str, ...]) -> Tuple[str, ...]:
@@ -45,10 +49,19 @@ class Settings:
     # (public-key) check, not a token exchange — this API is a resource
     # server, not an OAuth client of its own.
     auth0_domain: str = ""
-    auth0_audience: str = ""
+    auth0_audience: str = "https://openbank.api/com/auth"
 
     @staticmethod
     def from_env() -> "Settings":
+        audience = os.getenv("AUTH0_AUDIENCE", "https://openbank.api/com/auth")
+        if "api/v2/" in audience:
+            warnings.warn(
+                "AUTH0_AUDIENCE contains api/v2/ — expected https://openbank.api/com/auth; "
+                "tokens with Management API audience will be rejected with 401.",
+                UserWarning,
+                stacklevel=2,
+            )
+            LOG.warning("AUTH0_AUDIENCE looks like Management API audience: %s", audience)
         return Settings(
             bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:19092"),
             account_events_topic=os.getenv("ACCOUNT_EVENTS_TOPIC", "account-events"),
@@ -70,5 +83,5 @@ class Settings:
             websocket_timeout_seconds=float(os.getenv("WEBSOCKET_TIMEOUT_SECONDS", "30")),
             status_cache_size=int(os.getenv("STATUS_CACHE_SIZE", "10000")),
             auth0_domain=os.getenv("AUTH0_DOMAIN", ""),
-            auth0_audience=os.getenv("AUTH0_AUDIENCE", ""),
+            auth0_audience=audience,
         )
