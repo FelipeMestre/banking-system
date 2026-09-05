@@ -188,3 +188,40 @@ class InsufficientPermissionsError(DomainError):
         self.had = had
         super().__init__(f"missing permissions {required!r}, had {had!r}")
 
+class CardAccountNotFoundError(NotFoundError):
+    def __init__(self, identifier: object):
+        super().__init__("card_account", identifier)
+
+
+class CardNotFoundError(NotFoundError):
+    def __init__(self, identifier: object):
+        super().__init__("card", identifier)
+
+
+class DuplicateCardNumberError(DuplicateError):
+    """A generated 16-digit card number collided. -> 409
+
+    Mirrors `DuplicateAccountNumberError`: the repository retries internally
+    on this one and only this one — see `postgres_card_repository.py`.
+    """
+
+    def __init__(self, value: object):
+        super().__init__("card_number", value)
+
+
+class InvalidCardNumberError(DomainError):
+    """A 16-digit card number was expected. -> 400"""
+
+    def __init__(self, value: object):
+        self.value = value
+        super().__init__(f"card_number must be 16 digits: {value!r}")
+
+
+class InvalidCardStatusError(DomainError):
+    """The requested status transition is not allowed from the current status. -> 409"""
+
+    def __init__(self, current_status: str, target_status: str):
+        self.current_status = current_status
+        self.target_status = target_status
+        super().__init__(f"cannot transition from {current_status} to {target_status}")
+

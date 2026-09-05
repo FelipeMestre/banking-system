@@ -39,6 +39,7 @@ from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsE
 from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
+from ..domain.service.card_account_service import CardAccountService
 from ..domain.service.customer_service import CustomerService
 from ..domain.service.transaction_service import TransactionService
 from ..domain.service.transfer_service import TransferService
@@ -47,7 +48,11 @@ from ..infra.database.interfaces import (
     IAccountRepository,
     IAppliedRateRepository,
     IBranchRepository,
+    ICardAccountRepository,
+    ICardMovementRepository,
+    ICardRepository,
     ICustomerRepository,
+    IInstallmentRepository,
     ILocationRepository,
     ITransactionRepository,
 )
@@ -55,7 +60,11 @@ from ..infra.database.repositories import (
     PostgresAccountRepository,
     PostgresAppliedRateRepository,
     PostgresBranchRepository,
+    PostgresCardAccountRepository,
+    PostgresCardMovementRepository,
+    PostgresCardRepository,
     PostgresCustomerRepository,
+    PostgresInstallmentRepository,
     PostgresLocationRepository,
     PostgresTransactionRepository,
 )
@@ -92,6 +101,16 @@ def get_status_registry(conn: HTTPConnection) -> StatusRegistry:
 
 
 StatusRegistryDep = Annotated[StatusRegistry, Depends(get_status_registry)]
+
+
+def get_purchase_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A separate instance from `status_registry` (transfers): `request_id`
+    # is only unique within its own domain's Kafka topic, and a card
+    # purchase and a transfer could coincidentally share one.
+    return conn.app.state.purchase_status_registry
+
+
+PurchaseStatusRegistryDep = Annotated[StatusRegistry, Depends(get_purchase_status_registry)]
 
 
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
@@ -206,6 +225,36 @@ def get_transaction_repository(session: DbSession) -> ITransactionRepository:
 TransactionRepositoryDep = Annotated[ITransactionRepository, Depends(get_transaction_repository)]
 
 
+def get_card_account_repository(session: DbSession) -> ICardAccountRepository:
+    return PostgresCardAccountRepository(session)
+
+
+CardAccountRepositoryDep = Annotated[ICardAccountRepository, Depends(get_card_account_repository)]
+
+
+def get_card_repository(session: DbSession) -> ICardRepository:
+    return PostgresCardRepository(session)
+
+
+CardRepositoryDep = Annotated[ICardRepository, Depends(get_card_repository)]
+
+
+def get_card_movement_repository(session: DbSession) -> ICardMovementRepository:
+    return PostgresCardMovementRepository(session)
+
+
+CardMovementRepositoryDep = Annotated[
+    ICardMovementRepository, Depends(get_card_movement_repository)
+]
+
+
+def get_installment_repository(session: DbSession) -> IInstallmentRepository:
+    return PostgresInstallmentRepository(session)
+
+
+InstallmentRepositoryDep = Annotated[IInstallmentRepository, Depends(get_installment_repository)]
+
+
 async def get_current_customer(
     claims: CurrentUserDep, customer_repository: CustomerRepositoryDep
 ) -> Customer:
@@ -276,3 +325,13 @@ def get_transaction_service(repository: TransactionRepositoryDep) -> Transaction
 
 
 TransactionServiceDep = Annotated[TransactionService, Depends(get_transaction_service)]
+
+
+def get_card_account_service(
+    card_account_repository: CardAccountRepositoryDep,
+    card_repository: CardRepositoryDep,
+) -> CardAccountService:
+    return CardAccountService(card_account_repository, card_repository)
+
+
+CardAccountServiceDep = Annotated[CardAccountService, Depends(get_card_account_service)]

@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Numeric,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
@@ -163,3 +164,132 @@ class TransactionORM(Base):
     applied_rate_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("applied_rates.id"), nullable=True
     )
+
+
+class CardAccountORM(Base):
+    """The credit-card line: a customer's parent aggregate for `cards` (Phase 1)."""
+
+    __tablename__ = "card_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','blocked','closed')", name="card_accounts_status_check"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
+    )
+    paying_account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False
+    )
+    credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    created_at: Mapped[dt.datetime] = _created()
+    updated_at: Mapped[dt.datetime] = _created()
+
+
+class CardORM(Base):
+    """A physical/virtual card belonging to a `CardAccountORM` (Phase 1)."""
+
+    __tablename__ = "cards"
+    __table_args__ = (
+        CheckConstraint(r"card_number ~ '^[0-9]{16}$'", name="cards_card_number_check"),
+        CheckConstraint(
+            "status IN ('active','blocked','replaced','expired')", name="cards_status_check"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    card_account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("card_accounts.id"), nullable=False
+    )
+    card_number: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    expiration_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    created_at: Mapped[dt.datetime] = _created()
+    updated_at: Mapped[dt.datetime] = _created()
+
+
+class StatementORM(Base):
+    """A card account's billing period (Phase 1: structural only, no writers)."""
+
+    __tablename__ = "statements"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open','closed','paid','overdue')", name="statements_status_check"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    card_account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("card_accounts.id"), nullable=False
+    )
+    period_start: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    due_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    closing_balance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    minimum_payment: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="open")
+    created_at: Mapped[dt.datetime] = _created()
+    updated_at: Mapped[dt.datetime] = _created()
+
+
+class CardMovementORM(Base):
+    """A card ledger entry (Phase 1: structural only, no writers).
+
+    No `updated_at`: immutable audit rows, mirrors `AppliedRateORM`.
+    """
+
+    __tablename__ = "card_movements"
+    __table_args__ = (
+        CheckConstraint(
+            "movement_type IS NULL OR movement_type IN "
+            "('purchase','payment','fee','interest','refund','declined')",
+            name="card_movements_movement_type_check",
+        ),
+        UniqueConstraint(
+            "request_id", "movement_type", name="card_movements_request_id_movement_type_key"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("cards.id"), nullable=False
+    )
+    applied_rate_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("applied_rates.id"), nullable=True
+    )
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    movement_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    request_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    occurred_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[dt.datetime] = _created()
+
+
+class InstallmentORM(Base):
+    """One installment of a card movement (Phase 1: structural only, no writers).
+
+    No `updated_at`: immutable audit rows, same rationale as `CardMovementORM`.
+    """
+
+    __tablename__ = "installments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IS NULL OR status IN ('pending','paid','overdue')",
+            name="installments_status_check",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    card_movement_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("card_movements.id"), nullable=False
+    )
+    installment_number: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    created_at: Mapped[dt.datetime] = _created()

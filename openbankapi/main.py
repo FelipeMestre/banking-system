@@ -17,12 +17,20 @@ from .infra.cache.services.foreign_exchange_cache_service import ForeignExchange
 from .infra.database.repositories import (
     PostgresAccountBalanceProjection,
     PostgresAppliedRateWriter,
+    PostgresCardMovementWriter,
+    PostgresInstallmentWriter,
     PostgresTransactionWriter,
 )
 from .infra.database.config.session import create_engine, create_sessionmaker
 from .infra.foreign_exchange_service.config.foreign_exchange_config import ForeignExchangeConfig
 from .infra.foreign_exchange_service.repository.frankfurter_repository import FrankfurterRepository
-from .infra.kafka.consumers import AccountBalanceConsumer, TransactionConsumer, TransferStatusConsumer
+from .infra.kafka.consumers import (
+    AccountBalanceConsumer,
+    CardMovementConsumer,
+    PurchaseStatusConsumer,
+    TransactionConsumer,
+    TransferStatusConsumer,
+)
 from .infra.kafka.repositories import KafkaEventPublisherRepository
 from .infra.kafka.status_registry import StatusRegistry
 
@@ -44,6 +52,10 @@ transaction_writer = PostgresTransactionWriter(sessionmaker)
 # Same reasoning again, FX-19: the applied-rate audit row a converted leg
 # links to is written off the same Kafka thread, not a request.
 applied_rate_writer = PostgresAppliedRateWriter(sessionmaker)
+# Credit Cards Phase 2: `CardMovementConsumer` is driven by a Kafka thread
+# too, same reasoning as `transaction_writer`/`applied_rate_writer` above.
+card_movement_writer = PostgresCardMovementWriter(sessionmaker)
+installment_writer = PostgresInstallmentWriter(sessionmaker)
 
 cache = get_redis_cache_repository(settings.redis_url) if settings.redis_url else get_null_cache_repository()
 
@@ -53,9 +65,14 @@ foreign_exchange_cache_service = ForeignExchangeCacheService(cache, foreign_exch
 
 publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
+purchase_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
+purchase_status_consumer = PurchaseStatusConsumer(settings, purchase_status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
 transaction_consumer = TransactionConsumer(settings, transaction_writer, applied_rate_writer)
+card_movement_consumer = CardMovementConsumer(
+    settings, card_movement_writer, installment_writer, applied_rate_writer
+)
 
 # None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
 # to exist first — see config/dependencies.py for how routes degrade to a
@@ -69,14 +86,18 @@ auth0 = (
 
 def _start(loop: asyncio.AbstractEventLoop) -> None:
     status_consumer.start(loop)
+    purchase_status_consumer.start(loop)
     balance_consumer.start(loop)
     transaction_consumer.start(loop)
+    card_movement_consumer.start(loop)
 
 
 def _stop() -> None:
     status_consumer.stop()
+    purchase_status_consumer.stop()
     balance_consumer.stop()
     transaction_consumer.stop()
+    card_movement_consumer.stop()
     publisher.close()
 
 
@@ -91,6 +112,7 @@ app = create_app(
     publisher=publisher,
     sessionmaker=sessionmaker,
     status_registry=status_registry,
+    purchase_status_registry=purchase_status_registry,
     auth0=auth0,
     on_start=_start,
     on_stop=_stop,

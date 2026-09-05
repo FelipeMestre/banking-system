@@ -24,6 +24,8 @@ from ....domain.exceptions import (
     InsufficientFundsError,
     InsufficientPermissionsError,
     InvalidAccountNumberError,
+    InvalidCardNumberError,
+    InvalidCardStatusError,
     NoActiveBranchAvailableError,
     NotFoundError,
     RateNotAvailableError,
@@ -47,6 +49,8 @@ _STATUS = [
     (CustomerAlreadyHasAccountError, 409),
     (NoActiveBranchAvailableError, 503),
     (InsufficientPermissionsError, 403),
+    (InvalidCardStatusError, 409),
+    (InvalidCardNumberError, 400),
 ]
 
 
