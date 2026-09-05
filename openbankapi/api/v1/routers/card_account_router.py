@@ -21,21 +21,44 @@ from openbankapi.api.v1.dtos.card_account_dto import (
 )
 from openbankapi.api.v1.dtos.card_dto import CardIssuedDTO, CardMaskedDTO
 from openbankapi.api.v1.dtos.card_payment_dto import CardPaymentAcceptedDTO, CardPaymentRequestDTO
-from openbankapi.api.v1.dtos.common import PageParams
+from openbankapi.api.v1.dtos.card_usage_dto import CardMovementDTO, UsedCreditEstimateDTO
+from openbankapi.api.v1.dtos.common import PageParams, PageResponse
 from openbankapi.config.dependencies import (
     AccountRepositoryDep,
+    AppliedRateRepositoryDep,
     CardAccountRepositoryDep,
     CardAccountServiceDep,
+    CardMovementRepositoryDep,
     CardRepositoryDep,
+    CurrentCustomerDep,
     ForeignExchangeCacheServiceDep,
+    InstallmentRepositoryDep,
     PublisherDep,
     SettingsDep,
 )
-from openbankapi.domain.exceptions import CardAccountNotFoundError, InvalidCardStatusError
-from openbankapi.domain.model import CARD_ACCOUNT_TRANSITIONS, CardAccountStatus
+from openbankapi.domain.exceptions import (
+    CardAccountAccessForbiddenError,
+    CardAccountNotFoundError,
+    InvalidCardStatusError,
+)
+from openbankapi.domain.model import CARD_ACCOUNT_TRANSITIONS, CardAccountStatus, CardMovementType
 from openbankapi.domain.service.conversion_service import convert
 
 router = APIRouter(prefix="/card-accounts", tags=["card-accounts"])
+
+# `PURCHASE`/`FEE`/`INTEREST` increase what a customer owes; `PAYMENT`/`REFUND`
+# reduce it. `DECLINED` is excluded entirely — it never happened financially.
+_INCREASES_USAGE = frozenset({CardMovementType.PURCHASE, CardMovementType.FEE, CardMovementType.INTEREST})
+_REDUCES_USAGE = frozenset({CardMovementType.PAYMENT, CardMovementType.REFUND})
+
+
+async def _owned_card_account(card_account_id: UUID, repository: CardAccountRepositoryDep, customer):
+    card_account = await repository.get_by_id(card_account_id)
+    if card_account is None:
+        raise CardAccountNotFoundError(card_account_id)
+    if card_account.customer_id != customer.id:
+        raise CardAccountAccessForbiddenError(card_account_id)
+    return card_account
 
 
 def _issued_view(card_account, card) -> dict:
@@ -120,6 +143,83 @@ async def renew(card_account_id: UUID, service: CardAccountServiceDep):
     """Renews the account's active card; old card -> `replaced`, 409 if the
     account is not active (spec: "Renewal preserves account identity")."""
     return await service.renew_card(card_account_id)
+
+
+@router.get("/{card_account_id}/used-credit-estimate", response_model=UsedCreditEstimateDTO)
+async def used_credit_estimate(
+    card_account_id: UUID,
+    repository: CardAccountRepositoryDep,
+    movements: CardMovementRepositoryDep,
+    customer: CurrentCustomerDep,
+):
+    """A derived approximation, never the Flink Card Service's authoritative
+    `used_credit` state — the `-estimate` suffix and `is_estimate` field are
+    the honesty signal (spec: "Derived Used-Credit Approximation Endpoint").
+    Scoped by `card_account_id`, not the currently active card alone, so a
+    renewed card's pre-renewal history is still counted (design amendment)."""
+    card_account = await _owned_card_account(card_account_id, repository, customer)
+    rows = await movements.get_by_card_account_id(card_account_id)
+
+    total = Decimal(0)
+    for row in rows:
+        if row.movement_type in _INCREASES_USAGE:
+            total += row.amount
+        elif row.movement_type in _REDUCES_USAGE:
+            total -= row.amount
+        # DECLINED (and any other type) never happened financially — excluded.
+
+    return UsedCreditEstimateDTO(
+        card_account_id=card_account_id,
+        used_credit_estimate=max(total, Decimal(0)),
+        credit_limit=card_account.credit_limit,
+        movement_count=len(rows),
+    )
+
+
+@router.get("/{card_account_id}/movements", response_model=PageResponse[CardMovementDTO])
+async def list_movements(
+    card_account_id: UUID,
+    repository: CardAccountRepositoryDep,
+    movements: CardMovementRepositoryDep,
+    applied_rates: AppliedRateRepositoryDep,
+    installments: InstallmentRepositoryDep,
+    customer: CurrentCustomerDep,
+    page: PageParams = Depends(),
+):
+    """Paginated, newest-first (spec: "Movements List Endpoint"). Per-row
+    `applied_rates`/`installments` lookups mirror `card_router.py::list_all`'s
+    justified N+1 precedent for a bounded, paginated listing — not a batched
+    join."""
+    await _owned_card_account(card_account_id, repository, customer)
+
+    all_rows = await movements.get_by_card_account_id(card_account_id)
+    total = len(all_rows)
+    page_rows = all_rows[page.offset : page.offset + page.limit]
+
+    items = []
+    for row in page_rows:
+        rate = await applied_rates.get_by_id(row.applied_rate_id) if row.applied_rate_id else None
+        splits = (
+            await installments.get_by_movement_id(row.id)
+            if row.movement_type == CardMovementType.PURCHASE
+            else []
+        )
+        items.append(
+            CardMovementDTO(
+                id=row.id,
+                movement_type=row.movement_type.value,
+                amount=row.amount,
+                currency=row.currency,
+                description=row.description,
+                decline_reason=row.decline_reason,
+                occurred_at=row.occurred_at or row.created_at,
+                fx_pair=rate.pair if rate else None,
+                fx_applied_rate=rate.applied_rate if rate else None,
+                installment_count=len(splits) if len(splits) > 1 else None,
+                installment_amount=splits[0].amount if len(splits) > 1 else None,
+            )
+        )
+    return PageResponse(items=items, total=total, limit=page.limit, offset=page.offset)
 
 
 def _now() -> str:

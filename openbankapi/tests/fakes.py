@@ -20,6 +20,7 @@ from openbankapi.domain.exceptions import (
 from openbankapi.domain.model import (
     Account,
     AccountStatus,
+    AppliedRate,
     Branch,
     Card,
     CardAccount,
@@ -407,6 +408,17 @@ class FakeAppliedRateRepository:
         )
         return str(new_id)
 
+    async def get_by_id(self, applied_rate_id: UUID) -> Optional[AppliedRate]:
+        row = next((r for r in self.rows if r["id"] == applied_rate_id), None)
+        if row is None:
+            return None
+        return AppliedRate(
+            id=row["id"], pair=row["pair"], mid_rate=row["mid_rate"],
+            applied_rate=row["applied_rate"], margin=row["margin"],
+            direction=row["direction"], source_ts=row["source_ts"],
+            created_at=row["source_ts"],
+        )
+
 
 class FakeCardAccountRepository:
     """In-memory double for ICardAccountRepository (Credit Cards Phase 1)."""
@@ -549,11 +561,18 @@ class FakeCardMovementRepository:
 
     Identity is `(request_id, movement_type)`, the same tuple the real
     `UNIQUE` constraint and `ON CONFLICT DO NOTHING` enforce.
+
+    `cards` is a reference to the fake `ICardRepository` in use for this
+    harness — resolving `card_account_id -> card_ids` mirrors the real
+    Postgres `JOIN card_movements.card_id -> cards.id -> cards.card_account_id`
+    instead of filtering movements directly (a movement row has no
+    `card_account_id` column of its own, on Postgres or here).
     """
 
-    def __init__(self):
+    def __init__(self, cards: Optional["FakeCardRepository"] = None):
         self.rows: List[CardMovement] = []
         self._seen: set = set()
+        self.cards = cards
 
     async def insert(self, movement: CardMovement) -> CardMovement:
         key = (movement.request_id, movement.movement_type)
@@ -563,8 +582,17 @@ class FakeCardMovementRepository:
         self.rows.append(movement)
         return movement
 
-    async def get_by_card_id(self, card_id: UUID) -> List[CardMovement]:
-        return [row for row in self.rows if row.card_id == card_id]
+    async def get_by_card_account_id(self, card_account_id: UUID) -> List[CardMovement]:
+        if self.cards is None:
+            raise RuntimeError(
+                "FakeCardMovementRepository.get_by_card_account_id needs a `cards` "
+                "reference — construct with FakeCardMovementRepository(cards=...)."
+            )
+        card_ids = {
+            card.id for card in self.cards.rows.values() if card.card_account_id == card_account_id
+        }
+        matches = [row for row in self.rows if row.card_id in card_ids]
+        return sorted(matches, key=lambda row: row.created_at, reverse=True)
 
 
 class FakeInstallmentRepository:

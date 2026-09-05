@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ....domain.model import CardMovement, CardMovementType
-from ..schemas.models import CardMovementORM
+from ..schemas.models import CardMovementORM, CardORM
 from ._base import PostgresRepository
 
 
@@ -65,10 +65,11 @@ class PostgresCardMovementRepository(PostgresRepository):
         row = result.scalar_one()
         return _to_domain(row)
 
-    async def get_by_card_id(self, card_id: UUID) -> List[CardMovement]:
+    async def get_by_card_account_id(self, card_account_id: UUID) -> List[CardMovement]:
         result = await self._session.execute(
             select(CardMovementORM)
-            .where(CardMovementORM.card_id == card_id)
+            .join(CardORM, CardMovementORM.card_id == CardORM.id)
+            .where(CardORM.card_account_id == card_account_id)
             .order_by(CardMovementORM.created_at.desc())
         )
         return [_to_domain(row) for row in result.scalars().all()]

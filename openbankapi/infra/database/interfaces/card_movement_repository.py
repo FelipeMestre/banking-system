@@ -18,4 +18,8 @@ class ICardMovementRepository(Protocol):
         documents) — a redelivered event is a silent no-op, not an error."""
         ...
 
-    async def get_by_card_id(self, card_id: UUID) -> List[CardMovement]: ...
+    async def get_by_card_account_id(self, card_account_id: UUID) -> List[CardMovement]:
+        """All movements ever posted against every card (active or replaced)
+        ever issued under this card_account, newest first. Spans renewals —
+        this is the source of truth for a customer-facing 'one card' history."""
+        ...

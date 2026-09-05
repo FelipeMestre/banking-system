@@ -10,10 +10,13 @@ from openbankapi.app import create_app
 from openbankapi.config import Settings
 from openbankapi.config.dependencies import (
     get_account_repository,
+    get_applied_rate_repository,
     get_branch_repository,
     get_card_account_repository,
+    get_card_movement_repository,
     get_card_repository,
     get_customer_repository,
+    get_installment_repository,
     get_location_repository,
     get_transaction_repository,
 )
@@ -22,8 +25,11 @@ from openbankapi.infra.kafka.status_registry import StatusRegistry
 from .fakes import (
     FakeCustomerRepository,
     FakeAccountRepository,
+    FakeAppliedRateRepository,
     FakeCardAccountRepository,
+    FakeCardMovementRepository,
     FakeCardRepository,
+    FakeInstallmentRepository,
     FakeLocationRepository,
     FakePublisher,
     FakeBranchRepository,
@@ -38,6 +44,7 @@ class Harness:
     def __init__(
         self, client, publisher, cache, registry, repos, settings,
         fx_cache_service=None, fx_repo=None, card_accounts=None, cards=None,
+        card_movements=None, installments=None, applied_rates=None,
     ):
         self.client = client
         self.publisher = publisher
@@ -49,6 +56,9 @@ class Harness:
         self.fx_repo = fx_repo
         self.card_accounts = card_accounts
         self.cards = cards
+        self.card_movements = card_movements
+        self.installments = installments
+        self.applied_rates = applied_rates
 
 
 def build(
@@ -61,6 +71,9 @@ def build(
     fx_cache_service=None,
     card_accounts=None,
     cards=None,
+    card_movements=None,
+    installments=None,
+    applied_rates=None,
 ) -> Harness:
     # lazy imports to avoid circular deps during app wiring
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import (
@@ -83,6 +96,9 @@ def build(
 
     card_accounts = card_accounts or FakeCardAccountRepository()
     cards = cards or FakeCardRepository()
+    card_movements = card_movements or FakeCardMovementRepository(cards=cards)
+    installments = installments or FakeInstallmentRepository()
+    applied_rates = applied_rates or FakeAppliedRateRepository()
 
     try:
         app = create_app(
@@ -110,12 +126,15 @@ def build(
     app.dependency_overrides[get_transaction_repository] = lambda: transactions
     app.dependency_overrides[get_card_account_repository] = lambda: card_accounts
     app.dependency_overrides[get_card_repository] = lambda: cards
+    app.dependency_overrides[get_card_movement_repository] = lambda: card_movements
+    app.dependency_overrides[get_installment_repository] = lambda: installments
+    app.dependency_overrides[get_applied_rate_repository] = lambda: applied_rates
     client = TestClient(app)
     # also attach for router tests that use app.state directly
     app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
                    (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo,
-                   card_accounts, cards)
+                   card_accounts, cards, card_movements, installments, applied_rates)
 
 
 @pytest.fixture

@@ -7,7 +7,6 @@ import type { ComponentType } from "react";
 import { DS_ICON_PROPS } from "@/lib/icon-props";
 
 const INERT_ITEMS: { title: string; Icon: ComponentType<{ size?: number }> }[] = [
-  { title: "Cards", Icon: CreditCard },
   { title: "Support", Icon: Headphones },
   { title: "Settings", Icon: Settings },
 ];
@@ -16,6 +15,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const isTransfer = pathname === "/transfer" || pathname.startsWith("/transfer/");
+  const isCards = pathname === "/cards" || pathname.startsWith("/cards/");
 
   return (
     <nav className="flex h-full flex-col items-center border-r-2 border-divider bg-bg">
@@ -50,6 +50,20 @@ export function Sidebar() {
           }
         >
           <ArrowLeftRight size={21} {...DS_ICON_PROPS} />
+        </Link>
+
+        <Link
+          href="/cards"
+          title="Cards"
+          aria-current={isCards ? "page" : undefined}
+          className={
+            "flex h-[52px] w-[52px] items-center justify-center " +
+            (isCards
+              ? "bg-accent text-bg hover:bg-accent-600"
+              : "text-neutral-700 hover:bg-neutral-200 hover:text-text")
+          }
+        >
+          <CreditCard size={21} {...DS_ICON_PROPS} />
         </Link>
 
         {INERT_ITEMS.map(({ title, Icon }) => (

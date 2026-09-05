@@ -95,17 +95,17 @@ async def _insert_movement_and_installments(dsn: str):
         ]
         await installment_repo.bulk_insert(installments)
 
-        by_card = await movement_repo.get_by_card_id(card.id)
+        by_card_account = await movement_repo.get_by_card_account_id(card.card_account_id)
         by_movement = await installment_repo.get_by_movement_id(inserted.id)
-        return inserted, redelivered, by_card, by_movement
+        return inserted, redelivered, by_card_account, by_movement
 
 
 def test_insert_is_idempotent_and_bulk_insert_links_installments(fx_test_dsn):
-    inserted, redelivered, by_card, by_movement = asyncio.run(
+    inserted, redelivered, by_card_account, by_movement = asyncio.run(
         _insert_movement_and_installments(fx_test_dsn)
     )
     assert inserted.movement_type == CardMovementType.PURCHASE
     assert redelivered.id == inserted.id
-    assert len(by_card) == 1
+    assert len(by_card_account) == 1
     assert len(by_movement) == 3
     assert sum(i.amount for i in by_movement) == Decimal("100.00")
