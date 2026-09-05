@@ -7,10 +7,12 @@ import { AddBranchDialog } from "./AddBranchDialog";
 import { BranchesList } from "./BranchesList";
 import { DeleteBranchDialog } from "./DeleteBranchDialog";
 import { EditBranchDialog } from "./EditBranchDialog";
+import { usePermissions } from "@/lib/auth/usePermissions";
 import type { Branch } from "../types";
 
 /** What the Branches admin tab actually renders: the table plus the create/edit/delete/activate flows. */
 export function BranchesPanel() {
+  const { hasWriteAdmin } = usePermissions();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [deleting, setDeleting] = useState<Branch | null>(null);
@@ -19,17 +21,19 @@ export function BranchesPanel() {
 
   return (
     <div className="flex flex-col gap-ds-3">
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => setAddOpen(true)}>
-          Add branch
-        </Button>
-      </div>
+      {hasWriteAdmin ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setAddOpen(true)}>
+            Add branch
+          </Button>
+        </div>
+      ) : null}
 
       <BranchesList
         refreshToken={refreshToken}
-        onEdit={setEditing}
-        onDelete={setDeleting}
-        onActivate={setActivating}
+        onEdit={hasWriteAdmin ? setEditing : undefined}
+        onDelete={hasWriteAdmin ? setDeleting : undefined}
+        onActivate={hasWriteAdmin ? setActivating : undefined}
       />
 
       {addOpen ? (
