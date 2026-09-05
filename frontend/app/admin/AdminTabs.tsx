@@ -52,7 +52,7 @@ export function AdminTabs() {
         const Panel = PANELS[tab];
         return (
           <TabsContent key={tab} value={tab}>
-            <Panel />
+            {tab === "Accounts" ? <AccountsList scope="all" /> : <Panel />}
           </TabsContent>
         );
       })}

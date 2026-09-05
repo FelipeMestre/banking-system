@@ -192,7 +192,7 @@ services:
       # Empty until an Auth0 "API" resource exists (Applications > APIs in the
       # dashboard, or `auth0 apis create`) — auth stays off (503 on the
       # protected routes) rather than the app failing to start until then.
-      AUTH0_AUDIENCE: "https://dev-ekwg1eyvfjrof0to.us.auth0.com/api/v2/"
+      AUTH0_AUDIENCE: "https://openbank.api/com/auth"
 
   kafka-ui:
     image: tchiotludo/akhq:0.25.1

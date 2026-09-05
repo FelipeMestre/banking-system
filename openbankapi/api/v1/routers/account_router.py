@@ -128,6 +128,24 @@ async def list_all(
     )
 
 
+@router.get("/all", response_model=PageResponse[AccountResponseDTO])
+async def list_all_accounts(
+    _claims: ReadAdminDep,
+    repository: AccountRepositoryDep,
+    page: PageParams = Depends(),
+):
+    """Cross-customer admin list — `ReadAdminDep` ONLY, no `CurrentCustomerDep`.
+
+    Registered before any `/{account_number}` route so "all" is never
+    captured as an account number. Pages the unfiltered repository `list()`.
+    """
+    result = await repository.list(limit=page.limit, offset=page.offset)
+    return PageResponse(
+        items=[AccountResponseDTO.model_validate(i) for i in result.items],
+        total=result.total, limit=result.limit, offset=result.offset,
+    )
+
+
 @router.get("/{account_number}/transactions", response_model=TransactionsPageDTO)
 async def list_transactions(
     _claims: ReadAdminDep,
