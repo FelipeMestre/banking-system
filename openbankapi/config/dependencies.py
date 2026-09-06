@@ -166,10 +166,6 @@ def require_scope(scope: str):
 
     return _dependency
 
-require_admin_batch_scope = require_scope("admin:batch")
-
-RequireAdminBatchScopeDep = Annotated[dict, Depends(require_admin_batch_scope)]
-
 
 def _effective_permissions(claims: dict) -> list[str]:
     """permissions[] primary, scope fallback (spec admin-authorization).
@@ -197,6 +193,14 @@ def require_permissions(*required: str):
         return claims
 
     return _dependency
+
+
+# `admin:batch` is an RBAC permission (checked via `permissions[]`/`scope`
+# fallback, same as `read:admin`/`write:admin`), not an OAuth2 `scope` —
+# `require_permissions` is the correct check here, not `require_scope`.
+require_admin_batch_permission = require_permissions("admin:batch")
+
+RequireAdminBatchPermissionDep = Annotated[dict, Depends(require_admin_batch_permission)]
 
 
 # --- repositories: request-scoped, built fresh on the shared session --------

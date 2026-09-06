@@ -22,7 +22,7 @@ from openbankapi.api.v1.dtos.batch_dto import DueDateCheckRunResultDTO, MonthlyC
 from openbankapi.batch.run_once import check_and_close_if_due
 from openbankapi.config.dependencies import (
     CardAccountRepositoryDep,
-    RequireAdminBatchScopeDep,
+    RequireAdminBatchPermissionDep,
     SettingsDep,
     StatementRepositoryDep,
     StatementServiceDep,
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/admin/batch", tags=["admin-batch"])
 
 @router.post("/monthly-close", response_model=MonthlyCloseRunResultDTO)
 async def run_monthly_close(
-    _admin: RequireAdminBatchScopeDep,
+    _admin: RequireAdminBatchPermissionDep,
     statement_service: StatementServiceDep,
     statements: StatementRepositoryDep,
     card_accounts: CardAccountRepositoryDep,
@@ -63,7 +63,7 @@ async def run_monthly_close(
 
 
 @router.post("/due-date-check", response_model=DueDateCheckRunResultDTO)
-async def run_due_date_check(_admin: RequireAdminBatchScopeDep, statement_service: StatementServiceDep):
+async def run_due_date_check(_admin: RequireAdminBatchPermissionDep, statement_service: StatementServiceDep):
     """Runs today's due-date finalization + late-fee pass — the same
     `StatementService.run_due_date_check` the real cron calls, for today's
     REAL date."""

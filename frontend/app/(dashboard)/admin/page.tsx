@@ -1,5 +1,6 @@
 import { BatchJobsPanel, SimulatePurchaseButton } from "@/features/cards";
 import { AdminTabs } from "./AdminTabs";
+import { CurrentUserPanel } from "./CurrentUserPanel";
 
 export default function Page() {
   return (
@@ -11,6 +12,9 @@ export default function Page() {
         </div>
         <SimulatePurchaseButton />
       </header>
+      <div className="mb-ds-6">
+        <CurrentUserPanel />
+      </div>
       <section className="mb-ds-6 flex flex-col gap-ds-3 border-2 border-divider p-ds-4">
         <div>
           <h2 className="m-0">Monthly batch (testing)</h2>
