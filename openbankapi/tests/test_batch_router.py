@@ -15,7 +15,9 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from openbankapi.config.dependencies import get_statement_repository
+from fastapi import HTTPException
+
+from openbankapi.config.dependencies import get_statement_repository, require_admin_batch_scope
 from openbankapi.domain.model import CardMovement, CardMovementType
 from openbankapi.tests.conftest import build
 from openbankapi.tests.fakes import FakeStatementRepository
@@ -23,10 +25,22 @@ from openbankapi.tests.fakes import FakeStatementRepository
 CLOSE_DAY = 20
 
 
+def _allow_admin_scope() -> dict:
+    return {"sub": "auth0|admin-test", "scope": "admin:batch"}
+
+
+def _deny_admin_scope():
+    raise HTTPException(
+        status_code=403,
+        detail={"error": "insufficient_scope", "error_description": "Insufficient scopes"},
+    )
+
+
 def _harness():
     h = build()
     h.statements = FakeStatementRepository()
     h.client.app.dependency_overrides[get_statement_repository] = lambda: h.statements
+    h.client.app.dependency_overrides[require_admin_batch_scope] = _allow_admin_scope
     assert h.settings.close_day == CLOSE_DAY, "test assumes the default close_day=20"
     return h
 
@@ -134,3 +148,27 @@ def test_due_date_check_endpoint_is_a_noop_when_nothing_is_due():
     assert response.status_code == 200, response.text
     body = response.json()
     assert body == {"finalized_count": 0, "late_fees_applied_count": 0}
+
+
+def test_monthly_close_endpoint_rejects_a_caller_without_the_admin_scope():
+    h = _harness()
+    h.client.app.dependency_overrides[require_admin_batch_scope] = _deny_admin_scope
+
+    with h.client as client:
+        response = client.post("/admin/batch/monthly-close")
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["error"] == "insufficient_scope"
+    # Rejected before any batch logic ran — no statement was closed.
+    assert h.statements.rows == {}
+
+
+def test_due_date_check_endpoint_rejects_a_caller_without_the_admin_scope():
+    h = _harness()
+    h.client.app.dependency_overrides[require_admin_batch_scope] = _deny_admin_scope
+
+    with h.client as client:
+        response = client.post("/admin/batch/due-date-check")
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["error"] == "insufficient_scope"

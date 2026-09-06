@@ -1,12 +1,6 @@
 """Admin manual-trigger endpoints for the Credit Cards Phase 4 monthly-batch
 jobs (`batch-worker`'s hourly `python -m openbankapi.batch.run_once`).
 
-Testing tool only — same spirit as `card_router.py`'s admin-only `GET /cards`
-purchase-simulation listing: no extra auth beyond whatever the rest of this
-API already requires, since this lets an admin exercise the real hourly job
-on demand for testing instead of waiting for the cron or faking server time.
-These are ADDITIONAL manual triggers alongside the real scheduled job, not a
-replacement for it — `batch-worker`'s own cron/Docker setup is untouched.
 
 Both endpoints call the exact same real functions `batch/run_once.py` calls
 (`check_and_close_if_due`, `StatementService.run_due_date_check`) — nothing
@@ -28,6 +22,7 @@ from openbankapi.api.v1.dtos.batch_dto import DueDateCheckRunResultDTO, MonthlyC
 from openbankapi.batch.run_once import check_and_close_if_due
 from openbankapi.config.dependencies import (
     CardAccountRepositoryDep,
+    RequireAdminBatchScopeDep,
     SettingsDep,
     StatementRepositoryDep,
     StatementServiceDep,
@@ -38,6 +33,7 @@ router = APIRouter(prefix="/admin/batch", tags=["admin-batch"])
 
 @router.post("/monthly-close", response_model=MonthlyCloseRunResultDTO)
 async def run_monthly_close(
+    _admin: RequireAdminBatchScopeDep,
     statement_service: StatementServiceDep,
     statements: StatementRepositoryDep,
     card_accounts: CardAccountRepositoryDep,
@@ -67,7 +63,7 @@ async def run_monthly_close(
 
 
 @router.post("/due-date-check", response_model=DueDateCheckRunResultDTO)
-async def run_due_date_check(statement_service: StatementServiceDep):
+async def run_due_date_check(_admin: RequireAdminBatchScopeDep, statement_service: StatementServiceDep):
     """Runs today's due-date finalization + late-fee pass — the same
     `StatementService.run_due_date_check` the real cron calls, for today's
     REAL date."""

@@ -155,8 +155,7 @@ class StatementService:
 
             if not paid_by_due_date:
                 late_fee = min(self._late_fee_amount, statement.minimum_payment)
-                if late_fee > 0:
-                    await self._insert_late_fee(statement, late_fee, today)
+                if late_fee > 0 and await self._insert_late_fee(statement, late_fee, today):
                     late_fees_applied_count += 1
 
         return DueDateCheckSummary(
@@ -164,7 +163,13 @@ class StatementService:
             late_fees_applied_count=late_fees_applied_count,
         )
 
-    async def _insert_late_fee(self, statement: Statement, amount: Decimal, occurred_on: date) -> None:
+    async def _insert_late_fee(self, statement: Statement, amount: Decimal, occurred_on: date) -> bool:
+        """Returns whether a late-fee movement was actually inserted. False
+        (no exception) means `_first_card_for` found no card for this
+        account — that account is still finalized as `paid_by_due_date=False`
+        by the caller either way, only the fee itself is skipped. The caller
+        uses this to keep `DueDateCheckSummary.late_fees_applied_count`
+        accurate rather than counting an attempt that silently no-opped."""
         # Imported here (not at module top) to avoid a hard dependency from
         # this module on the exact `CardMovement` construction shape unless a
         # late fee actually needs inserting.
@@ -175,7 +180,7 @@ class StatementService:
 
         card = await self._first_card_for(statement.card_account_id)
         if card is None:
-            return
+            return False
         await self._card_movements.insert(
             CardMovement(
                 id=uuid.uuid4(), card_id=card, request_id=uuid.uuid4(),
@@ -185,6 +190,7 @@ class StatementService:
                 description=f"Late fee for statement due {statement.due_date.isoformat()}",
             )
         )
+        return True
 
     async def _first_card_for(self, card_account_id: UUID):
         movements = await self._card_movements.get_by_card_account_id(card_account_id)

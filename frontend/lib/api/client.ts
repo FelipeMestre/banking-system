@@ -35,8 +35,9 @@ export async function describeFailure(response: Response): Promise<string> {
   }
   // A domain error (see openbankapi's error_handlers.py) carries a message
   // written for a human — a business rule ("customer still has accounts"),
-  // not a status code. Prefer that over the generic fallback whenever it's
-  // actually there.
+  // not a status code. Prefer that over any status-based fallback whenever
+  // it's actually there, 401/403 included (e.g. `AccountAccessForbiddenError`
+  // is a 403 with its own specific message).
   try {
     const body = await response.json();
     const message = body?.error?.message;
@@ -44,7 +45,17 @@ export async function describeFailure(response: Response): Promise<string> {
       return message;
     }
   } catch {
-    // Not JSON, or no body at all — fall through to the generic message.
+    // Not JSON, or no body at all — fall through to the status-based message.
+  }
+  // Auth0's own 401/403 bodies (`{"detail": {"error": "insufficient_scope", ...}}`,
+  // e.g. from `require_scope(...)`) don't match the domain-error shape above,
+  // so they reach here — a generic "gateway answered 403" would wrongly read
+  // as the server being down rather than a permissions problem.
+  if (response.status === 401) {
+    return "Your session has expired. Sign in again and retry.";
+  }
+  if (response.status === 403) {
+    return "You don't have permission to do this.";
   }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
 }

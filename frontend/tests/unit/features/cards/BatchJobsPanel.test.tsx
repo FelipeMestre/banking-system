@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BatchJobsPanel } from "@/features/cards/components/BatchJobsPanel";
 import * as monthlyCloseModule from "@/features/cards/api/run-monthly-close";
 import * as dueDateCheckModule from "@/features/cards/api/run-due-date-check";
+import { ApiError } from "@/lib/api/client";
 
 describe("BatchJobsPanel", () => {
   afterEach(() => {
@@ -49,5 +50,21 @@ describe("BatchJobsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run monthly close check" }));
 
     await waitFor(() => expect(screen.getByText("The gateway is down.")).toBeInTheDocument());
+  });
+
+  it("shows a clear permission message when the caller lacks the admin:batch scope", async () => {
+    // The gateway now requires `admin:batch` on both endpoints — a caller
+    // without it gets a 403, surfaced here via `ApiError` exactly like any
+    // other gateway failure `describeFailure` produces.
+    vi.spyOn(monthlyCloseModule, "runMonthlyClose").mockRejectedValue(
+      new ApiError("You don't have permission to do this.", 403),
+    );
+
+    render(<BatchJobsPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Run monthly close check" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("You don't have permission to do this.")).toBeInTheDocument(),
+    );
   });
 });

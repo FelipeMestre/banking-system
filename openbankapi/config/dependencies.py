@@ -166,6 +166,10 @@ def require_scope(scope: str):
 
     return _dependency
 
+require_admin_batch_scope = require_scope("admin:batch")
+
+RequireAdminBatchScopeDep = Annotated[dict, Depends(require_admin_batch_scope)]
+
 
 # --- repositories: request-scoped, built fresh on the shared session --------
 
