@@ -159,11 +159,14 @@ def _approved(event: Dict[str, Any], now: datetime) -> Dict[str, Any]:
     applied_rate = event.get("applied_rate")
     if applied_rate is not None:
         payload["applied_rate"] = applied_rate
+    description = event.get("description")
+    if description is not None:
+        payload["description"] = description
     return payload
 
 
 def _declined(event: Dict[str, Any], now: datetime) -> Dict[str, Any]:
-    return {
+    payload = {
         "type": "purchase_declined",
         "request_id": event["request_id"],
         "card_id": event["card_id"],
@@ -172,6 +175,10 @@ def _declined(event: Dict[str, Any], now: datetime) -> Dict[str, Any]:
         "decline_reason": REASON_INSUFFICIENT_CREDIT,
         "ts": now.isoformat(),
     }
+    description = event.get("description")
+    if description is not None:
+        payload["description"] = description
+    return payload
 
 
 def _status(

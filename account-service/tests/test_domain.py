@@ -56,6 +56,11 @@ def test_other_events_shard_on_their_own_account_id():
     assert shard_key_of(event) == "acc-456"
 
 
+def test_payment_requested_shards_on_the_paying_account_id():
+    event = {"type": "payment_requested", "request_id": "pay-1", "account_id": "acc-789"}
+    assert shard_key_of(event) == "acc-789"
+
+
 # --- scenario 1: happy path -------------------------------------------------
 
 

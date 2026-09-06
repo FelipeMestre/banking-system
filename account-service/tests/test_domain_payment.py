@@ -12,6 +12,7 @@ TS = "2026-09-04T10:00:00Z"
 
 def payment_requested(
     request_id="pay-1",
+    account_id="acc-payer",
     destination_account="4111111111111111",
     card_account_id="card-acct-1",
     card_id="card-1",
@@ -22,6 +23,7 @@ def payment_requested(
     event = {
         "type": "payment_requested",
         "request_id": request_id,
+        "account_id": account_id,
         "destination_account": destination_account,
         "card_account_id": card_account_id,
         "card_id": card_id,

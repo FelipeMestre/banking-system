@@ -465,6 +465,13 @@ async def request_payment(
     wire = {
         "type": "payment_requested",
         "request_id": request_id,
+        # The paying account this debits — account-service's `shard_key_of`
+        # reads this field to route the event to the right keyed partition.
+        # Every other account_events type carries it; without it here,
+        # `shard_key_of` falls back to `event["source_account"]`, which this
+        # event has never had, raising KeyError and silently dropping the
+        # whole record as unroutable before `decide()` ever runs.
+        "account_id": paying_account.account_number,
         "destination_account": active_card.card_number,
         "card_account_id": str(card_account_id),
         "card_id": str(active_card.id),

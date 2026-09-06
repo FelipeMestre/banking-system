@@ -100,7 +100,7 @@ export function CreditCardsPageScreen() {
     refreshDetail();
   }, [refreshDetail]);
 
-  useEffect(() => {
+  const loadMovements = useCallback(() => {
     if (!selectedCardAccountId) {
       setMovements([]);
       return;
@@ -114,6 +114,8 @@ export function CreditCardsPageScreen() {
       .then((page) => setMovements(page.items))
       .catch(() => setMovements([]));
   }, [selectedCardAccountId, selectedStatementId]);
+
+  useEffect(() => loadMovements(), [loadMovements]);
 
   const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
 
@@ -220,7 +222,10 @@ export function CreditCardsPageScreen() {
         <PayDialog
           cardAccountId={selectedCardAccountId}
           onClose={() => setPayDialogOpen(false)}
-          onPaid={refreshDetail}
+          onPaid={() => {
+            refreshDetail();
+            loadMovements();
+          }}
           presets={
             selectedStatement
               ? {

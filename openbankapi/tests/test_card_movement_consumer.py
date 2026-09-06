@@ -257,6 +257,47 @@ def test_router_to_domain_to_consumer_pipeline_links_applied_rate_for_real_fx_pu
     assert movement_rows[0].applied_rate_id == applied_rate_rows[0]["id"]
 
 
+def test_router_to_domain_to_consumer_pipeline_links_description_for_a_purchase():
+    """True end-to-end regression for the `description` field always landing
+    as NULL: `card_router.py` publishes it on `purchase_requested`, but
+    `card_domain._approved`/`_declined` never forwarded it into
+    `purchase_approved`/`purchase_declined`, and the consumer never read it
+    off the event into the inserted row — two independent drops that a
+    hand-built consumer-only fixture (like `_approved()` above) can't catch,
+    since it never exercises the real `card_domain.decide()` in between."""
+    import card_domain
+
+    async def scenario():
+        purchase_requested_event = {
+            "type": "purchase_requested",
+            "request_id": str(uuid.uuid4()),
+            "card_id": CARD_ID,
+            "card_account_id": CARD_ACCOUNT_ID,
+            "amount": "100.00",
+            "currency": "USD",
+            "amount_usd": 10000,
+            "credit_limit": 100000,
+            "installments": 1,
+            "description": "Coffee shop",
+            "ts": "2026-01-01T00:00:00Z",
+        }
+
+        decision = card_domain.decide(
+            card_domain.CardState(used_credit=0, processed=frozenset()),
+            purchase_requested_event,
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        purchase_approved_event = decision.card_events[0]
+        assert purchase_approved_event["description"] == "Coffee shop"
+
+        movement_repo = FakeCardMovementRepository()
+        await _consumer(movement_repo)._apply(json.dumps(purchase_approved_event).encode())
+        return movement_repo.rows
+
+    rows = asyncio.run(scenario())
+    assert rows[0].description == "Coffee shop"
+
+
 def test_redelivering_the_same_approved_event_does_not_duplicate_installments():
     async def scenario():
         movement_repo = FakeCardMovementRepository()

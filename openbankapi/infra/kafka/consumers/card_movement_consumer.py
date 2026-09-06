@@ -157,6 +157,7 @@ class CardMovementConsumer:
             amount=amount,
             currency="USD",
             created_at=self._parse_ts(event.get("ts")),
+            description=event.get("description"),
             decline_reason=event.get("decline_reason") if movement_type == CardMovementType.DECLINED else None,
             applied_rate_id=applied_rate_id,
             occurred_at=self._parse_ts(event.get("ts")),

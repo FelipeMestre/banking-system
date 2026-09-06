@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CreditCardsPageScreen } from "@/features/credit-cards/components/CreditCardsPageScreen";
 import * as customerModule from "@/features/credit-cards/api/get-current-customer";
@@ -7,6 +7,8 @@ import * as usedCreditModule from "@/features/credit-cards/api/get-used-credit";
 import * as movementsModule from "@/features/credit-cards/api/get-movements";
 import * as statementsModule from "@/features/credit-cards/api/get-statements";
 import * as payoffModule from "@/features/credit-cards/api/get-installment-payoff";
+import * as requestPaymentModule from "@/features/credit-cards/api/request-payment";
+import * as watchModule from "@/features/credit-cards/api/watch-payment-status";
 import type { CardAccountListItem } from "@/features/credit-cards/types";
 import type { Page } from "@/lib/api/types";
 
@@ -75,5 +77,38 @@ describe("CreditCardsPageScreen", () => {
     for (const forbidden of [/renew card/i, /block card/i, /issue card/i, /coming soon/i]) {
       expect(screen.queryByText(forbidden)).not.toBeInTheDocument();
     }
+  });
+
+  it("refreshes the movements list once a payment is approved, not just the used-credit estimate", async () => {
+    vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+    vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+    vi.spyOn(usedCreditModule, "getUsedCredit").mockResolvedValue({
+      card_account_id: "ca-1", used_credit_estimate: "0.00", credit_limit: "1500.00",
+      currency: "USD", is_estimate: true, movement_count: 0,
+    });
+    vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+    vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+    vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+      card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+    });
+    vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+    let deliverApproved: (() => void) | undefined;
+    vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+      deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+      return () => {};
+    });
+
+    render(<CreditCardsPageScreen />);
+    await screen.findByText("•••• •••• •••• 1234");
+    await waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+    await screen.findByText("pending");
+
+    act(() => deliverApproved?.());
+
+    await waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(2));
   });
 });
