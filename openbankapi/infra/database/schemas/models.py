@@ -144,7 +144,9 @@ class TransactionORM(Base):
 
     __tablename__ = "transactions"
     __table_args__ = (
-        CheckConstraint("type IN ('debit', 'credit', 'declined')", name="transactions_type_check"),
+        CheckConstraint(
+            "type IN ('debit', 'credit', 'declined', 'deposit')", name="transactions_type_check"
+        ),
         UniqueConstraint(
             "request_id", "account_number", "type", name="transactions_request_id_account_number_type_key"
         ),
@@ -155,7 +157,7 @@ class TransactionORM(Base):
     account_number: Mapped[str] = mapped_column(String(16), nullable=False)
     type: Mapped[str] = mapped_column(String(10), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    counterparty_account: Mapped[str] = mapped_column(String(16), nullable=False)
+    counterparty_account: Mapped[str | None] = mapped_column(String(16), nullable=True)
     decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[dt.datetime] = _created()
