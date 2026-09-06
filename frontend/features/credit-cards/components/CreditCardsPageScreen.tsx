@@ -3,18 +3,31 @@
 import { useCallback, useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 import { ApiError } from "@/lib/api/client";
+import { downloadStatementPdf } from "../api/download-statement-pdf";
 import { getCardAccounts } from "../api/get-card-accounts";
 import { getCurrentCustomer } from "../api/get-current-customer";
+import { getInstallmentPayoff } from "../api/get-installment-payoff";
 import { getMovements } from "../api/get-movements";
+import { getStatements } from "../api/get-statements";
 import { getUsedCredit } from "../api/get-used-credit";
 import { CardDetail } from "./CardDetail";
 import { CardList } from "./CardList";
+import { CurrentCycleSummary } from "./CurrentCycleSummary";
 import { MovementsList } from "./MovementsList";
 import { PayDialog } from "./PayDialog";
-import type { CardAccountListItem, CardMovement, UsedCreditEstimate } from "../types";
+import { StatementCycleTabs } from "./StatementCycleTabs";
+import { StatementTotalsSidebar } from "./StatementTotalsSidebar";
+import type {
+  CardAccountListItem,
+  CardMovement,
+  InstallmentPayoff,
+  Statement,
+  UsedCreditEstimate,
+} from "../types";
 
 const CARD_ACCOUNTS_PAGE_SIZE = 50;
-const MOVEMENTS_PAGE_SIZE = 20;
+const MOVEMENTS_PAGE_SIZE = 100;
+const STATEMENTS_PAGE_SIZE = 24;
 
 type CardsState =
   | { kind: "loading" }
@@ -23,17 +36,22 @@ type CardsState =
 
 /**
  * Composes the customer-facing Cards page from the real `card-accounts`,
- * used-credit-estimate, and movements endpoints. Explicitly renders NONE of
- * Phase 4's billing UI (spec: "Explicit Exclusion of Phase-4 Billing UI") —
- * no cycle/statement/minimum-payment/due-date/PDF/late-fee element, and no
- * card issue/renew/block action (that stays admin-only Phase 1 CRUD).
+ * used-credit-estimate, movements, statements, and installment-payoff
+ * endpoints (`credit-card-monthly-batch-statements`). This supersedes the
+ * previous phase's "Explicit Exclusion of Phase-4 Billing UI" decision — the
+ * billing-cycle UI this page now renders is the deliberate subject of this
+ * change, not an accidental scope creep.
  */
 export function CreditCardsPageScreen() {
   const [cardsState, setCardsState] = useState<CardsState>({ kind: "loading" });
   const [selectedCardAccountId, setSelectedCardAccountId] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<UsedCreditEstimate | null>(null);
+  const [statements, setStatements] = useState<Statement[]>([]);
+  const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
   const [movements, setMovements] = useState<CardMovement[]>([]);
+  const [payoff, setPayoff] = useState<InstallmentPayoff | null>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const loadCards = useCallback(() => {
     setCardsState({ kind: "loading" });
@@ -60,16 +78,59 @@ export function CreditCardsPageScreen() {
   const refreshDetail = useCallback(() => {
     if (!selectedCardAccountId) return;
     getUsedCredit(selectedCardAccountId).then(setEstimate).catch(() => setEstimate(null));
-    getMovements({ cardAccountId: selectedCardAccountId, limit: MOVEMENTS_PAGE_SIZE, offset: 0 })
-      .then((page) => setMovements(page.items))
-      .catch(() => setMovements([]));
+    getInstallmentPayoff(selectedCardAccountId).then(setPayoff).catch(() => setPayoff(null));
+    getStatements({ cardAccountId: selectedCardAccountId, limit: STATEMENTS_PAGE_SIZE })
+      .then((rows) => {
+        setStatements(rows);
+        setSelectedStatementId((current) =>
+          rows.some((row) => row.id === current) ? current : (rows[0]?.id ?? null),
+        );
+      })
+      .catch(() => {
+        setStatements([]);
+        setSelectedStatementId(null);
+      });
   }, [selectedCardAccountId]);
 
   useEffect(() => {
     setEstimate(null);
-    setMovements([]);
+    setStatements([]);
+    setSelectedStatementId(null);
+    setPayoff(null);
     refreshDetail();
   }, [refreshDetail]);
+
+  useEffect(() => {
+    if (!selectedCardAccountId) {
+      setMovements([]);
+      return;
+    }
+    getMovements({
+      cardAccountId: selectedCardAccountId,
+      limit: MOVEMENTS_PAGE_SIZE,
+      offset: 0,
+      statementId: selectedStatementId ?? undefined,
+    })
+      .then((page) => setMovements(page.items))
+      .catch(() => setMovements([]));
+  }, [selectedCardAccountId, selectedStatementId]);
+
+  const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
+
+  const handleDownload = useCallback(() => {
+    if (!selectedCardAccountId || !selectedStatement) return;
+    setDownloading(true);
+    downloadStatementPdf(
+      selectedCardAccountId,
+      selectedStatement.id,
+      `statement-${selectedStatement.period_end}.pdf`,
+    )
+      .catch(() => {
+        // Best-effort: the customer can retry the download; nothing else on
+        // the page depends on this succeeding.
+      })
+      .finally(() => setDownloading(false));
+  }, [selectedCardAccountId, selectedStatement]);
 
   if (cardsState.kind === "loading") {
     return <LoadingScreen message="Loading your cards…" fullScreen={false} showBranding={false} />;
@@ -79,31 +140,98 @@ export function CreditCardsPageScreen() {
     return <p className="m-0 text-sm text-neutral-600">{cardsState.message}</p>;
   }
 
+  const selectedCard = cardsState.items.find(
+    (item) => item.card_account.id === selectedCardAccountId,
+  );
+
   return (
     <div className="flex flex-col gap-ds-4">
       <h1 className="m-0 font-heading text-[20px] font-extrabold tracking-[-0.01em]">Your cards</h1>
-      <div className="grid grid-cols-1 gap-ds-4 lg:grid-cols-[320px_1fr]">
+
+      <section className="flex flex-col gap-ds-2">
+        <h6 className="m-0">Select a card</h6>
         <CardList
           items={cardsState.items}
           selectedCardAccountId={selectedCardAccountId}
           onSelect={setSelectedCardAccountId}
         />
-        {selectedCardAccountId ? (
-          <div className="flex flex-col gap-ds-4">
-            <CardDetail
-              estimate={estimate}
-              loading={estimate === null}
-              onPay={() => setPayDialogOpen(true)}
+      </section>
+
+      {selectedCardAccountId ? (
+        <div className="flex flex-col gap-ds-4">
+          <CardDetail
+            estimate={estimate}
+            loading={estimate === null}
+            onPay={() => setPayDialogOpen(true)}
+          />
+
+          <section className="flex flex-col gap-ds-2">
+            <h6 className="m-0">
+              Current cycle{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
+            </h6>
+            {selectedStatement ? (
+              <CurrentCycleSummary
+                statement={selectedStatement}
+                onPay={() => setPayDialogOpen(true)}
+                onDownload={handleDownload}
+                downloading={downloading}
+              />
+            ) : (
+              <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
+                No billing cycle has closed yet.
+              </p>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-ds-2">
+            <h6 className="m-0">
+              Billing cycles{selectedCard?.card ? ` — ${selectedCard.card.card_number}` : ""}
+            </h6>
+            <StatementCycleTabs
+              statements={statements}
+              selectedStatementId={selectedStatementId}
+              onSelect={setSelectedStatementId}
             />
-            <MovementsList items={movements} />
+          </section>
+
+          <div className="grid grid-cols-1 gap-ds-4 md:grid-cols-[1fr_240px]">
+            <section className="flex flex-col gap-ds-2">
+              <h6 className="m-0">
+                Movements{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
+              </h6>
+              <MovementsList items={movements} />
+            </section>
+            <section className="flex flex-col gap-ds-2">
+              <h6 className="m-0">
+                Totals{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
+              </h6>
+              {selectedStatement ? (
+                <StatementTotalsSidebar statement={selectedStatement} cycleMovements={movements} />
+              ) : (
+                <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
+                  No billing cycle has closed yet.
+                </p>
+              )}
+            </section>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {payDialogOpen && selectedCardAccountId ? (
         <PayDialog
           cardAccountId={selectedCardAccountId}
           onClose={() => setPayDialogOpen(false)}
           onPaid={refreshDetail}
+          presets={
+            selectedStatement
+              ? {
+                  minimum: selectedStatement.minimum_payment,
+                  full: selectedStatement.total_due,
+                  installmentPayoff: payoff?.payoff_amount,
+                }
+              : payoff
+                ? { installmentPayoff: payoff.payoff_amount }
+                : undefined
+          }
         />
       ) : null}
     </div>

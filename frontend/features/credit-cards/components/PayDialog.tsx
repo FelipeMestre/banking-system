@@ -1,15 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/Dialog";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseAmountToCents } from "@/lib/money";
+import { formatDecimalCurrency } from "../format-decimal";
 import { getPaymentStatus } from "../api/get-payment-status";
 import { requestPayment } from "../api/request-payment";
 import { watchPaymentStatus } from "../api/watch-payment-status";
 import type { CardPaymentAccepted, CardPaymentStatus } from "../types";
+
+/** Quick-select presets for the current cycle, when known. All three are
+ * genuinely backed by real data: `minimum`/`full` come straight off the
+ * selected `Statement`, and `installmentPayoff` off `GET
+ * /card-accounts/{id}/installment-payoff` (`credit-card-monthly-batch-
+ * statements`) — none of them are guessed. Every preset only ever fills in
+ * the same editable amount field; the customer still confirms what actually
+ * gets submitted. */
+export interface PayDialogPresets {
+  minimum?: string;
+  full?: string;
+  installmentPayoff?: string;
+}
 
 interface Props {
   cardAccountId: string;
@@ -18,16 +33,18 @@ interface Props {
    * the used-credit estimate (spec: "refreshing the used-credit approximation
    * afterward reflects the reduction"). */
   onPaid?: () => void;
+  presets?: PayDialogPresets;
 }
 
 /**
- * Free-form amount only — no minimum-payment, full-payoff, or
- * installment-payoff presets, since no backing data exists for them (spec:
- * "Real Payment Flow"). Live pending -> approved status mirrors
+ * Free-form amount, with optional quick-select presets for the minimum
+ * payment, the full statement balance, and settling installment balances
+ * early (`credit-card-monthly-batch-statements`) when the caller has that
+ * data for the selected cycle. Live pending -> approved status mirrors
  * `SimulatePurchaseDialog`'s exact watcher pattern, pointed at the real
  * `payments/{request_id}/status` endpoint.
  */
-export function PayDialog({ cardAccountId, onClose, onPaid }: Props) {
+export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
   const [amount, setAmount] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +133,30 @@ export function PayDialog({ cardAccountId, onClose, onPaid }: Props) {
         </div>
       ) : (
         <div className="flex flex-col gap-ds-3">
+          {presets ? (
+            <div className="flex flex-wrap gap-ds-2">
+              {presets.minimum ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setAmount(presets.minimum!)}>
+                  Pay minimum ({formatDecimalCurrency(presets.minimum)})
+                </Button>
+              ) : null}
+              {presets.full ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setAmount(presets.full!)}>
+                  Pay in full ({formatDecimalCurrency(presets.full)})
+                </Button>
+              ) : null}
+              {presets.installmentPayoff && Number(presets.installmentPayoff) > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAmount(presets.installmentPayoff!)}
+                >
+                  Settle installments early ({formatDecimalCurrency(presets.installmentPayoff)})
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="field">
             <Label htmlFor="payment-amount">Amount</Label>
             <Input

@@ -2,6 +2,9 @@ export { getCurrentCustomer } from "./api/get-current-customer";
 export { getCardAccounts } from "./api/get-card-accounts";
 export { getUsedCredit } from "./api/get-used-credit";
 export { getMovements } from "./api/get-movements";
+export { getStatements } from "./api/get-statements";
+export { getInstallmentPayoff } from "./api/get-installment-payoff";
+export { downloadStatementPdf, fetchStatementPdf, triggerBrowserDownload } from "./api/download-statement-pdf";
 export { requestPayment } from "./api/request-payment";
 export { getPaymentStatus } from "./api/get-payment-status";
 export { watchPaymentStatus } from "./api/watch-payment-status";
@@ -9,7 +12,13 @@ export { CardList } from "./components/CardList";
 export { CardDetail } from "./components/CardDetail";
 export { MovementsList } from "./components/MovementsList";
 export { PayDialog } from "./components/PayDialog";
+export { StatementCycleTabs } from "./components/StatementCycleTabs";
+export { CurrentCycleSummary } from "./components/CurrentCycleSummary";
+export { StatementTotalsSidebar } from "./components/StatementTotalsSidebar";
 export { CreditCardsPageScreen } from "./components/CreditCardsPageScreen";
+export { deriveStatementStatusLabel, statementStatusBadgeVariant } from "./statement-status";
+export type { StatementStatusLabel } from "./statement-status";
+export type { PayDialogPresets } from "./components/PayDialog";
 export type {
   CardAccount,
   MaskedCard,
@@ -19,4 +28,6 @@ export type {
   CardPaymentRequestBody,
   CardPaymentAccepted,
   CardPaymentStatus,
+  Statement,
+  InstallmentPayoff,
 } from "./types";

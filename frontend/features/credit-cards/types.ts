@@ -85,3 +85,40 @@ export interface CardPaymentStatus {
   reason?: string;
   ts?: string;
 }
+
+/**
+ * Mirrors `StatementDTO` (openbankapi/api/v1/dtos/statement_dto.py) — one
+ * closed billing cycle. `status` is the raw backend enum
+ * (`closed`/`paid`/`overdue`); the frontend derives its own display label
+ * from `status` + `paid_in_full` + `paid_by_due_date` rather than trusting
+ * any single field alone (see `deriveStatementStatusLabel`), since an
+ * `overdue` statement that later gets fully paid still carries
+ * `paid_by_due_date: false` forever.
+ */
+export interface Statement {
+  id: string;
+  card_account_id: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  purchases_total: string;
+  interest_total: string;
+  total_due: string;
+  paid_amount: string;
+  credit_balance: string;
+  late_fees_total: string;
+  minimum_payment: string;
+  paid_in_full: boolean;
+  paid_by_due_date: boolean;
+  status: "open" | "closed" | "paid" | "overdue";
+  created_at: string;
+  updated_at: string;
+}
+
+/** Mirrors `InstallmentPayoffDTO` — the "settle all installment balances
+ * early" figure, safe to expose verbatim since installments carry 0% interest. */
+export interface InstallmentPayoff {
+  card_account_id: string;
+  payoff_amount: string;
+  currency: string;
+}
