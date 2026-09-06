@@ -16,6 +16,7 @@ currency conversion) is persisted to `applied_rates` first, and the returned
 id threaded into the transaction row as `applied_rate_id`. `outgoing_payment`
 and `declined_payment` never carry `conversion` and always link `None`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,12 +25,13 @@ import logging
 import threading
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
 from ...database.interfaces.applied_rate_repository import IAppliedRateRepository
+from ...database.interfaces.deposit_repository import IDepositRepository
 from ...database.interfaces.transaction_repository import ITransactionRepository
 
 LOG = logging.getLogger("openbankapi.kafka.transactions")
@@ -40,6 +42,7 @@ _EVENT_TO_ROW_TYPE = {
     "outgoing_payment": "debit",
     "incoming_payment": "credit",
     "declined_payment": "declined",
+    "deposit_confirmed": "deposit",
 }
 
 
@@ -48,20 +51,24 @@ class TransactionConsumer:
         self,
         settings: Settings,
         repository: ITransactionRepository,
-        applied_rate_repository: Optional[IAppliedRateRepository] = None,
+        applied_rate_repository: IAppliedRateRepository | None = None,
+        deposit_repository: IDepositRepository | None = None,
     ):
         self._settings = settings
         self._repository = repository
         # Optional, default None: a caller that predates FX-19 keeps working
         # unmodified — it just never links an applied-rate row.
         self._applied_rate_repository = applied_rate_repository
+        self._deposit_repository = deposit_repository
         self._stopping = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: threading.Thread | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
-        self._thread = threading.Thread(target=self._run, name="transactions", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name="transactions", daemon=True
+        )
         self._thread.start()
 
     def stop(self) -> None:
@@ -104,7 +111,7 @@ class TransactionConsumer:
             LOG.error("failed to project transaction: %s", error)
 
     @staticmethod
-    def _parse(raw) -> Optional[Dict[str, Any]]:
+    def _parse(raw) -> dict[str, Any] | None:
         if not raw:
             return None
         try:
@@ -130,7 +137,10 @@ class TransactionConsumer:
         except (KeyError, TypeError, ValueError) as error:
             LOG.warning("dropping malformed transaction record: %s", error)
 
-    async def _insert_for(self, row_type: str, event: Dict[str, Any]) -> None:
+    async def _insert_for(self, row_type: str, event: dict[str, Any]) -> None:
+        if row_type == "deposit":
+            await self._insert_deposit(event)
+            return
         if row_type == "debit":
             counterparty = event["destination_account"]
         elif row_type == "credit":
@@ -151,18 +161,54 @@ class TransactionConsumer:
             applied_rate_id=applied_rate_id,
         )
 
+    async def _insert_deposit(self, event: dict[str, Any]) -> None:
+        # Guard orphan applied_rates: insert movement first with no rate, RETURNING
+        movement_id = await self._repository.insert(
+            request_id=uuid.UUID(str(event["request_id"])),
+            account_number=event["account_id"],
+            type="deposit",
+            amount=event["amount"],
+            counterparty_account=None,
+            decline_reason=None,
+            ts=self._parse_ts(event.get("ts")),
+            applied_rate_id=None,
+        )
+        if movement_id is None:
+            return
+        # Cross-currency: link applied_rate after confirming movement is new
+        applied_data = event.get("applied_rate") or event.get("conversion")
+        if applied_data is not None and self._applied_rate_repository is not None:
+            new_rate_id = await self._applied_rate_repository.insert(
+                pair=applied_data["pair"],
+                mid_rate=applied_data["mid_rate"],
+                applied_rate=applied_data["applied_rate"],
+                margin=applied_data["margin"],
+                direction=applied_data["direction"],
+                source_ts=self._parse_ts(applied_data["source_ts"]),
+            )
+            rate_uuid = uuid.UUID(str(new_rate_id))
+            await self._repository.set_applied_rate(movement_id, rate_uuid)
+        if self._deposit_repository is not None:
+            await self._deposit_repository.insert(
+                movement_id=movement_id,
+                admin_id=event.get("admin_id", ""),
+                reason=event.get("reason"),
+            )
+
     async def _resolve_applied_rate_id(
-        self, row_type: str, event: Dict[str, Any]
-    ) -> Optional[uuid.UUID]:
+        self, row_type: str, event: dict[str, Any]
+    ) -> uuid.UUID | None:
         """A row carrying `conversion` gets its applied-rate linked regardless
         of leg direction; ordinary debit legs never carry `conversion` so this
         is unchanged for existing transfer behavior (FX-19 extended for
         Phase 3: a cross-currency card payment's DEBIT-leg `outgoing_payment`
         is the first debit-side event to ever set `conversion`, attached by
-        `account-service/domain.py`'s widened `_outgoing()`)."""
+        `account-service/domain.py`'s widened `_outgoing()`).
+        Deposit leg may carry `applied_rate` instead of `conversion` — handle both.
+        """
         if self._applied_rate_repository is None:
             return None
-        conversion = event.get("conversion")
+        conversion = event.get("conversion") or event.get("applied_rate")
         if conversion is None:
             return None
         new_id = await self._applied_rate_repository.insert(

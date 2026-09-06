@@ -5,10 +5,10 @@ same time-of-check-to-time-of-use reasoning `errors.py` documents for other
 repositories applies here too, and at-least-once Kafka delivery makes the race
 routine rather than theoretical.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -33,6 +33,21 @@ def _to_domain(row: TransactionORM) -> Transaction:
     )
 
 
+async def _update_applied_rate(
+    session, transaction_id: UUID, applied_rate_id: UUID
+) -> None:
+    from sqlalchemy import update
+
+    await session.execute(
+        update(TransactionORM)
+        .where(TransactionORM.id == transaction_id)
+        .values(applied_rate_id=applied_rate_id)
+    )
+
+
+# Keep helper for writers; repository methods expose the same operation.
+
+
 class PostgresTransactionRepository(PostgresRepository):
     async def insert(
         self,
@@ -41,11 +56,11 @@ class PostgresTransactionRepository(PostgresRepository):
         account_number: str,
         type: str,
         amount: int,
-        counterparty_account: str,
-        decline_reason: Optional[str],
+        counterparty_account: str | None,
+        decline_reason: str | None,
         ts: datetime,
-        applied_rate_id: Optional[UUID] = None,
-    ) -> None:
+        applied_rate_id: UUID | None = None,
+    ) -> UUID | None:
         statement = (
             pg_insert(TransactionORM)
             .values(
@@ -61,17 +76,19 @@ class PostgresTransactionRepository(PostgresRepository):
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]
             )
+            .returning(TransactionORM.id)
         )
-        await self._session.execute(statement)
+        result = await self._session.execute(statement)
         await self._session.flush()
+        return result.scalar_one_or_none()
 
     async def list_by_account(
         self,
         account_number: str,
         *,
         limit: int,
-        before: Optional[Tuple[datetime, UUID]] = None,
-    ) -> List[Transaction]:
+        before: tuple[datetime, UUID] | None = None,
+    ) -> list[Transaction]:
         from sqlalchemy import and_, or_, select
 
         conditions = [TransactionORM.account_number == account_number]
@@ -90,6 +107,12 @@ class PostgresTransactionRepository(PostgresRepository):
             .limit(limit)
         )
         return [_to_domain(r) for r in rows.scalars().all()]
+
+    async def set_applied_rate(
+        self, transaction_id: UUID, applied_rate_id: UUID
+    ) -> None:
+        await _update_applied_rate(self._session, transaction_id, applied_rate_id)
+        await self._session.flush()
 
 
 class PostgresTransactionWriter:
@@ -112,11 +135,11 @@ class PostgresTransactionWriter:
         account_number: str,
         type: str,
         amount: int,
-        counterparty_account: str,
-        decline_reason: Optional[str],
+        counterparty_account: str | None,
+        decline_reason: str | None,
         ts: datetime,
-        applied_rate_id: Optional[UUID] = None,
-    ) -> None:
+        applied_rate_id: UUID | None = None,
+    ) -> UUID | None:
         statement = (
             pg_insert(TransactionORM)
             .values(
@@ -132,6 +155,14 @@ class PostgresTransactionWriter:
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]
             )
+            .returning(TransactionORM.id)
         )
         async with self._sessionmaker.begin() as session:
-            await session.execute(statement)
+            result = await session.execute(statement)
+            return result.scalar_one_or_none()
+
+    async def set_applied_rate(
+        self, transaction_id: UUID, applied_rate_id: UUID
+    ) -> None:
+        async with self._sessionmaker.begin() as session:
+            await _update_applied_rate(session, transaction_id, applied_rate_id)

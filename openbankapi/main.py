@@ -3,6 +3,7 @@
 The only module allowed to know about every concrete adapter and wire them
 together. Nothing else imports Redis, asyncpg or confluent-kafka directly.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,18 +13,28 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 
 from .app import create_app
 from .config import Settings
-from .infra.cache.repositories import get_null_cache_repository, get_redis_cache_repository
-from .infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
+from .infra.cache.repositories import (
+    get_null_cache_repository,
+    get_redis_cache_repository,
+)
+from .infra.cache.services.foreign_exchange_cache_service import (
+    ForeignExchangeCacheService,
+)
+from .infra.database.config.session import create_engine, create_sessionmaker
 from .infra.database.repositories import (
     PostgresAccountBalanceProjection,
     PostgresAppliedRateWriter,
     PostgresCardMovementWriter,
+    PostgresDepositWriter,
     PostgresInstallmentWriter,
     PostgresTransactionWriter,
 )
-from .infra.database.config.session import create_engine, create_sessionmaker
-from .infra.foreign_exchange_service.config.foreign_exchange_config import ForeignExchangeConfig
-from .infra.foreign_exchange_service.repository.frankfurter_repository import FrankfurterRepository
+from .infra.foreign_exchange_service.config.foreign_exchange_config import (
+    ForeignExchangeConfig,
+)
+from .infra.foreign_exchange_service.repository.frankfurter_repository import (
+    FrankfurterRepository,
+)
 from .infra.kafka.consumers import (
     AccountBalanceConsumer,
     CardMovementConsumer,
@@ -54,16 +65,23 @@ transaction_writer = PostgresTransactionWriter(sessionmaker)
 # Same reasoning again, FX-19: the applied-rate audit row a converted leg
 # links to is written off the same Kafka thread, not a request.
 applied_rate_writer = PostgresAppliedRateWriter(sessionmaker)
+deposit_writer = PostgresDepositWriter(sessionmaker)
 # Credit Cards Phase 2: `CardMovementConsumer` is driven by a Kafka thread
 # too, same reasoning as `transaction_writer`/`applied_rate_writer` above.
 card_movement_writer = PostgresCardMovementWriter(sessionmaker)
 installment_writer = PostgresInstallmentWriter(sessionmaker)
 
-cache = get_redis_cache_repository(settings.redis_url) if settings.redis_url else get_null_cache_repository()
+cache = (
+    get_redis_cache_repository(settings.redis_url)
+    if settings.redis_url
+    else get_null_cache_repository()
+)
 
 foreign_exchange_config = ForeignExchangeConfig()
 foreign_exchange_repository = FrankfurterRepository(foreign_exchange_config)
-foreign_exchange_cache_service = ForeignExchangeCacheService(cache, foreign_exchange_repository)
+foreign_exchange_cache_service = ForeignExchangeCacheService(
+    cache, foreign_exchange_repository
+)
 
 publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
@@ -72,10 +90,14 @@ card_payment_status_registry = StatusRegistry(max_cached=settings.status_cache_s
 deposit_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 purchase_status_consumer = PurchaseStatusConsumer(settings, purchase_status_registry)
-card_payment_status_consumer = CardPaymentStatusConsumer(settings, card_payment_status_registry)
+card_payment_status_consumer = CardPaymentStatusConsumer(
+    settings, card_payment_status_registry
+)
 deposit_status_consumer = DepositStatusConsumer(settings, deposit_status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
-transaction_consumer = TransactionConsumer(settings, transaction_writer, applied_rate_writer)
+transaction_consumer = TransactionConsumer(
+    settings, transaction_writer, applied_rate_writer, deposit_writer
+)
 card_movement_consumer = CardMovementConsumer(
     settings, card_movement_writer, installment_writer, applied_rate_writer
 )
