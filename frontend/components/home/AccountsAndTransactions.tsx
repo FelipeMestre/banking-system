@@ -5,13 +5,11 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AccountCell } from "./AccountCell";
 import { useAccountVisibility } from "@/features/accounts/hooks/useAccountVisibility";
-import { TransactionsList } from "@/features/transactions";
+import { TransactionsPanel } from "@/features/transactions";
 import type { AccountSummary } from "@/features/accounts";
-import type { Transaction } from "@/features/transactions";
 
 interface Props {
   accounts: AccountSummary[];
-  transactionsByAccount: Record<string, Transaction[]>;
   asOf: string;
   /** Controlled: the parent owns which account is selected, since selecting
    * a different account has to trigger a real fetch of that account's
@@ -30,7 +28,6 @@ interface Props {
 
 export function AccountsAndTransactions({
   accounts,
-  transactionsByAccount,
   asOf,
   selectedAccountNumber,
   onSelectAccount,
@@ -83,10 +80,7 @@ export function AccountsAndTransactions({
       </div>
 
       <div className="mt-[36px] grid grid-cols-[minmax(0,1fr)_300px] items-start gap-ds-8">
-        <TransactionsList
-          currencyCode={account.currency}
-          transactions={transactionsByAccount[account.account_number] ?? []}
-        />
+        <TransactionsPanel accountNumber={account.account_number} currencyCode={account.currency} />
         {/* The key is load-bearing, not decorative: `aside` is JSX authored in
             a Server Component (the page) and handed across into this Client
             Component as a prop. Rendered bare, that crossing makes React's

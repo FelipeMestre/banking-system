@@ -3,10 +3,10 @@
 export interface Transaction {
   id: string;
   request_id: string;
-  type: "debit" | "credit" | "declined";
+  type: "debit" | "credit" | "declined" | "deposit";
   /** Integer cents. */
   amount: number;
-  counterparty_account: string;
+  counterparty_account: string | null;
   decline_reason: string | null;
   /** ISO 8601 timestamp. */
   ts: string;

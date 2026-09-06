@@ -20,7 +20,7 @@ class TransactionDTO(BaseModel):
     request_id: UUID
     type: str
     amount: int
-    counterparty_account: str
+    counterparty_account: Optional[str] = None
     decline_reason: Optional[str] = None
     ts: datetime
 

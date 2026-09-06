@@ -16,11 +16,16 @@ const ACCOUNTS: AccountSummary[] = [
   },
 ];
 
+function mockTransactionsFetch() {
+  return vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ items: [], next_cursor: null }), { status: 200 }),
+  );
+}
+
 function renderScreen() {
   return render(
     <AccountsAndTransactions
       accounts={ACCOUNTS}
-      transactionsByAccount={{}}
       asOf="just now"
       selectedAccountNumber="1111222233334444"
       onSelectAccount={() => {}}
@@ -30,6 +35,10 @@ function renderScreen() {
 }
 
 describe("AccountsAndTransactions — account detail visibility", () => {
+  beforeEach(() => {
+    mockTransactionsFetch();
+  });
+
   afterEach(() => {
     window.localStorage.clear();
     vi.restoreAllMocks();
@@ -102,6 +111,7 @@ describe("AccountsAndTransactions — copy account number", () => {
   beforeEach(() => {
     writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
+    mockTransactionsFetch();
   });
 
   afterEach(() => {
@@ -131,7 +141,6 @@ describe("AccountsAndTransactions — copy account number", () => {
     render(
       <AccountsAndTransactions
         accounts={ACCOUNTS}
-        transactionsByAccount={{}}
         asOf="just now"
         selectedAccountNumber="1111222233334444"
         onSelectAccount={onSelectAccount}

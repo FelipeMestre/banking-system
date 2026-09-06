@@ -55,6 +55,48 @@ describe("HomeDashboard", () => {
     await waitFor(() => expect(screen.getByText("9999999999999999")).toBeInTheDocument());
   });
 
+  it("shows the second account's own transactions after selecting it, not the first's", async () => {
+    const TRANSACTIONS_BY_ACCOUNT: Record<string, unknown> = {
+      "1111111111111111": {
+        items: [{
+          id: "t1", request_id: "r1", type: "credit", amount: 96000,
+          counterparty_account: "9999999999999999", decline_reason: null, ts: "2026-01-01T00:00:00Z",
+        }],
+        next_cursor: null,
+      },
+      "2222222222222222": {
+        items: [{
+          id: "t2", request_id: "r2", type: "debit", amount: 5000,
+          counterparty_account: "8888888888888888", decline_reason: null, ts: "2026-01-02T00:00:00Z",
+        }],
+        next_cursor: null,
+      },
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      const match = url.match(/\/accounts\/(\d+)\/transactions/);
+      if (match) {
+        const page = TRANSACTIONS_BY_ACCOUNT[match[1]!];
+        return new Response(JSON.stringify(page), { status: 200 });
+      }
+      if (url.includes("/accounts")) {
+        return new Response(JSON.stringify(ACCOUNTS_PAGE), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    render(<HomeDashboard />);
+
+    await waitFor(() => expect(screen.getByText("9999999999999999")).toBeInTheDocument());
+
+    const secondAccountCell = screen.getByText("EUR account").closest('[role="button"]');
+    expect(secondAccountCell).not.toBeNull();
+    fireEvent.click(secondAccountCell!);
+
+    await waitFor(() => expect(screen.getByText("8888888888888888")).toBeInTheDocument());
+    expect(screen.queryByText("9999999999999999")).not.toBeInTheDocument();
+  });
+
   it("shows the empty-accounts state without an error when the customer has no accounts", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 }), { status: 200 }),

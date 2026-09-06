@@ -13,6 +13,7 @@ const TYPE_LABEL: Record<Transaction["type"], string> = {
   debit: "Debit",
   credit: "Credit",
   declined: "Declined",
+  deposit: "Deposit",
 };
 
 /**
@@ -59,7 +60,7 @@ export function TransactionsList({ transactions, currencyCode }: Props) {
                   ) : null}
                 </TableCell>
                 <TableCell className="font-mono text-xs whitespace-normal break-all">
-                  {row.counterparty_account}
+                  {row.counterparty_account ?? "—"}
                 </TableCell>
                 <TableCell className="text-right text-sm font-semibold">
                   {formatCents(row.amount, symbol)}

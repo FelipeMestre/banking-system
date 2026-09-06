@@ -14,11 +14,9 @@ import {
   totalPositionByCurrency,
   type Account,
 } from "@/features/accounts";
-import { getTransactions, type Transaction } from "@/features/transactions";
 import { ApiError } from "@/lib/api/client";
 
 const ACCOUNTS_PAGE_SIZE = 50;
-const TRANSACTIONS_PAGE_SIZE = 20;
 
 type State =
   | { kind: "loading" }
@@ -37,7 +35,6 @@ type State =
 export function HomeDashboard() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selectedAccountNumber, setSelectedAccountNumber] = useState<string | null>(null);
-  const [transactionsByAccount, setTransactionsByAccount] = useState<Record<string, Transaction[]>>({});
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
 
   const refetchAccounts = useCallback(() => {
@@ -68,32 +65,6 @@ export function HomeDashboard() {
   }, []);
 
   useEffect(() => refetchAccounts(), [refetchAccounts]);
-
-  useEffect(() => {
-    if (!selectedAccountNumber || selectedAccountNumber in transactionsByAccount) {
-      return;
-    }
-    let cancelled = false;
-
-    getTransactions(selectedAccountNumber, { limit: TRANSACTIONS_PAGE_SIZE })
-      .then((page) => {
-        if (!cancelled) {
-          setTransactionsByAccount((current) => ({ ...current, [selectedAccountNumber]: page.items }));
-        }
-      })
-      .catch(() => {
-        // No error surfaced for normal replication lag / a transient failure
-        // here — the transactions section just keeps its empty state.
-        if (!cancelled) {
-          setTransactionsByAccount((current) => ({ ...current, [selectedAccountNumber]: [] }));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- transactionsByAccount is a cache, not a trigger
-  }, [selectedAccountNumber]);
 
   if (state.kind === "loading") {
     return <LoadingScreen message="Loading your accounts securely" fullScreen={false} showBranding={false} />;
@@ -137,7 +108,6 @@ export function HomeDashboard() {
   return (
     <AccountsAndTransactions
       accounts={accountSummaries}
-      transactionsByAccount={transactionsByAccount}
       asOf="just now"
       selectedAccountNumber={selectedAccountNumber ?? accounts[0]?.account_number ?? ""}
       onSelectAccount={setSelectedAccountNumber}
