@@ -44,3 +44,25 @@ export interface PurchaseStatus {
   reason?: string;
   ts?: string;
 }
+
+/**
+ * `POST /admin/batch/monthly-close` result (`MonthlyCloseRunResultDTO`,
+ * openbankapi/api/v1/dtos/batch_dto.py). Manually runs the same
+ * `check_and_close_if_due` the hourly `batch-worker` cron calls, using the
+ * gateway's real current date — never a date the frontend supplies.
+ */
+export interface MonthlyCloseRunResult {
+  closed_count: number;
+  statement_ids: string[];
+  card_account_ids: string[];
+}
+
+/**
+ * `POST /admin/batch/due-date-check` result (`DueDateCheckRunResultDTO`,
+ * openbankapi/api/v1/dtos/batch_dto.py). Manually runs the same
+ * `StatementService.run_due_date_check` the hourly `batch-worker` cron calls.
+ */
+export interface DueDateCheckRunResult {
+  finalized_count: number;
+  late_fees_applied_count: number;
+}
