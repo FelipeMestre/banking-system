@@ -10,6 +10,7 @@ from .card_repository import ICardRepository
 from .card_movement_repository import ICardMovementRepository
 from .installment_repository import IInstallmentRepository
 from .statement_repository import IStatementRepository
+from .deposit_repository import IDepositRepository
 
 __all__ = [
     "ICustomerRepository",
@@ -24,6 +25,7 @@ __all__ = [
     "ICardMovementRepository",
     "IInstallmentRepository",
     "IStatementRepository",
+    "IDepositRepository",
     "Page",
     "DEFAULT_LIMIT",
     "MAX_LIMIT",

@@ -169,6 +169,31 @@ class TransactionORM(Base):
     )
 
 
+class DepositORM(Base):
+    """Audit row linking a `transactions` deposit movement to the admin who created it.
+
+    One row per `transactions` row of `type='deposit'`, enforced by
+    `UNIQUE(movement_id)`. No columns are added to `transactions` itself
+    (spec §6, audit separation) — the join is via FK `movement_id → transactions.id`.
+    """
+
+    __tablename__ = "deposits"
+    __table_args__ = (
+        UniqueConstraint("movement_id", name="deposits_movement_id_key"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    movement_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    admin_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[dt.datetime] = _created()
+
+
 class CardAccountORM(Base):
     """The credit-card line: a customer's parent aggregate for `cards` (Phase 1)."""
 
