@@ -37,7 +37,11 @@ LEG_CREDIT_DESTINATION = "credit:destination"
 LEG_CREDIT_FEES = "credit:fees"
 LEG_CREDIT_SEED = "credit:seed"
 LEG_PAYMENT = "payment"
+LEG_DEPOSIT = "deposit"
 CHEAT_ACCOUNT = "cheatAccount"
+
+DEPOSIT = "deposit"
+DEPOSIT_CONFIRMED = "deposit_confirmed"
 
 
 def dedup_key(request_id: str, leg: str) -> str:
@@ -113,6 +117,8 @@ def decide(account: str, event: Dict[str, Any], state: LedgerState, now: str) ->
     """Decide what happens to `account` when `event` arrives. Pure."""
     event_type = event.get("type")
 
+    if event_type == DEPOSIT:
+        return _on_deposit(account, event, state, now)
     if event_type == TRANSFER_REQUESTED:
         return _on_transfer_requested(account, event, state, now)
     if event_type == INCOMING_PAYMENT:
@@ -366,6 +372,59 @@ def _status(
     }
     if reason:
         payload["reason"] = reason
+    return payload
+
+
+def _on_deposit(
+    account: str, event: Dict[str, Any], state: LedgerState, now: str
+) -> Decision:
+    request_id = event["request_id"]
+    key = dedup_key(request_id, LEG_DEPOSIT)
+    if state.is_processed(key):
+        return Decision.noop()
+    amount_applied = event["amount_applied"]
+    credited = (state.balance or 0) + amount_applied
+    return Decision(
+        new_balance=credited,
+        dedup_keys=(key,),
+        account_events=(_deposit_confirmed(event, amount_applied, now),),
+        status_events=(_deposit_status(event, credited, amount_applied, now),),
+        balance_events=(_balance_updated(account, credited, now),),
+    )
+
+
+def _deposit_confirmed(event: Dict[str, Any], amount_applied: int, now: str) -> Dict[str, Any]:
+    payload = {
+        "type": DEPOSIT_CONFIRMED,
+        "request_id": event["request_id"],
+        "account_id": event["account_id"],
+        "amount": amount_applied,
+        "currency": event["currency"],
+        "leg": LEG_DEPOSIT,
+        "ts": now,
+    }
+    # Preserve audit fields for downstream TransactionConsumer
+    if "admin_id" in event:
+        payload["admin_id"] = event["admin_id"]
+    if "reason" in event and event["reason"] is not None:
+        payload["reason"] = event["reason"]
+    applied_rate = event.get("applied_rate")
+    if applied_rate is not None:
+        payload["applied_rate"] = applied_rate
+    return payload
+
+
+def _deposit_status(event: Dict[str, Any], new_balance: int, amount_applied: int, now: str) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "request_id": event["request_id"],
+        "status": STATUS_APPROVED,
+        "new_balance": new_balance,
+        "amount_applied": amount_applied,
+        "ts": now,
+    }
+    applied_rate = event.get("applied_rate")
+    if applied_rate is not None:
+        payload["applied_rate"] = applied_rate
     return payload
 
 

@@ -58,6 +58,7 @@ ACCOUNT_BALANCES_TOPIC = os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances")
 # (spec: kafka-topics, account-service-payment-handling).
 CARD_EVENTS_TOPIC = os.getenv("CARD_EVENTS_TOPIC", "card-events")
 CARD_PAYMENT_STATUS_TOPIC = os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status")
+DEPOSIT_STATUS_TOPIC = os.getenv("DEPOSIT_STATUS_TOPIC", "deposit-status")
 CONSUMER_GROUP = os.getenv("ACCOUNT_SERVICE_GROUP_ID", "account-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -81,6 +82,7 @@ BALANCES_TAG = OutputTag("balance-events", RECORD_TYPE)
 # existing pattern exactly.
 CARD_TAG = OutputTag("card-events", RECORD_TYPE)
 CARD_STATUS_TAG = OutputTag("card-payment-status-events", RECORD_TYPE)
+DEPOSIT_STATUS_TAG = OutputTag("deposit-status-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -158,7 +160,11 @@ class AccountProcessor(KeyedProcessFunction):
         for produced in decision.account_events:
             yield Row(shard_key_of(produced), json.dumps(produced))
         for status in decision.status_events:
-            yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
+            # Deposit statuses carry new_balance; route them to deposit-status topic
+            if "new_balance" in status:
+                yield DEPOSIT_STATUS_TAG, Row(status["request_id"], json.dumps(status))
+            else:
+                yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
         for balance in decision.balance_events:
             yield BALANCES_TAG, Row(balance["account_id"], json.dumps(balance))
         for card_event in decision.card_events:
@@ -247,6 +253,9 @@ def build_job():
     processed.get_side_output(CARD_STATUS_TAG).sink_to(
         _kafka_sink(CARD_PAYMENT_STATUS_TOPIC)
     ).name("card-payment-status-sink")
+    processed.get_side_output(DEPOSIT_STATUS_TAG).sink_to(
+        _kafka_sink(DEPOSIT_STATUS_TOPIC)
+    ).name("deposit-status-sink")
 
     env.execute(JOB_NAME)
 
