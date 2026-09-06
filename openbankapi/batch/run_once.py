@@ -32,6 +32,7 @@ from ..infra.database.interfaces.card_account_repository import ICardAccountRepo
 from ..infra.database.interfaces.statement_repository import IStatementRepository
 from ..infra.database.repositories.postgres_card_account_repository import PostgresCardAccountRepository
 from ..infra.database.repositories.postgres_card_movement_repository import PostgresCardMovementRepository
+from ..infra.database.repositories.postgres_card_repository import PostgresCardRepository
 from ..infra.database.repositories.postgres_installment_repository import PostgresInstallmentRepository
 from ..infra.database.repositories.postgres_statement_repository import PostgresStatementRepository
 
@@ -114,8 +115,9 @@ def _build_service(session: AsyncSession, settings: Settings) -> tuple[Statement
     card_movements = PostgresCardMovementRepository(session)
     installments = PostgresInstallmentRepository(session)
     card_accounts = PostgresCardAccountRepository(session)
+    cards = PostgresCardRepository(session)
     service = StatementService(
-        statements, card_movements, installments,
+        statements, card_movements, installments, cards,
         credit_card_apr=settings.credit_card_apr,
         late_fee_amount=settings.late_fee_amount,
         minimum_payment_rate=settings.minimum_payment_rate,

@@ -31,7 +31,7 @@ def _service(cards=None, card_accounts=None, movements=None, installments=None, 
     movements = movements or FakeCardMovementRepository(cards=cards, installments=installments)
     statements = statements or FakeStatementRepository()
     service = StatementService(
-        statements, movements, installments,
+        statements, movements, installments, cards,
         credit_card_apr=APR, late_fee_amount=LATE_FEE_AMOUNT,
         minimum_payment_rate=MIN_PAYMENT_RATE, due_date_offset_days=DUE_OFFSET,
     )
@@ -256,6 +256,35 @@ def test_late_fee_capped_at_minimum_payment():
     late_fee_movements = asyncio.run(scenario())
     assert len(late_fee_movements) == 1
     assert late_fee_movements[0].amount == Decimal("5.00")
+
+
+def test_late_fee_inserted_when_card_has_no_prior_movements():
+    async def scenario():
+        service, cards, card_accounts, movements, installments, statements = _service()
+        account, card = await _new_account_with_card(cards, card_accounts)
+        now = datetime.now(timezone.utc)
+
+        # A due, unpaid statement on a card that has never had a single
+        # CardMovement — e.g. a freshly issued card that missed a payment
+        # before ever making a purchase. `_first_card_for` must resolve the
+        # card via `ICardRepository.get_active_for_account`, not by
+        # inspecting movement history that doesn't exist yet.
+        assert await movements.get_by_card_account_id(account.id) == []
+        statement = await statements.create(
+            account.id, now.date() - timedelta(days=30), now.date(),
+            now.date() + timedelta(days=DUE_OFFSET),
+            purchases_total=Decimal("100.00"), interest_total=Decimal("0.00"),
+            total_due=Decimal("100.00"), credit_balance=Decimal("0.00"),
+            late_fees_total=Decimal("0.00"), minimum_payment=Decimal("20.00"),
+        )
+
+        await service.run_due_date_check(statement.due_date)
+        late_fee_movements = [m for m in movements.rows if m.movement_type == CardMovementType.LATE_FEE]
+        return late_fee_movements
+
+    late_fee_movements = asyncio.run(scenario())
+    assert len(late_fee_movements) == 1
+    assert late_fee_movements[0].amount == Decimal("20.00")
 
 
 def test_run_due_date_check_finalizes_once_no_double_late_fee():

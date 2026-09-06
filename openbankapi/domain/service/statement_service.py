@@ -22,6 +22,7 @@ from uuid import UUID
 
 from ..model import CardMovementType, Installment, Statement
 from ...infra.database.interfaces.card_movement_repository import ICardMovementRepository
+from ...infra.database.interfaces.card_repository import ICardRepository
 from ...infra.database.interfaces.installment_repository import IInstallmentRepository
 from ...infra.database.interfaces.statement_repository import IStatementRepository
 from ...infra.pdf.statement_pdf_generator import render as render_statement_pdf
@@ -59,6 +60,7 @@ class StatementService:
         statement_repository: IStatementRepository,
         card_movement_repository: ICardMovementRepository,
         installment_repository: IInstallmentRepository,
+        card_repository: ICardRepository,
         *,
         credit_card_apr: Decimal,
         late_fee_amount: Decimal,
@@ -68,6 +70,7 @@ class StatementService:
         self._statements = statement_repository
         self._card_movements = card_movement_repository
         self._installments = installment_repository
+        self._cards = card_repository
         self._apr = credit_card_apr
         self._late_fee_amount = late_fee_amount
         self._minimum_payment_rate = minimum_payment_rate
@@ -192,6 +195,6 @@ class StatementService:
         )
         return True
 
-    async def _first_card_for(self, card_account_id: UUID):
-        movements = await self._card_movements.get_by_card_account_id(card_account_id)
-        return movements[0].card_id if movements else None
+    async def _first_card_for(self, card_account_id: UUID) -> Optional[UUID]:
+        card = await self._cards.get_active_for_account(card_account_id)
+        return card.id if card is not None else None

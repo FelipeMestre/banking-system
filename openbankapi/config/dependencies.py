@@ -367,9 +367,10 @@ def get_statement_service(
     statement_repository: StatementRepositoryDep,
     card_movement_repository: CardMovementRepositoryDep,
     installment_repository: InstallmentRepositoryDep,
+    card_repository: CardRepositoryDep,
 ) -> StatementService:
     return StatementService(
-        statement_repository, card_movement_repository, installment_repository,
+        statement_repository, card_movement_repository, installment_repository, card_repository,
         credit_card_apr=settings.credit_card_apr,
         late_fee_amount=settings.late_fee_amount,
         minimum_payment_rate=settings.minimum_payment_rate,
