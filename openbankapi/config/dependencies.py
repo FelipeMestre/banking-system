@@ -127,6 +127,15 @@ def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
 CardPaymentStatusRegistryDep = Annotated[StatusRegistry, Depends(get_card_payment_status_registry)]
 
 
+def get_deposit_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A FOURTH separate instance: `request_id` is only unique within its own
+    # domain's Kafka topic.
+    return conn.app.state.deposit_status_registry
+
+
+DepositStatusRegistryDep = Annotated[StatusRegistry, Depends(get_deposit_status_registry)]
+
+
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
     return conn.app.state.foreign_exchange_cache_service
 
