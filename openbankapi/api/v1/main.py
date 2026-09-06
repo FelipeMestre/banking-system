@@ -5,6 +5,7 @@ from openbankapi.api.v1.routers import (
     batch_router,
     customer_router,
     account_router,
+    deposit_router,
     location_router,
     branch_router,
     transfer_router,
@@ -27,4 +28,5 @@ api_router.include_router(card_account_router.router)
 api_router.include_router(card_router.router)
 api_router.include_router(purchase_status_router.router)
 api_router.include_router(card_payment_status_router.router)
+api_router.include_router(deposit_router.router)
 api_router.include_router(batch_router.router)

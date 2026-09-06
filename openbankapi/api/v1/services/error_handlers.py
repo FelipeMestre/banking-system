@@ -92,9 +92,15 @@ def install(app: FastAPI) -> None:
     async def _validation(_: Request, error: RequestValidationError):
         # Strip `input`: pydantic echoes the rejected value back, which would
         # put a date_of_birth in an HTTP response body (spec §3.4).
-        details = [
-            {k: v for k, v in item.items() if k != "input"} for item in error.errors()
-        ]
+        details = []
+        for item in error.errors():
+            filtered = {k: v for k, v in item.items() if k != "input"}
+            if "ctx" in filtered and isinstance(filtered["ctx"], dict):
+                ctx = dict(filtered["ctx"])
+                if "error" in ctx and isinstance(ctx["error"], Exception):
+                    ctx["error"] = str(ctx["error"])
+                filtered["ctx"] = ctx
+            details.append(filtered)
         return JSONResponse(
             status_code=422,
             content=error_body("ValidationError", "request validation failed", details),
