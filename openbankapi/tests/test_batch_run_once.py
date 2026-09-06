@@ -55,7 +55,7 @@ def _wiring():
     movements = FakeCardMovementRepository(cards=cards, installments=installments)
     statements = FakeStatementRepository()
     service = StatementService(
-        statements, movements, installments,
+        statements, movements, installments, cards,
         credit_card_apr=APR, late_fee_amount=LATE_FEE_AMOUNT,
         minimum_payment_rate=MIN_PAYMENT_RATE, due_date_offset_days=DUE_OFFSET,
     )
