@@ -25,7 +25,13 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: Account[]; total: number };
 
-export function AccountsList({ scope = "mine" }: { scope?: "mine" | "all" }) {
+interface Props {
+  scope?: "mine" | "all";
+  /** Bump this (e.g. after a deposit) to force a refetch at the current page. */
+  refreshToken?: number;
+}
+
+export function AccountsList({ scope = "mine", refreshToken }: Props = {}) {
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -50,7 +56,7 @@ export function AccountsList({ scope = "mine" }: { scope?: "mine" | "all" }) {
     return () => {
       cancelled = true;
     };
-  }, [offset, scope]);
+  }, [offset, scope, refreshToken]);
 
   if (state.kind === "loading") {
     return <LoadingScreen message="Loading accounts…" fullScreen={false} showBranding={false} />;

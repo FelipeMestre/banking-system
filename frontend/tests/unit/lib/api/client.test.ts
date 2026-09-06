@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, authorizedFetch, setAccessTokenGetter, toWebSocketUrl } from "../../../../lib/api/client";
+import {
+  ApiError,
+  authorizedFetch,
+  describeFailure,
+  setAccessTokenGetter,
+  toWebSocketUrl,
+} from "../../../../lib/api/client";
 
 describe("toWebSocketUrl", () => {
   it("maps http to ws and https to wss", () => {
@@ -46,5 +52,50 @@ describe("authorizedFetch", () => {
     const [, init] = fetchSpy.mock.calls[0]!;
     const headers = new Headers(init?.headers);
     expect(headers.has("Authorization")).toBe(false);
+  });
+});
+
+describe("describeFailure", () => {
+  it("surfaces a plain FastAPI HTTPException detail on 404", async () => {
+    const response = new Response(JSON.stringify({ detail: "account not found" }), { status: 404 });
+    expect(await describeFailure(response)).toBe("account not found");
+  });
+
+  it("surfaces a plain FastAPI HTTPException detail on 504", async () => {
+    const response = new Response(
+      JSON.stringify({ detail: "deposit confirmation timeout" }),
+      { status: 504 },
+    );
+    expect(await describeFailure(response)).toBe("deposit confirmation timeout");
+  });
+
+  it("prefers the domain error envelope over a detail field when both are present", async () => {
+    const response = new Response(
+      JSON.stringify({ error: { message: "domain message" }, detail: "should be ignored" }),
+      { status: 404 },
+    );
+    expect(await describeFailure(response)).toBe("domain message");
+  });
+
+  it("keeps 401 forced-generic even when a detail field is present", async () => {
+    const response = new Response(JSON.stringify({ detail: "should not surface" }), { status: 401 });
+    expect(await describeFailure(response)).toBe("Not authenticated. Please log in again.");
+  });
+
+  it("keeps 403 forced-generic even when a detail field is present", async () => {
+    const response = new Response(JSON.stringify({ detail: "should not surface" }), { status: 403 });
+    expect(await describeFailure(response)).toBe("You do not have permission to perform this action.");
+  });
+
+  it("falls back to the generic gateway message when there is no detail or error", async () => {
+    const response = new Response(JSON.stringify({}), { status: 500 });
+    expect(await describeFailure(response)).toMatch(/The gateway answered 500/);
+  });
+
+  it("422 stays generic even when a detail field is present (unchanged behavior)", async () => {
+    const response = new Response(JSON.stringify({ detail: "some validation detail" }), { status: 422 });
+    expect(await describeFailure(response)).toBe(
+      "The gateway rejected those values. Check the accounts and amount.",
+    );
   });
 });

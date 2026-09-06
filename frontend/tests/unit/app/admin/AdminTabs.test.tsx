@@ -2,11 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/features/accounts", () => ({
-  AccountsList: (props: { scope?: string }) => (
-    <div data-testid="accounts-list" data-scope={props.scope}>
-      Accounts
-    </div>
-  ),
+  AccountsPanel: () => <div data-testid="accounts-panel">Accounts</div>,
 }));
 vi.mock("@/features/branches", () => ({
   BranchesPanel: () => <div data-testid="branches-panel">Branches</div>,
@@ -63,23 +59,7 @@ describe("AdminTabs", () => {
     render(<AdminTabs />);
 
     expect(screen.getByRole("tablist")).toBeInTheDocument();
-    expect(screen.getByTestId("accounts-list")).toBeInTheDocument();
-  });
-
-  it("wires the Accounts tab to the cross-customer scope", () => {
-    mockedUsePermissions.mockReturnValue({
-      hasReadAdmin: true,
-      hasWriteAdmin: false,
-      hasPermission: vi.fn().mockImplementation((p: string) => p === "read:admin"),
-      permissions: ["read:admin"],
-      claims: { permissions: ["read:admin"] },
-      isLoading: false,
-      isAuthenticated: true,
-    } as unknown as ReturnType<typeof usePermissions>);
-
-    render(<AdminTabs />);
-
-    expect(screen.getByTestId("accounts-list")).toHaveAttribute("data-scope", "all");
+    expect(screen.getByTestId("accounts-panel")).toBeInTheDocument();
   });
 
   it("shows tabs when write:admin present", () => {
@@ -96,7 +76,7 @@ describe("AdminTabs", () => {
     render(<AdminTabs />);
 
     expect(screen.getByRole("tablist")).toBeInTheDocument();
-    expect(screen.getByTestId("accounts-list")).toBeInTheDocument();
+    expect(screen.getByTestId("accounts-panel")).toBeInTheDocument();
   });
 
   it("shows Empty when no data — handled via shadcn Empty (smoke)", () => {

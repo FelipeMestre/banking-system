@@ -57,6 +57,18 @@ export async function describeFailure(response: Response): Promise<string> {
   if (response.status === 403) {
     return "You do not have permission to perform this action.";
   }
+  // Plain FastAPI `HTTPException(detail="...")` responses (e.g. the deposits
+  // router's 404/504) don't use the app's `{"error":{"message":...}}`
+  // envelope — surface that detail before falling back to a generic message.
+  try {
+    const body = await response.clone().json();
+    const detail = body?.detail;
+    if (typeof detail === "string" && detail.length > 0) {
+      return detail;
+    }
+  } catch {
+    // Not JSON, or no body at all — fall through to the generic message.
+  }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
 }
 

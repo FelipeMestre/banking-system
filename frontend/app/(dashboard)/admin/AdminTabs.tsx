@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AccountsList } from "@/features/accounts";
+import { AccountsPanel } from "@/features/accounts";
 import { BranchesPanel } from "@/features/branches";
 import { CustomersPanel } from "@/features/customers";
 import { LocationsPanel } from "@/features/locations";
@@ -13,7 +13,7 @@ const TABS = ["Accounts", "Customers", "Branches", "Locations"] as const;
 type Tab = (typeof TABS)[number];
 
 const PANELS: Record<Tab, React.ComponentType> = {
-  Accounts: AccountsList,
+  Accounts: AccountsPanel,
   Branches: BranchesPanel,
   Customers: CustomersPanel,
   Locations: LocationsPanel,
@@ -52,7 +52,7 @@ export function AdminTabs() {
         const Panel = PANELS[tab];
         return (
           <TabsContent key={tab} value={tab}>
-            {tab === "Accounts" ? <AccountsList scope="all" /> : <Panel />}
+            <Panel />
           </TabsContent>
         );
       })}

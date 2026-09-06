@@ -1,4 +1,5 @@
 export { AccountsList } from "./components/AccountsList";
+export { AccountsPanel } from "./components/AccountsPanel";
 export { NoAccountsEmptyState } from "./components/NoAccountsEmptyState";
 export { CreateAccountDialog } from "./components/CreateAccountDialog";
 export { getAccounts, getAllAccounts } from "./api/get-accounts";
