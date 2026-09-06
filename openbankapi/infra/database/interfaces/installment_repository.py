@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import List, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -18,6 +19,25 @@ class IInstallmentRepository(Protocol):
         ...
 
     async def get_by_movement_id(self, movement_id: UUID) -> List[Installment]: ...
+
+    async def get_by_statement_id(self, statement_id: UUID) -> List[Installment]:
+        """Every installment billed onto this exact statement — the inverse
+        of `mark_billed` (Credit Cards `credit-card-monthly-batch-statements`
+        frontend page). Powers the cycle-scoped movements list and the real
+        statement PDF download: both need to know exactly which installments
+        this specific closed cycle billed, not just the lowest-unbilled one
+        `get_next_due_per_plan` returns."""
+        ...
+
+    async def sum_unbilled(self, card_account_id: UUID) -> Decimal:
+        """Sum of `amount` across every installment for this account's cards
+        with `statement_id IS NULL` — every remaining installment balance
+        across every plan, not just the next-due one per plan. This is a
+        plain aggregate over already-known, unambiguous state (unlike an
+        "early payoff" figure that would need to guess at unearned-interest
+        or fee waivers, which nothing in this domain computes) — safe to
+        expose as the "settle all installment balances early" amount."""
+        ...
 
     async def get_next_due_per_plan(self, card_account_id: UUID) -> List[Installment]:
         """Lowest unbilled `installment_number` per plan (`card_movement_id`)

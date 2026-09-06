@@ -1,6 +1,7 @@
 """Postgres implementation of `IInstallmentRepository` (Credit Cards Phase 2)."""
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import List
 from uuid import UUID
 
@@ -51,6 +52,26 @@ class PostgresInstallmentRepository(PostgresRepository):
             .order_by(InstallmentORM.installment_number.asc())
         )
         return [_to_domain(row) for row in result.scalars().all()]
+
+    async def get_by_statement_id(self, statement_id: UUID) -> List[Installment]:
+        result = await self._session.execute(
+            select(InstallmentORM)
+            .where(InstallmentORM.statement_id == statement_id)
+            .order_by(InstallmentORM.installment_number.asc())
+        )
+        return [_to_domain(row) for row in result.scalars().all()]
+
+    async def sum_unbilled(self, card_account_id: UUID) -> Decimal:
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(InstallmentORM.amount), 0))
+            .join(CardMovementORM, InstallmentORM.card_movement_id == CardMovementORM.id)
+            .join(CardORM, CardMovementORM.card_id == CardORM.id)
+            .where(
+                CardORM.card_account_id == card_account_id,
+                InstallmentORM.statement_id.is_(None),
+            )
+        )
+        return Decimal(result.scalar_one())
 
     async def get_next_due_per_plan(self, card_account_id: UUID) -> List[Installment]:
         result = await self._session.execute(

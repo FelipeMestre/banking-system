@@ -31,6 +31,17 @@ describe("getMovements", () => {
     expect(requestedUrl).toContain("limit=20");
   });
 
+  it("includes statement_id when scoping to one billing cycle", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify(PAGE_BODY), { status: 200 }));
+
+    await getMovements({ cardAccountId: "ca-1", limit: 20, offset: 0, statementId: "st-1" });
+
+    const requestedUrl = fetchSpy.mock.calls[0]?.[0] as string;
+    expect(requestedUrl).toContain("statement_id=st-1");
+  });
+
   it("throws an ApiError carrying the response status on a 404", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "not found" } }), { status: 404 }),

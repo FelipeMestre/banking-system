@@ -9,13 +9,44 @@ describe("PayDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers only a free-form amount field — no preset payment options", () => {
+  it("offers only a free-form amount field when no presets are supplied", () => {
     render(<PayDialog cardAccountId="ca-1" onClose={vi.fn()} />);
 
     expect(screen.getByLabelText("Amount")).toBeInTheDocument();
-    expect(screen.queryByText(/minimum payment/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/full payoff/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/pay off installments/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pay minimum/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pay in full/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/settle installments early/i)).not.toBeInTheDocument();
+  });
+
+  it("shows quick-select presets and fills the amount field when clicked (credit-card-monthly-batch-statements)", () => {
+    render(
+      <PayDialog
+        cardAccountId="ca-1"
+        onClose={vi.fn()}
+        presets={{ minimum: "15.00", full: "120.00", installmentPayoff: "300.00" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay minimum/ }));
+    expect(screen.getByLabelText("Amount")).toHaveValue("15.00");
+
+    fireEvent.click(screen.getByRole("button", { name: /Settle installments early/ }));
+    expect(screen.getByLabelText("Amount")).toHaveValue("300.00");
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay in full/ }));
+    expect(screen.getByLabelText("Amount")).toHaveValue("120.00");
+  });
+
+  it("hides the settle-installments preset when the payoff amount is zero", () => {
+    render(
+      <PayDialog
+        cardAccountId="ca-1"
+        onClose={vi.fn()}
+        presets={{ minimum: "15.00", full: "120.00", installmentPayoff: "0.00" }}
+      />,
+    );
+
+    expect(screen.queryByText(/settle installments early/i)).not.toBeInTheDocument();
   });
 
   it("blocks submit until a valid amount is entered", () => {

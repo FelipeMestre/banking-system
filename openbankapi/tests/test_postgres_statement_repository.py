@@ -79,3 +79,39 @@ def test_statement_repository_full_round_trip(fx_test_dsn):
     assert pending_after == []
     assert finalized.paid_in_full is True
     assert finalized.status.value == "paid"
+
+
+async def _exercise_get_by_id_and_list(dsn: str):
+    async with rollback_session(dsn) as session:
+        account = await _seed_card_account(session)
+        repo = PostgresStatementRepository(session)
+
+        older = await repo.create(
+            account.id, date(2026, 6, 20), date(2026, 7, 20), date(2026, 8, 10),
+            purchases_total=Decimal("100.00"), interest_total=Decimal("0.00"),
+            total_due=Decimal("100.00"), credit_balance=Decimal("0.00"),
+            late_fees_total=Decimal("0.00"), minimum_payment=Decimal("10.00"),
+        )
+        newer = await repo.create(
+            account.id, date(2026, 7, 20), date(2026, 8, 20), date(2026, 9, 10),
+            purchases_total=Decimal("200.00"), interest_total=Decimal("0.00"),
+            total_due=Decimal("200.00"), credit_balance=Decimal("0.00"),
+            late_fees_total=Decimal("0.00"), minimum_payment=Decimal("20.00"),
+        )
+
+        found = await repo.get_by_id(older.id)
+        missing = await repo.get_by_id(uuid.uuid4())
+        listed = await repo.list_by_card_account_id(account.id, limit=10)
+        capped = await repo.list_by_card_account_id(account.id, limit=1)
+        return older, newer, found, missing, listed, capped
+
+
+def test_get_by_id_and_list_by_card_account_id_against_postgres(fx_test_dsn):
+    older, newer, found, missing, listed, capped = asyncio.run(
+        _exercise_get_by_id_and_list(fx_test_dsn)
+    )
+
+    assert found.id == older.id
+    assert missing is None
+    assert [row.id for row in listed] == [newer.id, older.id]
+    assert [row.id for row in capped] == [newer.id]

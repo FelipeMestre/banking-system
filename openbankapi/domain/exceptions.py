@@ -211,6 +211,17 @@ class CardAccountAccessForbiddenError(DomainError):
         super().__init__(f"card account {card_account_id} does not belong to this customer")
 
 
+class StatementNotFoundError(NotFoundError):
+    """No statement matches this id, or it belongs to a different card
+    account than the one in the URL (Credit Cards Phase 4 frontend page).
+    Deliberately not distinguished from "wrong account" -> 404, not 403 —
+    mirrors how a mismatched nested resource is treated elsewhere in this
+    router rather than leaking whether the id exists at all."""
+
+    def __init__(self, identifier: object):
+        super().__init__("statement", identifier)
+
+
 class DuplicateCardNumberError(DuplicateError):
     """A generated 16-digit card number collided. -> 409
 

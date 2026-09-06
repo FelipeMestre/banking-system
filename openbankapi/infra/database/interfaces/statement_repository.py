@@ -27,6 +27,23 @@ class IStatementRepository(Protocol):
         none exists yet (first-ever close for this account)."""
         ...
 
+    async def get_by_id(self, statement_id: UUID) -> Optional[Statement]:
+        """Single statement by id, or `None`. Used by the frontend PDF
+        download and cycle-scoped-movements endpoints (`credit-card-monthly-
+        batch-statements`) to resolve one specific billing cycle a customer
+        picked from `list_by_card_account_id`."""
+        ...
+
+    async def list_by_card_account_id(
+        self, card_account_id: UUID, limit: int
+    ) -> List[Statement]:
+        """Every closed billing cycle for this account, newest `period_end`
+        first, capped at `limit`. Powers the customer-facing billing-cycle
+        tab strip (`credit-card-monthly-batch-statements`) — unlike
+        `get_latest`, this is the full history, not just the most recent
+        one."""
+        ...
+
     async def create(
         self,
         card_account_id: UUID,

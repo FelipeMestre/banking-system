@@ -19,6 +19,7 @@ from openbankapi.config.dependencies import (
     get_customer_repository,
     get_installment_repository,
     get_location_repository,
+    get_statement_repository,
     get_transaction_repository,
 )
 from openbankapi.infra.kafka.status_registry import StatusRegistry
@@ -42,6 +43,7 @@ from .fakes import (
     FakePublisher,
     FakeBranchRepository,
     FakeCache,
+    FakeStatementRepository,
     FakeTransactionRepository,
     FakeForeignExchangeRepository,
 )
@@ -52,7 +54,7 @@ class Harness:
     def __init__(
         self, client, publisher, cache, registry, repos, settings,
         fx_cache_service=None, fx_repo=None, card_accounts=None, cards=None,
-        card_movements=None, installments=None, applied_rates=None,
+        card_movements=None, installments=None, applied_rates=None, statements=None,
     ):
         self.client = client
         self.publisher = publisher
@@ -67,6 +69,7 @@ class Harness:
         self.card_movements = card_movements
         self.installments = installments
         self.applied_rates = applied_rates
+        self.statements = statements
 
 
 def build(
@@ -84,6 +87,7 @@ def build(
     card_movements=None,
     installments=None,
     applied_rates=None,
+    statements=None,
 ) -> Harness:
     # lazy imports to avoid circular deps during app wiring
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import (
@@ -109,6 +113,7 @@ def build(
     card_movements = card_movements or FakeCardMovementRepository(cards=cards)
     installments = installments or FakeInstallmentRepository()
     applied_rates = applied_rates or FakeAppliedRateRepository()
+    statements = statements or FakeStatementRepository()
 
     try:
         app = create_app(
@@ -147,12 +152,13 @@ def build(
     app.dependency_overrides[get_card_movement_repository] = lambda: card_movements
     app.dependency_overrides[get_installment_repository] = lambda: installments
     app.dependency_overrides[get_applied_rate_repository] = lambda: applied_rates
+    app.dependency_overrides[get_statement_repository] = lambda: statements
     client = TestClient(app)
     # also attach for router tests that use app.state directly
     app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
                    (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo,
-                   card_accounts, cards, card_movements, installments, applied_rates)
+                   card_accounts, cards, card_movements, installments, applied_rates, statements)
 
 
 @pytest.fixture
