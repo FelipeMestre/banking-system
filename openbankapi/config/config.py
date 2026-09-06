@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Tuple
 
 
@@ -40,6 +41,15 @@ class Settings:
     # accounts CHECK constraint, and this value is a Kafka partition key.
     fees_account: str = "0000000000000001"
     fee_flat_cents: int = 25
+
+    # --- Credit Cards Phase 4 (monthly batch) ---
+    # Runtime-tunable ops knobs, same category as `fee_flat_cents` — not
+    # structural business constants like `CARD_VALIDITY_YEARS`.
+    credit_card_apr: Decimal = Decimal("0.24")
+    late_fee_amount: Decimal = Decimal("35.00")
+    close_day: int = 20
+    due_date_offset_days: int = 20
+    minimum_payment_rate: Decimal = Decimal("0.02")
 
     # --- HTTP ---
     cors_allow_origins: Tuple[str, ...] = ("http://localhost:3000",)
@@ -80,6 +90,11 @@ class Settings:
             cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "300")),
             fees_account=os.getenv("FEES_ACCOUNT", "0000000000000001"),
             fee_flat_cents=int(os.getenv("FEE_FLAT_CENTS", "25")),
+            credit_card_apr=Decimal(os.getenv("CREDIT_CARD_APR", "0.24")),
+            late_fee_amount=Decimal(os.getenv("LATE_FEE_AMOUNT", "35.00")),
+            close_day=int(os.getenv("CLOSE_DAY", "20")),
+            due_date_offset_days=int(os.getenv("DUE_DATE_OFFSET_DAYS", "20")),
+            minimum_payment_rate=Decimal(os.getenv("MINIMUM_PAYMENT_RATE", "0.02")),
             cors_allow_origins=_tuple_from_env("CORS_ALLOW_ORIGINS", ("http://localhost:3000",)),
             websocket_timeout_seconds=float(os.getenv("WEBSOCKET_TIMEOUT_SECONDS", "30")),
             status_cache_size=int(os.getenv("STATUS_CACHE_SIZE", "10000")),

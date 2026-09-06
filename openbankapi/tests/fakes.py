@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -31,6 +32,8 @@ from openbankapi.domain.model import (
     Customer,
     Installment,
     Location,
+    Statement,
+    StatementStatus,
     Transaction,
     TransactionType,
 )
@@ -475,6 +478,17 @@ class FakeCardAccountRepository:
         self.rows[card_account_id] = updated
         return updated
 
+    async def list_active_ids(self) -> List[UUID]:
+        """Every card_account still billable — everything except CLOSED
+        (Credit Cards Phase 4 correction: a BLOCKED account still has an
+        outstanding balance and must keep getting statements; blocking only
+        affects Phase 2's purchase check, not this phase)."""
+        return [row.id for row in self.rows.values() if row.status is not CardAccountStatus.CLOSED]
+
+    async def get_issuance_date(self, card_account_id: UUID):
+        row = self.rows.get(card_account_id)
+        return row.created_at.date() if row is not None else None
+
 
 class FakeCardRepository:
     """In-memory double for ICardRepository (Credit Cards Phase 1)."""
@@ -569,10 +583,18 @@ class FakeCardMovementRepository:
     `card_account_id` column of its own, on Postgres or here).
     """
 
-    def __init__(self, cards: Optional["FakeCardRepository"] = None):
+    def __init__(
+        self,
+        cards: Optional["FakeCardRepository"] = None,
+        installments: Optional["FakeInstallmentRepository"] = None,
+    ):
         self.rows: List[CardMovement] = []
         self._seen: set = set()
         self.cards = cards
+        # Needed only by `sum_single_charge_purchases` to exclude
+        # installment-plan purchases — mirrors the real repository's
+        # `NOT EXISTS (SELECT 1 FROM installments WHERE card_movement_id = ...)`.
+        self.installments = installments
 
     async def insert(self, movement: CardMovement) -> CardMovement:
         key = (movement.request_id, movement.movement_type)
@@ -594,6 +616,54 @@ class FakeCardMovementRepository:
         matches = [row for row in self.rows if row.card_id in card_ids]
         return sorted(matches, key=lambda row: row.created_at, reverse=True)
 
+    def _card_ids_for(self, card_account_id: UUID) -> set:
+        if self.cards is None:
+            raise RuntimeError(
+                "FakeCardMovementRepository aggregation methods need a `cards` "
+                "reference — construct with FakeCardMovementRepository(cards=...)."
+            )
+        return {
+            card.id for card in self.cards.rows.values() if card.card_account_id == card_account_id
+        }
+
+    def _in_period(self, row: CardMovement, period_start, period_end) -> bool:
+        occurred = (row.occurred_at or row.created_at).date()
+        return period_start <= occurred <= period_end
+
+    async def sum_single_charge_purchases(
+        self, card_account_id: UUID, period_start, period_end
+    ) -> Decimal:
+        """Purchases NOT part of an installment plan — excludes any movement
+        whose id shows up as an `Installment.card_movement_id` anywhere."""
+        card_ids = self._card_ids_for(card_account_id)
+        installment_rows = self.installments.rows if self.installments is not None else []
+        installment_movement_ids = {inst.card_movement_id for inst in installment_rows}
+        total = Decimal("0")
+        for row in self.rows:
+            if (
+                row.card_id in card_ids
+                and row.movement_type == CardMovementType.PURCHASE
+                and row.id not in installment_movement_ids
+                and self._in_period(row, period_start, period_end)
+            ):
+                total += row.amount
+        return total
+
+    async def sum_by_type(self, card_account_id: UUID, movement_type: str, period_start, period_end) -> Decimal:
+        card_ids = self._card_ids_for(card_account_id)
+        total = Decimal("0")
+        for row in self.rows:
+            if (
+                row.card_id in card_ids
+                and row.movement_type.value == movement_type
+                and self._in_period(row, period_start, period_end)
+            ):
+                total += row.amount
+        return total
+
+    async def sum_payments(self, card_account_id: UUID, period_start, period_end) -> Decimal:
+        return await self.sum_by_type(card_account_id, CardMovementType.PAYMENT.value, period_start, period_end)
+
 
 class FakeInstallmentRepository:
     """In-memory double for `IInstallmentRepository` — Credit Cards Phase 2."""
@@ -606,3 +676,121 @@ class FakeInstallmentRepository:
 
     async def get_by_movement_id(self, movement_id: UUID) -> List[Installment]:
         return [row for row in self.rows if row.card_movement_id == movement_id]
+
+    async def get_next_due_per_plan(self, card_account_id: UUID, card_ids: Optional[set] = None) -> List[Installment]:
+        """Lowest unbilled `installment_number` per `card_movement_id`.
+
+        `card_ids` is accepted so a caller/test can scope the plan search to
+        one account's cards without the fake needing its own `cards`
+        reference — mirrors what the real repository does via the
+        `card_movements -> cards` join, done here by the caller supplying
+        the relevant card_movement ids instead.
+        """
+        unbilled = [row for row in self.rows if row.statement_id is None]
+        by_plan: Dict[UUID, List[Installment]] = {}
+        for row in unbilled:
+            by_plan.setdefault(row.card_movement_id, []).append(row)
+        result = []
+        for plan_rows in by_plan.values():
+            plan_rows.sort(key=lambda r: r.installment_number)
+            result.append(plan_rows[0])
+        return result
+
+    async def mark_billed(self, installment_id: UUID, statement_id: UUID) -> None:
+        for i, row in enumerate(self.rows):
+            if row.id == installment_id:
+                self.rows[i] = Installment(
+                    id=row.id, card_movement_id=row.card_movement_id,
+                    installment_number=row.installment_number, amount=row.amount,
+                    due_date=row.due_date, status=row.status, created_at=row.created_at,
+                    statement_id=statement_id,
+                )
+                return
+
+    async def get_total_installments(self, card_movement_id: UUID) -> int:
+        """`MAX(installment_number)` for this plan, derived over the FULL
+        row set (billed and unbilled alike) — matches the real repository's
+        `MAX()` semantics, not just the still-unbilled rows."""
+        numbers = [
+            row.installment_number
+            for row in self.rows
+            if row.card_movement_id == card_movement_id
+        ]
+        return max(numbers)
+
+
+class FakeStatementRepository:
+    """In-memory double for `IStatementRepository` — Credit Cards Phase 4.
+
+    Finalization tracking mirrors the real repository: `status` moves
+    `closed -> paid|overdue` once `finalize_due_date_outcome` runs, and
+    `list_with_due_date(..., outcome_not_finalized=True)` filters on
+    `status == closed` — the same trick that makes the double-finalize
+    scenario provable against the fake alone.
+    """
+
+    def __init__(self):
+        self.rows: Dict[UUID, Statement] = {}
+
+    async def exists_for_period(self, card_account_id: UUID, period_end) -> bool:
+        return any(
+            row.card_account_id == card_account_id and row.period_end == period_end
+            for row in self.rows.values()
+        )
+
+    async def get_latest(self, card_account_id: UUID) -> Optional[Statement]:
+        candidates = [row for row in self.rows.values() if row.card_account_id == card_account_id]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda row: row.period_end)
+
+    async def create(
+        self,
+        card_account_id: UUID,
+        period_start,
+        period_end,
+        due_date,
+        purchases_total: Decimal,
+        interest_total: Decimal,
+        total_due: Decimal,
+        credit_balance: Decimal,
+        late_fees_total: Decimal,
+        minimum_payment: Decimal,
+    ) -> Statement:
+        now = _now()
+        statement = Statement(
+            id=uuid.uuid4(), card_account_id=card_account_id,
+            period_start=period_start, period_end=period_end, due_date=due_date,
+            purchases_total=purchases_total, interest_total=interest_total,
+            total_due=total_due, paid_amount=Decimal("0"), credit_balance=credit_balance,
+            late_fees_total=late_fees_total, minimum_payment=minimum_payment,
+            paid_in_full=False, paid_by_due_date=False,
+            status=StatementStatus.CLOSED, created_at=now, updated_at=now,
+        )
+        self.rows[statement.id] = statement
+        return statement
+
+    async def list_with_due_date(self, due_date, outcome_not_finalized: bool) -> List[Statement]:
+        candidates = [row for row in self.rows.values() if row.due_date == due_date]
+        if outcome_not_finalized:
+            candidates = [row for row in candidates if row.status is StatementStatus.CLOSED]
+        return candidates
+
+    async def finalize_due_date_outcome(
+        self, statement_id: UUID, paid_amount: Decimal, paid_in_full: bool, paid_by_due_date: bool
+    ) -> None:
+        current = self.rows.get(statement_id)
+        if current is None:
+            return
+        new_status = StatementStatus.PAID if paid_in_full else StatementStatus.OVERDUE
+        self.rows[statement_id] = Statement(
+            id=current.id, card_account_id=current.card_account_id,
+            period_start=current.period_start, period_end=current.period_end,
+            due_date=current.due_date, purchases_total=current.purchases_total,
+            interest_total=current.interest_total, total_due=current.total_due,
+            paid_amount=paid_amount, credit_balance=current.credit_balance,
+            late_fees_total=current.late_fees_total, minimum_payment=current.minimum_payment,
+            paid_in_full=paid_in_full,
+            paid_by_due_date=paid_by_due_date, status=new_status,
+            created_at=current.created_at, updated_at=_now(),
+        )

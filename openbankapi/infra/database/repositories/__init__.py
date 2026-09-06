@@ -12,6 +12,7 @@ from .postgres_card_account_repository import PostgresCardAccountRepository
 from .postgres_card_repository import PostgresCardRepository, generate_card_number
 from .postgres_card_movement_repository import PostgresCardMovementRepository, PostgresCardMovementWriter
 from .postgres_installment_repository import PostgresInstallmentRepository, PostgresInstallmentWriter
+from .postgres_statement_repository import PostgresStatementRepository
 
 __all__ = [
     "PostgresCustomerRepository",
@@ -31,4 +32,5 @@ __all__ = [
     "PostgresCardMovementWriter",
     "PostgresInstallmentRepository",
     "PostgresInstallmentWriter",
+    "PostgresStatementRepository",
 ]

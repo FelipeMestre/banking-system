@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Optional
 from uuid import UUID
 
 
@@ -23,3 +24,6 @@ class Installment:
     due_date: date
     status: InstallmentStatus
     created_at: datetime
+    # Phase 4: set once this installment is billed onto a statement. `None`
+    # means "not yet billed" — this is what `get_next_due_per_plan` filters on.
+    statement_id: Optional[UUID] = None

@@ -12,3 +12,6 @@ httpx==0.28.1
 # unauthenticated/under-scoped requests. Bumps fastapi from 0.115.6: this
 # version needs >=0.115.11,<0.116.0.
 auth0-fastapi-api==1.0.0b5
+# Pure-Python PDF generation for statement export (Credit Cards Phase 4) — no
+# OS-level deps added to `python:3.12-slim` (weasyprint would need Pango/Cairo).
+reportlab==4.2.5
