@@ -84,6 +84,51 @@ def test_purchase_declined_becomes_a_declined_movement_with_a_reason():
     assert rows[0].decline_reason == "insufficient_credit"
 
 
+def _payment_applied(request_id: str, card_id: str = CARD_ID, amount_usd: int = 20000) -> bytes:
+    return json.dumps(
+        {
+            "type": "payment_applied",
+            "request_id": request_id,
+            "card_account_id": CARD_ACCOUNT_ID,
+            "card_id": card_id,
+            "amount_usd": amount_usd,
+            "ts": "2026-01-01T00:00:00Z",
+        }
+    ).encode()
+
+
+def test_payment_applied_becomes_a_payment_movement():
+    """RED for task 11 (Credit Cards Phase 3): `payment_applied` MUST insert a
+    `card_movements` row of `type='payment'` — already a valid CHECK value
+    since Phase 1's original migration (spec: card-movements-consumer)."""
+    async def scenario():
+        repo = FakeCardMovementRepository()
+        await _consumer(repo)._apply(_payment_applied(str(uuid.uuid4()), amount_usd=20000))
+        return repo.rows
+
+    rows = asyncio.run(scenario())
+    assert len(rows) == 1
+    assert rows[0].movement_type.value == "payment"
+    assert rows[0].amount == 200
+    assert rows[0].currency == "USD"
+    assert str(rows[0].card_id) == CARD_ID
+
+
+def test_payment_applied_movement_has_no_installment_or_applied_rate_linkage():
+    async def scenario():
+        movement_repo = FakeCardMovementRepository()
+        installment_repo = FakeInstallmentRepository()
+        applied_rate_repo = FakeAppliedRateRepository()
+        consumer = _consumer(movement_repo, installment_repo, applied_rate_repo)
+        await consumer._apply(_payment_applied(str(uuid.uuid4())))
+        return movement_repo.rows, installment_repo.rows, applied_rate_repo.rows
+
+    movement_rows, installment_rows, applied_rate_rows = asyncio.run(scenario())
+    assert movement_rows[0].applied_rate_id is None
+    assert installment_rows == []
+    assert applied_rate_rows == []
+
+
 def test_purchase_requested_is_never_dispatched():
     async def scenario():
         repo = FakeCardMovementRepository()

@@ -57,15 +57,34 @@ describe("Sidebar — Payments active", () => {
     expect(link.className).not.toContain("bg-accent");
   });
 
-  it("keeps Cards, Support, Settings as disabled buttons with opacity-45", () => {
+  it("keeps Support, Settings as disabled buttons with opacity-45", () => {
     mockPathname.mockReturnValue("/");
     render(<Sidebar />);
-    for (const title of ["Cards", "Support", "Settings"]) {
+    for (const title of ["Support", "Settings"]) {
       const btn = screen.getByTitle(title);
       expect(btn.tagName.toLowerCase()).toBe("button");
       expect(btn).toBeDisabled();
       expect(btn.className).toContain("opacity-45");
     }
+  });
+
+  it("renders Cards as an active Link to /cards, not a disabled button", () => {
+    mockPathname.mockReturnValue("/cards");
+    render(<Sidebar />);
+    const link = screen.getByTitle("Cards");
+    expect(link.tagName.toLowerCase()).toBe("a");
+    expect(link).toHaveAttribute("href", "/cards");
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link.className).toContain("bg-accent");
+  });
+
+  it("renders Cards without active styling when on Home", () => {
+    mockPathname.mockReturnValue("/");
+    render(<Sidebar />);
+    const link = screen.getByTitle("Cards");
+    expect(link.tagName.toLowerCase()).toBe("a");
+    expect(link).not.toHaveAttribute("aria-current");
+    expect(link.className).not.toContain("bg-accent");
   });
 
   it("Home is active only on /", () => {

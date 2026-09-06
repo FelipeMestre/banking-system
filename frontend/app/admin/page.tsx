@@ -1,4 +1,4 @@
-import { SimulatePurchaseButton } from "@/features/cards";
+import { BatchJobsPanel, SimulatePurchaseButton } from "@/features/cards";
 import { AdminTabs } from "./AdminTabs";
 
 export default function Page() {
@@ -11,6 +11,16 @@ export default function Page() {
         </div>
         <SimulatePurchaseButton />
       </header>
+      <section className="mb-ds-6 flex flex-col gap-ds-3 border-2 border-divider p-ds-4">
+        <div>
+          <h2 className="m-0">Monthly batch (testing)</h2>
+          <p className="m-0 text-[0.85rem] text-neutral-600">
+            Manually run the credit card batch worker&apos;s jobs on demand, using today&apos;s
+            real date, instead of waiting for the hourly cron.
+          </p>
+        </div>
+        <BatchJobsPanel />
+      </section>
       <AdminTabs />
     </main>
   );

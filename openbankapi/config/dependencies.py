@@ -41,6 +41,7 @@ from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
 from ..domain.service.card_account_service import CardAccountService
 from ..domain.service.customer_service import CustomerService
+from ..domain.service.statement_service import StatementService
 from ..domain.service.transaction_service import TransactionService
 from ..domain.service.transfer_service import TransferService
 from ..infra.cache.interfaces.cache_service import ICacheService
@@ -54,6 +55,7 @@ from ..infra.database.interfaces import (
     ICustomerRepository,
     IInstallmentRepository,
     ILocationRepository,
+    IStatementRepository,
     ITransactionRepository,
 )
 from ..infra.database.repositories import (
@@ -66,6 +68,7 @@ from ..infra.database.repositories import (
     PostgresCustomerRepository,
     PostgresInstallmentRepository,
     PostgresLocationRepository,
+    PostgresStatementRepository,
     PostgresTransactionRepository,
 )
 from ..infra.database.config.session import DbSession
@@ -113,6 +116,17 @@ def get_purchase_status_registry(conn: HTTPConnection) -> StatusRegistry:
 PurchaseStatusRegistryDep = Annotated[StatusRegistry, Depends(get_purchase_status_registry)]
 
 
+def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A THIRD separate instance (never `status_registry` or
+    # `purchase_status_registry`): `request_id` is only unique within its own
+    # domain's Kafka topic, and a card payment could coincidentally share one
+    # with a transfer or a purchase.
+    return conn.app.state.card_payment_status_registry
+
+
+CardPaymentStatusRegistryDep = Annotated[StatusRegistry, Depends(get_card_payment_status_registry)]
+
+
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
     return conn.app.state.foreign_exchange_cache_service
 
@@ -151,6 +165,10 @@ def require_scope(scope: str):
         return await _require_auth0(auth0).require_auth(scopes=scope)(request)
 
     return _dependency
+
+require_admin_batch_scope = require_scope("admin:batch")
+
+RequireAdminBatchScopeDep = Annotated[dict, Depends(require_admin_batch_scope)]
 
 
 def _effective_permissions(claims: dict) -> list[str]:
@@ -255,6 +273,13 @@ def get_installment_repository(session: DbSession) -> IInstallmentRepository:
 InstallmentRepositoryDep = Annotated[IInstallmentRepository, Depends(get_installment_repository)]
 
 
+def get_statement_repository(session: DbSession) -> IStatementRepository:
+    return PostgresStatementRepository(session)
+
+
+StatementRepositoryDep = Annotated[IStatementRepository, Depends(get_statement_repository)]
+
+
 async def get_current_customer(
     claims: CurrentUserDep, customer_repository: CustomerRepositoryDep
 ) -> Customer:
@@ -335,3 +360,21 @@ def get_card_account_service(
 
 
 CardAccountServiceDep = Annotated[CardAccountService, Depends(get_card_account_service)]
+
+
+def get_statement_service(
+    settings: SettingsDep,
+    statement_repository: StatementRepositoryDep,
+    card_movement_repository: CardMovementRepositoryDep,
+    installment_repository: InstallmentRepositoryDep,
+) -> StatementService:
+    return StatementService(
+        statement_repository, card_movement_repository, installment_repository,
+        credit_card_apr=settings.credit_card_apr,
+        late_fee_amount=settings.late_fee_amount,
+        minimum_payment_rate=settings.minimum_payment_rate,
+        due_date_offset_days=settings.due_date_offset_days,
+    )
+
+
+StatementServiceDep = Annotated[StatementService, Depends(get_statement_service)]

@@ -104,6 +104,10 @@ class PostgresAccountRepository(PostgresRepository):
         row = await self._fetch_one(AccountORM, AccountORM.account_number == account_number)
         return _to_domain(row) if row else None
 
+    async def get_by_id(self, account_id: UUID) -> Optional[Account]:
+        row = await self._fetch_one(AccountORM, AccountORM.id == account_id)
+        return _to_domain(row) if row else None
+
     async def list(self, *, limit: int, offset: int) -> Page:
         rows, total = await self._fetch_page(AccountORM, limit=limit, offset=offset)
         return page_of([_to_domain(r) for r in rows], total, limit, offset)

@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from typing import List, Optional, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -18,4 +20,27 @@ class ICardMovementRepository(Protocol):
         documents) — a redelivered event is a silent no-op, not an error."""
         ...
 
-    async def get_by_card_id(self, card_id: UUID) -> List[CardMovement]: ...
+    async def get_by_card_account_id(self, card_account_id: UUID) -> List[CardMovement]:
+        """All movements ever posted against every card (active or replaced)
+        ever issued under this card_account, newest first. Spans renewals —
+        this is the source of truth for a customer-facing 'one card' history."""
+        ...
+
+    async def sum_single_charge_purchases(
+        self, card_account_id: UUID, period_start: date, period_end: date
+    ) -> Decimal:
+        """Sum of `purchase` movements in `[period_start, period_end]` that
+        are NOT part of an installment plan (Phase 4 `close_statement`).
+        Joins `card_movements -> cards` on `card_id`, mirroring
+        `get_by_card_account_id`'s real join shape."""
+        ...
+
+    async def sum_by_type(
+        self, card_account_id: UUID, movement_type: str, period_start: date, period_end: date
+    ) -> Decimal:
+        """Sum of movements of `movement_type` in `[period_start, period_end]`."""
+        ...
+
+    async def sum_payments(self, card_account_id: UUID, period_start: date, period_end: date) -> Decimal:
+        """Sum of `payment` movements in `[period_start, period_end]`."""
+        ...

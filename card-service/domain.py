@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any, Dict, FrozenSet, Optional, Tuple
 
 PURCHASE_REQUESTED = "purchase_requested"
+CARD_PAYMENT_RECEIVED = "card_payment_received"
 
 STATUS_APPROVED = "approved"
 STATUS_DECLINED = "declined"
@@ -52,6 +53,11 @@ class Decision:
     dedup_keys: Tuple[str, ...] = ()
     card_events: Tuple[Dict[str, Any], ...] = ()
     status_events: Tuple[Dict[str, Any], ...] = ()
+    # Credit Cards Phase 3: a payment's approval status routes to the NEW
+    # `card-payment-status` topic, never `purchase-status` (`status_events`) —
+    # kept as a separate field so `job.py` can sink each to its own topic
+    # without inspecting event payloads (spec: kafka-topics).
+    payment_status_events: Tuple[Dict[str, Any], ...] = ()
 
     @staticmethod
     def noop() -> "Decision":
@@ -59,8 +65,25 @@ class Decision:
 
 
 def decide(card_state: CardState, event: Dict[str, Any], now: datetime) -> Decision:
+    """Event-type dispatcher (Credit Cards Phase 3 — design: "wrap, don't
+    rewrite"). `purchase_requested` wraps the ORIGINAL, unmodified authorization
+    logic as the first branch; `card_payment_received` is the new branch.
+    An unrecognised type is a noop — `job.py`'s own allow-list filter is the
+    first line of defense, this is the second (design's defensive style)."""
+    event_type = event.get("type")
+
+    if event_type == PURCHASE_REQUESTED:
+        return _on_purchase_requested(card_state, event, now)
+    if event_type == CARD_PAYMENT_RECEIVED:
+        return _on_card_payment_received(card_state, event, now)
+
+    return Decision.noop()
+
+
+def _on_purchase_requested(card_state: CardState, event: Dict[str, Any], now: datetime) -> Decision:
     """Decide what happens when a `purchase_requested` event arrives for the
-    card keyed by `event["card_id"]`. Pure."""
+    card keyed by `event["card_id"]`. Pure. Unchanged body from before the
+    Phase 3 dispatcher was introduced — only the function boundary moved."""
     request_id = event["request_id"]
 
     # At-least-once redelivery of a request already settled — approved or
@@ -90,6 +113,37 @@ def decide(card_state: CardState, event: Dict[str, Any], now: datetime) -> Decis
         card_events=(_declined(event, now),),
         status_events=(_status(event, STATUS_DECLINED, now, reason=REASON_INSUFFICIENT_CREDIT),),
     )
+
+
+def _on_card_payment_received(card_state: CardState, event: Dict[str, Any], now: datetime) -> Decision:
+    """A payment reduces `used_credit` unconditionally (Credit Cards Phase 3):
+    NO credit-limit check, and overpayment is explicitly allowed to drive
+    `used_credit` negative — the account side already verified the payer had
+    the funds; this side only ever records the paydown (spec:
+    card-service-payment-handling)."""
+    request_id = event["request_id"]
+
+    if card_state.is_processed(request_id):
+        return Decision.noop()
+
+    new_used_credit = card_state.used_credit - event["amount_usd"]
+    return Decision(
+        new_used_credit=new_used_credit,
+        dedup_keys=(request_id,),
+        card_events=(_payment_applied(event, now),),
+        payment_status_events=(_status(event, STATUS_APPROVED, now),),
+    )
+
+
+def _payment_applied(event: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    return {
+        "type": "payment_applied",
+        "request_id": event["request_id"],
+        "card_account_id": event["card_account_id"],
+        "card_id": event["card_id"],
+        "amount_usd": event["amount_usd"],
+        "ts": now.isoformat(),
+    }
 
 
 def _approved(event: Dict[str, Any], now: datetime) -> Dict[str, Any]:

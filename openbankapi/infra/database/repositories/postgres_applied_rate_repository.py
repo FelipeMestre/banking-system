@@ -10,14 +10,33 @@ per call instead.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
+from ....domain.model import AppliedRate
 from ..schemas.models import AppliedRateORM
 from ._base import PostgresRepository
 
 
+def _to_domain(row: AppliedRateORM) -> AppliedRate:
+    return AppliedRate(
+        id=row.id, pair=row.pair, mid_rate=row.mid_rate, applied_rate=row.applied_rate,
+        margin=row.margin, direction=row.direction, source_ts=row.source_ts,
+        # `applied_rates` has no dedicated creation-timestamp column of its
+        # own (see AppliedRateORM) — `source_ts`, the quote's own timestamp,
+        # is the closest real value and is what the domain field represents
+        # here, same as the fake's construction.
+        created_at=row.source_ts,
+    )
+
+
 class PostgresAppliedRateRepository(PostgresRepository):
+    async def get_by_id(self, applied_rate_id: UUID) -> Optional[AppliedRate]:
+        row = await self._fetch_one(AppliedRateORM, AppliedRateORM.id == applied_rate_id)
+        return _to_domain(row) if row is not None else None
+
     async def insert(
         self,
         *,

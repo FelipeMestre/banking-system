@@ -1,9 +1,12 @@
 """Postgres implementation of `ICardAccountRepository` (Credit Cards Phase 1)."""
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
-from typing import Optional, Union
+from typing import List, Optional, Union
 from uuid import UUID
+
+from sqlalchemy import select
 
 from ..interfaces.common import Page
 from ..schemas.models import CardAccountORM
@@ -62,3 +65,19 @@ class PostgresCardAccountRepository(PostgresRepository):
             CardAccountORM, CardAccountORM.id == card_account_id, {"credit_limit": credit_limit}
         )
         return _to_domain(row) if row else None
+
+    async def list_active_ids(self) -> List[UUID]:
+        """Every card_account still billable — everything except CLOSED
+        (Credit Cards Phase 4 correction: a BLOCKED account still has an
+        outstanding balance and must keep getting statements; blocking only
+        affects Phase 2's purchase check, not this phase)."""
+        result = await self._session.execute(
+            select(CardAccountORM.id).where(
+                CardAccountORM.status != CardAccountStatus.CLOSED.value
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_issuance_date(self, card_account_id: UUID) -> date:
+        row = await self._fetch_one(CardAccountORM, CardAccountORM.id == card_account_id)
+        return row.created_at.date()

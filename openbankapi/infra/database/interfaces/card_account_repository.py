@@ -6,8 +6,9 @@ raw user spec text (same precedent documented in `applied_rate_repository.py`).
 """
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
-from typing import Optional, Protocol, Union, runtime_checkable
+from typing import List, Optional, Protocol, Union, runtime_checkable
 from uuid import UUID
 
 from ....domain.model import CardAccount
@@ -36,3 +37,16 @@ class ICardAccountRepository(Protocol):
     async def update_limit(
         self, card_account_id: UUID, *, credit_limit: Union[int, Decimal]
     ) -> Optional[CardAccount]: ...
+
+    async def list_active_ids(self) -> List[UUID]:
+        """Every `card_account` still billable — `status != 'closed'` — the
+        batch worker's iteration set (Credit Cards Phase 4). A BLOCKED
+        account still has an outstanding balance and must keep getting
+        statements; blocking only affects Phase 2's purchase check, not
+        this billing phase. Only a CLOSED account has no ongoing credit
+        line and is excluded."""
+        ...
+
+    async def get_issuance_date(self, card_account_id: UUID) -> date:
+        """`created_at` as a date — no separate issuance-date concept exists."""
+        ...

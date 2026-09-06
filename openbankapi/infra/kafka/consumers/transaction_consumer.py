@@ -154,9 +154,13 @@ class TransactionConsumer:
     async def _resolve_applied_rate_id(
         self, row_type: str, event: Dict[str, Any]
     ) -> Optional[uuid.UUID]:
-        """Only a `credit` row (an `incoming_payment` leg) ever carries
-        `conversion`; `debit`/`declined` always link `None` (FX-19)."""
-        if row_type != "credit" or self._applied_rate_repository is None:
+        """A row carrying `conversion` gets its applied-rate linked regardless
+        of leg direction; ordinary debit legs never carry `conversion` so this
+        is unchanged for existing transfer behavior (FX-19 extended for
+        Phase 3: a cross-currency card payment's DEBIT-leg `outgoing_payment`
+        is the first debit-side event to ever set `conversion`, attached by
+        `account-service/domain.py`'s widened `_outgoing()`)."""
+        if self._applied_rate_repository is None:
             return None
         conversion = event.get("conversion")
         if conversion is None:

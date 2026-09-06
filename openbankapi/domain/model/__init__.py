@@ -21,6 +21,7 @@ from .card import (
 )
 from .card_movement import CardMovement, CardMovementType
 from .installment import Installment, InstallmentStatus
+from .statement import Statement, StatementStatus
 
 __all__ = [
     "Customer",
@@ -46,4 +47,6 @@ __all__ = [
     "CardMovementType",
     "Installment",
     "InstallmentStatus",
+    "Statement",
+    "StatementStatus",
 ]

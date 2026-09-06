@@ -198,6 +198,19 @@ class CardNotFoundError(NotFoundError):
         super().__init__("card", identifier)
 
 
+class CardAccountAccessForbiddenError(DomainError):
+    """A resolved customer tried to reach a card account they do not own. -> 403
+
+    Distinct from `CardAccountNotFoundError`: the card account exists, the
+    caller is simply not entitled to see it — modeled on
+    `AccountAccessForbiddenError`.
+    """
+
+    def __init__(self, card_account_id: object):
+        self.card_account_id = card_account_id
+        super().__init__(f"card account {card_account_id} does not belong to this customer")
+
+
 class DuplicateCardNumberError(DuplicateError):
     """A generated 16-digit card number collided. -> 409
 

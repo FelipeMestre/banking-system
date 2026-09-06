@@ -38,6 +38,7 @@ def create_app(
     sessionmaker: async_sessionmaker[AsyncSession],
     status_registry: StatusRegistry,
     purchase_status_registry: Optional[StatusRegistry] = None,
+    card_payment_status_registry: Optional[StatusRegistry] = None,
     auth0: Optional[Auth0FastAPI] = None,
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
@@ -47,12 +48,14 @@ def create_app(
     # A separate instance from `status_registry` (transfers) by default:
     # `request_id` is only unique within its own domain's Kafka topic.
     resolved_purchase_status_registry = purchase_status_registry or StatusRegistry()
+    resolved_card_payment_status_registry = card_payment_status_registry or StatusRegistry()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         loop = asyncio.get_running_loop()
         status_registry.bind_loop(loop)
         resolved_purchase_status_registry.bind_loop(loop)
+        resolved_card_payment_status_registry.bind_loop(loop)
         if on_start is not None:
             on_start(loop)
         try:
@@ -73,6 +76,7 @@ def create_app(
     app.state.sessionmaker = sessionmaker
     app.state.status_registry = status_registry
     app.state.purchase_status_registry = resolved_purchase_status_registry
+    app.state.card_payment_status_registry = resolved_card_payment_status_registry
     app.state.auth0 = auth0
     app.state.foreign_exchange_cache_service = foreign_exchange_cache_service
 

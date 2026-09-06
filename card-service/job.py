@@ -53,13 +53,22 @@ from pyflink.datastream.state import (
 from pyflink.datastream.state_backend import EmbeddedRocksDBStateBackend
 from pyflink.java_gateway import get_gateway
 
-from domain import CardState, PURCHASE_REQUESTED, decide
+from domain import CARD_PAYMENT_RECEIVED, CardState, PURCHASE_REQUESTED, decide
+
+# Credit Cards Phase 3: the only two event types this job ever decides on.
+# An explicit allow-list (not an open pass-through) — any other type is still
+# dropped, matching the pre-Phase-3 defensive style (design decision).
+_ADMITTED_EVENT_TYPES = frozenset({PURCHASE_REQUESTED, CARD_PAYMENT_RECEIVED})
 
 LOG = logging.getLogger("card-service")
 
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:19092")
 CARD_EVENTS_TOPIC = os.getenv("CARD_EVENTS_TOPIC", "card-events")
 PURCHASE_STATUS_TOPIC = os.getenv("PURCHASE_STATUS_TOPIC", "purchase-status")
+# Credit Cards Phase 3: a THIRD status feed, separate from `purchase-status` —
+# `request_id` is only unique within its own domain's topic, and a purchase
+# and a payment could coincidentally share one (spec: kafka-topics).
+CARD_PAYMENT_STATUS_TOPIC = os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status")
 CONSUMER_GROUP = os.getenv("CARD_SERVICE_GROUP_ID", "card-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -70,6 +79,10 @@ JOB_NAME = "card-service"
 # key is what routes the record to its credit line's shard on the way out.
 RECORD_TYPE = Types.ROW_NAMED(["kafka_key", "payload"], [Types.STRING(), Types.STRING()])
 STATUS_TAG = OutputTag("status-events", RECORD_TYPE)
+# Credit Cards Phase 3: a payment's approval status is a THIRD side output,
+# separate from purchase's `STATUS_TAG` (design: kept as a distinct topic so
+# a purchase and a payment sharing a `request_id` never collide).
+CARD_PAYMENT_STATUS_TAG = OutputTag("card-payment-status-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -133,10 +146,10 @@ class CardProcessor(KeyedProcessFunction):
 
         # Reaching here means _routing_key already parsed this record.
         event = json.loads(value)
-        if event.get("type") != PURCHASE_REQUESTED:
-            # This job only decides on purchase requests; approved/declined
-            # legs it emits itself pass through this topic too (fan-out) but
-            # must never be reconsidered here.
+        if event.get("type") not in _ADMITTED_EVENT_TYPES:
+            # This job only decides on purchase requests and payments;
+            # approved/declined/applied legs it emits itself pass through
+            # this topic too (fan-out) but must never be reconsidered here.
             return
 
         current_used_credit = self._used_credit.value()
@@ -156,6 +169,8 @@ class CardProcessor(KeyedProcessFunction):
             yield Row(card_account_id, json.dumps(produced))
         for status in decision.status_events:
             yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
+        for payment_status in decision.payment_status_events:
+            yield CARD_PAYMENT_STATUS_TAG, Row(payment_status["request_id"], json.dumps(payment_status))
 
 
     def __contains__(self, request_id: str) -> bool:
@@ -232,6 +247,9 @@ def build_job():
     processed.get_side_output(STATUS_TAG).sink_to(
         _kafka_sink(PURCHASE_STATUS_TOPIC)
     ).name("purchase-status-sink")
+    processed.get_side_output(CARD_PAYMENT_STATUS_TAG).sink_to(
+        _kafka_sink(CARD_PAYMENT_STATUS_TOPIC)
+    ).name("card-payment-status-sink")
 
     env.execute(JOB_NAME)
 

@@ -27,6 +27,7 @@ from .infra.foreign_exchange_service.repository.frankfurter_repository import Fr
 from .infra.kafka.consumers import (
     AccountBalanceConsumer,
     CardMovementConsumer,
+    CardPaymentStatusConsumer,
     PurchaseStatusConsumer,
     TransactionConsumer,
     TransferStatusConsumer,
@@ -66,8 +67,10 @@ foreign_exchange_cache_service = ForeignExchangeCacheService(cache, foreign_exch
 publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 purchase_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
+card_payment_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 purchase_status_consumer = PurchaseStatusConsumer(settings, purchase_status_registry)
+card_payment_status_consumer = CardPaymentStatusConsumer(settings, card_payment_status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
 transaction_consumer = TransactionConsumer(settings, transaction_writer, applied_rate_writer)
 card_movement_consumer = CardMovementConsumer(
@@ -87,6 +90,7 @@ auth0 = (
 def _start(loop: asyncio.AbstractEventLoop) -> None:
     status_consumer.start(loop)
     purchase_status_consumer.start(loop)
+    card_payment_status_consumer.start(loop)
     balance_consumer.start(loop)
     transaction_consumer.start(loop)
     card_movement_consumer.start(loop)
@@ -95,6 +99,7 @@ def _start(loop: asyncio.AbstractEventLoop) -> None:
 def _stop() -> None:
     status_consumer.stop()
     purchase_status_consumer.stop()
+    card_payment_status_consumer.stop()
     balance_consumer.stop()
     transaction_consumer.stop()
     card_movement_consumer.stop()
@@ -113,6 +118,7 @@ app = create_app(
     sessionmaker=sessionmaker,
     status_registry=status_registry,
     purchase_status_registry=purchase_status_registry,
+    card_payment_status_registry=card_payment_status_registry,
     auth0=auth0,
     on_start=_start,
     on_stop=_stop,

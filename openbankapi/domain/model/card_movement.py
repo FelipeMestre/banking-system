@@ -16,6 +16,9 @@ class CardMovementType(str, Enum):
     INTEREST = "interest"
     REFUND = "refund"
     DECLINED = "declined"
+    # Phase 4: a distinct value, never overloading `FEE` (design's explicit
+    # decision — keeps future filtering by type unambiguous).
+    LATE_FEE = "late_fee"
 
 
 @dataclass(frozen=True)

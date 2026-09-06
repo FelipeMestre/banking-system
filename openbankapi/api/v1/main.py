@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from openbankapi.api.v1.routers import (
     auth_diagnostics_router,
+    batch_router,
     customer_router,
     account_router,
     location_router,
@@ -9,6 +10,7 @@ from openbankapi.api.v1.routers import (
     transfer_router,
     foreign_exchange_rate_router,
     card_account_router,
+    card_payment_status_router,
     card_router,
     purchase_status_router,
 )
@@ -24,3 +26,5 @@ api_router.include_router(foreign_exchange_rate_router.router)
 api_router.include_router(card_account_router.router)
 api_router.include_router(card_router.router)
 api_router.include_router(purchase_status_router.router)
+api_router.include_router(card_payment_status_router.router)
+api_router.include_router(batch_router.router)

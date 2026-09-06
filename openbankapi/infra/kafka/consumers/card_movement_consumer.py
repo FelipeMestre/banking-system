@@ -50,6 +50,9 @@ _CENTS_PER_USD = Decimal(100)
 _EVENT_TO_MOVEMENT_TYPE = {
     "purchase_approved": CardMovementType.PURCHASE,
     "purchase_declined": CardMovementType.DECLINED,
+    # Credit Cards Phase 3: `card_movements.movement_type` already allows
+    # `'payment'` since Phase 1's original migration — zero schema change.
+    "payment_applied": CardMovementType.PAYMENT,
 }
 
 

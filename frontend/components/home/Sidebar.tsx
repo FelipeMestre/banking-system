@@ -8,7 +8,6 @@ import { DS_ICON_PROPS } from "@/lib/icon-props";
 import { usePermissions } from "@/lib/auth/usePermissions";
 
 const INERT_ITEMS: { title: string; Icon: ComponentType<{ size?: number }> }[] = [
-  { title: "Cards", Icon: CreditCard },
   { title: "Support", Icon: Headphones },
   { title: "Settings", Icon: Settings },
 ];
@@ -18,6 +17,7 @@ export function Sidebar() {
   const { hasReadAdmin } = usePermissions();
   const isHome = pathname === "/";
   const isTransfer = pathname === "/transfer" || pathname.startsWith("/transfer/");
+  const isCards = pathname === "/cards" || pathname.startsWith("/cards/");
   const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
 
   return (
@@ -55,6 +55,19 @@ export function Sidebar() {
           <ArrowLeftRight size={21} {...DS_ICON_PROPS} />
         </Link>
 
+        <Link
+          href="/cards"
+          title="Cards"
+          aria-current={isCards ? "page" : undefined}
+          className={
+            "flex h-[52px] w-[52px] items-center justify-center " +
+            (isCards
+              ? "bg-accent text-bg hover:bg-accent-600"
+              : "text-neutral-700 hover:bg-neutral-200 hover:text-text")
+          }
+        >
+          <CreditCard size={21} {...DS_ICON_PROPS} />
+        </Link>
         {hasReadAdmin ? (
           <Link
             href="/admin"

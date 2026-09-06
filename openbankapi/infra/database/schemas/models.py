@@ -21,6 +21,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    false as sa_false,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -231,6 +232,16 @@ class StatementORM(Base):
     closing_balance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     minimum_payment: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="open")
+    # Phase 4 additive columns — `closing_balance`/`status` above are left
+    # untouched on purpose (design's explicit no-repurpose decision).
+    purchases_total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    interest_total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    total_due: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    credit_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    late_fees_total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    paid_in_full: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa_false())
+    paid_by_due_date: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa_false())
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 
@@ -245,7 +256,7 @@ class CardMovementORM(Base):
     __table_args__ = (
         CheckConstraint(
             "movement_type IS NULL OR movement_type IN "
-            "('purchase','payment','fee','interest','refund','declined')",
+            "('purchase','payment','fee','interest','refund','declined','late_fee')",
             name="card_movements_movement_type_check",
         ),
         UniqueConstraint(
@@ -292,4 +303,8 @@ class InstallmentORM(Base):
     amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Phase 4: nullable — set once the installment is billed onto a statement.
+    statement_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("statements.id"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = _created()

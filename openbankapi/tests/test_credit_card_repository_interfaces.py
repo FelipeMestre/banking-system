@@ -56,4 +56,10 @@ def test_a_conforming_object_satisfies_the_protocol_at_runtime():
         async def update_limit(self, card_account_id, *, credit_limit):
             ...
 
+        async def list_active_ids(self):
+            ...
+
+        async def get_issuance_date(self, card_account_id):
+            ...
+
     assert isinstance(_Impl(), ICardAccountRepository)
