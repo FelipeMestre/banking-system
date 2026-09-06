@@ -7,6 +7,7 @@ use the synchronous `TestClient` via `conftest.py`'s `build()` harness. No
 `pytest-asyncio` is installed here, so each async body is driven with
 `asyncio.run(...)`, matching `test_foreign_exchange_cache_service.py`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,6 +19,7 @@ from sqlalchemy import text
 
 from openbankapi.app import create_app
 from openbankapi.config import Settings
+from openbankapi.config.dependencies import get_current_user
 from openbankapi.domain.exceptions import RateNotAvailableError
 from openbankapi.domain.service.conversion_service import get_mid_rate
 from openbankapi.infra.kafka.status_registry import StatusRegistry
@@ -62,7 +64,9 @@ class _FakeCache:
 
 
 def _build_app(*, rates=None, raise_error=None):
-    fx_cache_service = _FakeForeignExchangeCacheService(rates=rates, raise_error=raise_error)
+    fx_cache_service = _FakeForeignExchangeCacheService(
+        rates=rates, raise_error=raise_error
+    )
     app = create_app(
         settings=Settings(),
         cache=_FakeCache(),
@@ -71,6 +75,15 @@ def _build_app(*, rates=None, raise_error=None):
         status_registry=StatusRegistry(),
         foreign_exchange_cache_service=fx_cache_service,
     )
+
+    async def _fake_admin():
+        return {
+            "sub": "test-admin",
+            "permissions": ["read:admin", "write:admin"],
+            "scope": "read:admin write:admin",
+        }
+
+    app.dependency_overrides[get_current_user] = _fake_admin
     return app, fx_cache_service
 
 
@@ -85,13 +98,20 @@ def test_eur_to_usd_debit_matches_conversion_service():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 10000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": 10000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         )
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["final_amount"] == 11744
-    assert body["applied_rate"] == pytest.approx(get_mid_rate("EUR", "USD", RATES) * 1.01)
+    assert body["applied_rate"] == pytest.approx(
+        get_mid_rate("EUR", "USD", RATES) * 1.01
+    )
 
 
 def test_eur_to_usd_credit_matches_conversion_service_and_differs_from_debit():
@@ -99,13 +119,20 @@ def test_eur_to_usd_credit_matches_conversion_service_and_differs_from_debit():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 10000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "credit"},
+            {
+                "amount": 10000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "credit",
+            },
         )
     )
     body = resp.json()
     assert body["final_amount"] == 11512
     assert body["final_amount"] != 11744
-    assert body["applied_rate"] == pytest.approx(get_mid_rate("EUR", "USD", RATES) * 0.99)
+    assert body["applied_rate"] == pytest.approx(
+        get_mid_rate("EUR", "USD", RATES) * 0.99
+    )
 
 
 def test_usd_to_eur_debit_matches_conversion_service():
@@ -113,12 +140,19 @@ def test_usd_to_eur_debit_matches_conversion_service():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 10000, "from_currency": "USD", "to_currency": "EUR", "customer_effect": "debit"},
+            {
+                "amount": 10000,
+                "from_currency": "USD",
+                "to_currency": "EUR",
+                "customer_effect": "debit",
+            },
         )
     )
     body = resp.json()
     assert body["final_amount"] == 8686
-    assert body["applied_rate"] == pytest.approx(get_mid_rate("USD", "EUR", RATES) * 1.01)
+    assert body["applied_rate"] == pytest.approx(
+        get_mid_rate("USD", "EUR", RATES) * 1.01
+    )
 
 
 def test_usd_to_eur_credit_matches_conversion_service_and_differs_from_debit():
@@ -126,13 +160,20 @@ def test_usd_to_eur_credit_matches_conversion_service_and_differs_from_debit():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 10000, "from_currency": "USD", "to_currency": "EUR", "customer_effect": "credit"},
+            {
+                "amount": 10000,
+                "from_currency": "USD",
+                "to_currency": "EUR",
+                "customer_effect": "credit",
+            },
         )
     )
     body = resp.json()
     assert body["final_amount"] == 8514
     assert body["final_amount"] != 8686
-    assert body["applied_rate"] == pytest.approx(get_mid_rate("USD", "EUR", RATES) * 0.99)
+    assert body["applied_rate"] == pytest.approx(
+        get_mid_rate("USD", "EUR", RATES) * 0.99
+    )
 
 
 def test_same_currency_passthrough_via_http():
@@ -140,7 +181,12 @@ def test_same_currency_passthrough_via_http():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 5000, "from_currency": "EUR", "to_currency": "EUR", "customer_effect": "debit"},
+            {
+                "amount": 5000,
+                "from_currency": "EUR",
+                "to_currency": "EUR",
+                "customer_effect": "debit",
+            },
         )
     )
     assert resp.status_code == 200, resp.text
@@ -155,7 +201,12 @@ def test_non_positive_amount_rejected_before_any_cache_call():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 0, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": 0,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         )
     )
     assert resp.status_code == 422
@@ -167,7 +218,12 @@ def test_negative_amount_rejected():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": -100, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": -100,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         )
     )
     assert resp.status_code == 422
@@ -179,7 +235,12 @@ def test_rate_unavailable_maps_to_503_not_the_global_502():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 1000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": 1000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         )
     )
     assert resp.status_code == 503, resp.text
@@ -190,11 +251,21 @@ def test_response_never_leaks_internal_pricing_fields():
     resp = asyncio.run(
         _post_quote(
             app,
-            {"amount": 10000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": 10000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         )
     )
     body = resp.json()
-    assert set(body.keys()) == {"final_amount", "from_currency", "to_currency", "applied_rate"}
+    assert set(body.keys()) == {
+        "final_amount",
+        "from_currency",
+        "to_currency",
+        "applied_rate",
+    }
     assert "mid_rate" not in resp.text
     assert "margin" not in resp.text.lower()
 
@@ -202,14 +273,36 @@ def test_response_never_leaks_internal_pricing_fields():
 def test_quote_never_writes_to_applied_rates(fx_test_dsn):
     async def _run():
         async with rollback_session(fx_test_dsn) as session:
-            before = (await session.execute(text("SELECT count(*) FROM applied_rates"))).scalar_one()
+            before = (
+                await session.execute(text("SELECT count(*) FROM applied_rates"))
+            ).scalar_one()
             assert before == 0
 
         payloads = [
-            {"amount": 10000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
-            {"amount": 10000, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "credit"},
-            {"amount": 5000, "from_currency": "EUR", "to_currency": "EUR", "customer_effect": "debit"},
-            {"amount": 0, "from_currency": "EUR", "to_currency": "USD", "customer_effect": "debit"},
+            {
+                "amount": 10000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
+            {
+                "amount": 10000,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "credit",
+            },
+            {
+                "amount": 5000,
+                "from_currency": "EUR",
+                "to_currency": "EUR",
+                "customer_effect": "debit",
+            },
+            {
+                "amount": 0,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+                "customer_effect": "debit",
+            },
         ]
         app, _ = _build_app()
         transport = ASGITransport(app=app)
@@ -219,11 +312,15 @@ def test_quote_never_writes_to_applied_rates(fx_test_dsn):
 
         error_app, _ = _build_app(raise_error=RateNotAvailableError("no rates"))
         error_transport = ASGITransport(app=error_app)
-        async with AsyncClient(transport=error_transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=error_transport, base_url="http://test"
+        ) as client:
             await client.post("/foreign-exchange-rates/quote", json=payloads[0])
 
         async with rollback_session(fx_test_dsn) as session:
-            after = (await session.execute(text("SELECT count(*) FROM applied_rates"))).scalar_one()
+            after = (
+                await session.execute(text("SELECT count(*) FROM applied_rates"))
+            ).scalar_one()
             assert after == 0
 
     asyncio.run(_run())
