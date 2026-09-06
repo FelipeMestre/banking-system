@@ -677,6 +677,19 @@ class FakeInstallmentRepository:
     async def get_by_movement_id(self, movement_id: UUID) -> List[Installment]:
         return [row for row in self.rows if row.card_movement_id == movement_id]
 
+    async def get_by_statement_id(self, statement_id: UUID) -> List[Installment]:
+        matches = [row for row in self.rows if row.statement_id == statement_id]
+        return sorted(matches, key=lambda row: row.installment_number)
+
+    async def sum_unbilled(self, card_account_id: UUID) -> Decimal:
+        """Sum of `amount` across every unbilled installment (`statement_id
+        is None`). Ignores `card_account_id` exactly like
+        `get_next_due_per_plan` above does on this fake — every existing
+        test scenario constructs one `FakeInstallmentRepository` per
+        account, so there is nothing else in `self.rows` to wrongly
+        include."""
+        return sum((row.amount for row in self.rows if row.statement_id is None), Decimal("0"))
+
     async def get_next_due_per_plan(self, card_account_id: UUID, card_ids: Optional[set] = None) -> List[Installment]:
         """Lowest unbilled `installment_number` per `card_movement_id`.
 
@@ -743,6 +756,14 @@ class FakeStatementRepository:
         if not candidates:
             return None
         return max(candidates, key=lambda row: row.period_end)
+
+    async def get_by_id(self, statement_id: UUID) -> Optional[Statement]:
+        return self.rows.get(statement_id)
+
+    async def list_by_card_account_id(self, card_account_id: UUID, limit: int) -> List[Statement]:
+        candidates = [row for row in self.rows.values() if row.card_account_id == card_account_id]
+        candidates.sort(key=lambda row: row.period_end, reverse=True)
+        return candidates[:limit]
 
     async def create(
         self,

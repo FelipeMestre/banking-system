@@ -64,6 +64,19 @@ class PostgresStatementRepository(PostgresRepository):
         row = result.scalar_one_or_none()
         return _to_domain(row) if row else None
 
+    async def get_by_id(self, statement_id: UUID) -> Optional[Statement]:
+        row = await self._fetch_one(StatementORM, StatementORM.id == statement_id)
+        return _to_domain(row) if row else None
+
+    async def list_by_card_account_id(self, card_account_id: UUID, limit: int) -> List[Statement]:
+        result = await self._session.execute(
+            select(StatementORM)
+            .where(StatementORM.card_account_id == card_account_id)
+            .order_by(StatementORM.period_end.desc())
+            .limit(limit)
+        )
+        return [_to_domain(row) for row in result.scalars().all()]
+
     async def create(
         self,
         card_account_id: UUID,

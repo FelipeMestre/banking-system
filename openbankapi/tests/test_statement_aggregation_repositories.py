@@ -19,6 +19,9 @@ from openbankapi.infra.database.repositories.postgres_card_repository import Pos
 from openbankapi.infra.database.repositories.postgres_installment_repository import (
     PostgresInstallmentRepository,
 )
+from openbankapi.infra.database.repositories.postgres_statement_repository import (
+    PostgresStatementRepository,
+)
 from openbankapi.infra.database.schemas.models import AccountORM, BranchORM, CustomerORM, LocationORM
 from openbankapi.tests.db_fixtures import rollback_session
 
@@ -267,3 +270,50 @@ def test_list_active_ids_includes_blocked_excludes_closed_and_issuance_date_matc
     assert blocked_id in active_ids
     assert closed_id not in active_ids
     assert issuance_date == created_at.date()
+
+
+async def _exercise_get_by_statement_id_and_sum_unbilled(dsn: str):
+    async with rollback_session(dsn) as session:
+        account, card = await _seed_card_account(session)
+        now = datetime.now(timezone.utc)
+        movement = await PostgresCardMovementRepository(session).insert(
+            CardMovement(
+                id=uuid.uuid4(), card_id=card.id, request_id=uuid.uuid4(),
+                movement_type=CardMovementType.PURCHASE, amount=Decimal("300.00"),
+                currency="USD", created_at=now, occurred_at=now,
+            )
+        )
+        installment_repo = PostgresInstallmentRepository(session)
+        await installment_repo.bulk_insert([
+            Installment(
+                id=uuid.uuid4(), card_movement_id=movement.id, installment_number=i + 1,
+                amount=Decimal("100.00"), due_date=date.today() + timedelta(days=30 * (i + 1)),
+                status=InstallmentStatus.PENDING, created_at=now,
+            )
+            for i in range(3)
+        ])
+
+        unbilled_before = await installment_repo.sum_unbilled(account.id)
+        first_due = (await installment_repo.get_next_due_per_plan(account.id))[0]
+
+        statement = await PostgresStatementRepository(session).create(
+            account.id, date.today(), date.today(), date.today() + timedelta(days=20),
+            purchases_total=Decimal("100.00"), interest_total=Decimal("0"),
+            total_due=Decimal("100.00"), credit_balance=Decimal("0"),
+            late_fees_total=Decimal("0"), minimum_payment=Decimal("10.00"),
+        )
+        await installment_repo.mark_billed(first_due.id, statement.id)
+
+        unbilled_after = await installment_repo.sum_unbilled(account.id)
+        billed_for_statement = await installment_repo.get_by_statement_id(statement.id)
+        return unbilled_before, unbilled_after, billed_for_statement
+
+
+def test_get_by_statement_id_and_sum_unbilled_against_postgres(fx_test_dsn):
+    unbilled_before, unbilled_after, billed_for_statement = asyncio.run(
+        _exercise_get_by_statement_id_and_sum_unbilled(fx_test_dsn)
+    )
+
+    assert unbilled_before == Decimal("300.00")
+    assert unbilled_after == Decimal("200.00")
+    assert [row.installment_number for row in billed_for_statement] == [1]

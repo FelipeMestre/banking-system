@@ -141,6 +141,40 @@ def test_get_total_installments_returns_max_installment_number_against_fake():
     assert total == 9
 
 
+def test_get_by_statement_id_and_sum_unbilled_against_fake():
+    """`get_by_statement_id` is the inverse of `mark_billed`: only the
+    installment(s) actually assigned to a statement come back, in
+    installment-number order. `sum_unbilled` totals every remaining
+    `statement_id IS NULL` row across every plan for the account."""
+    async def scenario():
+        installments = FakeInstallmentRepository()
+        movement_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        await installments.bulk_insert([
+            Installment(
+                id=uuid.uuid4(), card_movement_id=movement_id, installment_number=i + 1,
+                amount=Decimal("100.00"), due_date=date.today(), status=InstallmentStatus.PENDING,
+                created_at=now,
+            )
+            for i in range(3)
+        ])
+        statement_id = uuid.uuid4()
+        first_due = (await installments.get_next_due_per_plan(uuid.uuid4()))[0]
+        unbilled_before = await installments.sum_unbilled(uuid.uuid4())
+        await installments.mark_billed(first_due.id, statement_id)
+        unbilled_after = await installments.sum_unbilled(uuid.uuid4())
+        billed_for_statement = await installments.get_by_statement_id(statement_id)
+        billed_for_other_statement = await installments.get_by_statement_id(uuid.uuid4())
+        return unbilled_before, unbilled_after, billed_for_statement, billed_for_other_statement
+
+    unbilled_before, unbilled_after, billed_for_statement, billed_for_other_statement = asyncio.run(scenario())
+
+    assert unbilled_before == Decimal("300.00")
+    assert unbilled_after == Decimal("200.00")
+    assert [row.installment_number for row in billed_for_statement] == [1]
+    assert billed_for_other_statement == []
+
+
 def test_list_active_ids_includes_blocked_excludes_closed_against_fake():
     """A blocked card_account still has an outstanding balance and must
     still get billed — blocking only affects Phase 2's purchase check, not

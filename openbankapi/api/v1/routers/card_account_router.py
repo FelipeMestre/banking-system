@@ -9,9 +9,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 
 from openbankapi.api.v1.dtos.card_account_dto import (
     CardAccountCreateDTO,
@@ -22,7 +24,8 @@ from openbankapi.api.v1.dtos.card_account_dto import (
 from openbankapi.api.v1.dtos.card_dto import CardIssuedDTO, CardMaskedDTO
 from openbankapi.api.v1.dtos.card_payment_dto import CardPaymentAcceptedDTO, CardPaymentRequestDTO
 from openbankapi.api.v1.dtos.card_usage_dto import CardMovementDTO, UsedCreditEstimateDTO
-from openbankapi.api.v1.dtos.common import PageParams, PageResponse
+from openbankapi.api.v1.dtos.common import DEFAULT_LIMIT, MAX_LIMIT, PageParams, PageResponse
+from openbankapi.api.v1.dtos.statement_dto import InstallmentPayoffDTO, StatementDTO
 from openbankapi.config.dependencies import (
     AccountRepositoryDep,
     AppliedRateRepositoryDep,
@@ -35,14 +38,23 @@ from openbankapi.config.dependencies import (
     InstallmentRepositoryDep,
     PublisherDep,
     SettingsDep,
+    StatementRepositoryDep,
 )
 from openbankapi.domain.exceptions import (
     CardAccountAccessForbiddenError,
     CardAccountNotFoundError,
     InvalidCardStatusError,
+    StatementNotFoundError,
 )
-from openbankapi.domain.model import CARD_ACCOUNT_TRANSITIONS, CardAccountStatus, CardMovementType
+from openbankapi.domain.model import (
+    CARD_ACCOUNT_TRANSITIONS,
+    CardAccountStatus,
+    CardMovement,
+    CardMovementType,
+    Statement,
+)
 from openbankapi.domain.service.conversion_service import convert
+from openbankapi.infra.pdf.statement_pdf_generator import render as render_statement_pdf
 
 router = APIRouter(prefix="/card-accounts", tags=["card-accounts"])
 
@@ -176,6 +188,120 @@ async def used_credit_estimate(
     )
 
 
+async def _movement_dto(
+    row: CardMovement, applied_rates: AppliedRateRepositoryDep, installments: InstallmentRepositoryDep
+) -> CardMovementDTO:
+    rate = await applied_rates.get_by_id(row.applied_rate_id) if row.applied_rate_id else None
+    splits = (
+        await installments.get_by_movement_id(row.id)
+        if row.movement_type == CardMovementType.PURCHASE
+        else []
+    )
+    return CardMovementDTO(
+        id=row.id,
+        movement_type=row.movement_type.value,
+        amount=row.amount,
+        currency=row.currency,
+        description=row.description,
+        decline_reason=row.decline_reason,
+        occurred_at=row.occurred_at or row.created_at,
+        fx_pair=rate.pair if rate else None,
+        fx_applied_rate=rate.applied_rate if rate else None,
+        installment_count=len(splits) if len(splits) > 1 else None,
+        installment_amount=splits[0].amount if len(splits) > 1 else None,
+    )
+
+
+async def _installment_plan_movement_ids(
+    rows: List[CardMovement], installments: InstallmentRepositoryDep
+) -> set:
+    """Ids of purchase movements that are the parent of a multi-installment
+    plan. Such a movement occurred once, at purchase time — it must never be
+    date-range-matched into a later statement's cycle, because each cycle
+    only ever bills ONE installment of that plan (`mark_billed`). The billed
+    installment itself (not this parent row) is what represents that plan in
+    a given cycle — see `_billed_installment_dtos` below."""
+    plan_ids = set()
+    for row in rows:
+        if row.movement_type != CardMovementType.PURCHASE:
+            continue
+        splits = await installments.get_by_movement_id(row.id)
+        if len(splits) > 1:
+            plan_ids.add(row.id)
+    return plan_ids
+
+
+def _in_statement_period(row: CardMovement, statement: Statement) -> bool:
+    occurred = (row.occurred_at or row.created_at).date()
+    return statement.period_start <= occurred <= statement.period_end
+
+
+async def _period_movements(
+    statement: Statement, all_rows: List[CardMovement], installments: InstallmentRepositoryDep
+) -> List[CardMovement]:
+    """Every movement genuinely tied to this billing cycle by *when it
+    happened* — single-charge purchases and every other movement type
+    (payments, fees, interest, refunds, declines) whose `occurred_at` falls
+    inside `[period_start, period_end]`. Multi-installment purchase movements
+    are excluded here on purpose (see `_installment_plan_movement_ids`) —
+    they are represented per-cycle by `_billed_installment_dtos` instead,
+    which ties them to the statement `mark_billed` actually assigned rather
+    than to a purchase date that may not even fall in this cycle."""
+    plan_ids = await _installment_plan_movement_ids(all_rows, installments)
+    return [
+        row for row in all_rows if row.id not in plan_ids and _in_statement_period(row, statement)
+    ]
+
+
+async def _billed_installment_dtos(
+    statement: Statement,
+    rows_by_id: dict,
+    installments: InstallmentRepositoryDep,
+    applied_rates: AppliedRateRepositoryDep,
+) -> List[CardMovementDTO]:
+    """One `CardMovementDTO` per installment this exact statement billed
+    (`get_by_statement_id` — the inverse of `mark_billed`), carrying only
+    that installment's own amount, not the parent purchase's full amount."""
+    billed = await installments.get_by_statement_id(statement.id)
+    dtos = []
+    for installment in billed:
+        parent = rows_by_id.get(installment.card_movement_id)
+        total_installments = await installments.get_total_installments(installment.card_movement_id)
+        rate = (
+            await applied_rates.get_by_id(parent.applied_rate_id)
+            if parent is not None and parent.applied_rate_id
+            else None
+        )
+        occurred_at = datetime.combine(installment.due_date, datetime.min.time(), tzinfo=timezone.utc)
+        dtos.append(
+            CardMovementDTO(
+                id=installment.id,
+                movement_type=CardMovementType.PURCHASE.value,
+                amount=installment.amount,
+                currency=parent.currency if parent is not None else "USD",
+                description=parent.description if parent is not None else None,
+                decline_reason=None,
+                occurred_at=occurred_at,
+                fx_pair=rate.pair if rate else None,
+                fx_applied_rate=rate.applied_rate if rate else None,
+                installment_count=total_installments,
+                installment_amount=installment.amount,
+            )
+        )
+    return dtos
+
+
+async def _owned_statement(
+    card_account_id: UUID, statement_id: UUID, statements: StatementRepositoryDep
+) -> Statement:
+    statement = await statements.get_by_id(statement_id)
+    if statement is None or statement.card_account_id != card_account_id:
+        # Deliberately not distinguished from "doesn't exist" — see
+        # `StatementNotFoundError`'s own docstring.
+        raise StatementNotFoundError(statement_id)
+    return statement
+
+
 @router.get("/{card_account_id}/movements", response_model=PageResponse[CardMovementDTO])
 async def list_movements(
     card_account_id: UUID,
@@ -183,8 +309,18 @@ async def list_movements(
     movements: CardMovementRepositoryDep,
     applied_rates: AppliedRateRepositoryDep,
     installments: InstallmentRepositoryDep,
+    statements: StatementRepositoryDep,
     customer: CurrentCustomerDep,
     page: PageParams = Depends(),
+    statement_id: Optional[UUID] = Query(
+        default=None,
+        description=(
+            "Scope the list to one billing cycle. A single-charge purchase "
+            "matches by date falling inside that statement's period; a "
+            "billed installment matches by the statement it was actually "
+            "billed onto, regardless of its parent purchase's date."
+        ),
+    ),
 ):
     """Paginated, newest-first (spec: "Movements List Endpoint"). Per-row
     `applied_rates`/`installments` lookups mirror `card_router.py::list_all`'s
@@ -193,33 +329,83 @@ async def list_movements(
     await _owned_card_account(card_account_id, repository, customer)
 
     all_rows = await movements.get_by_card_account_id(card_account_id)
+
+    if statement_id is not None:
+        statement = await _owned_statement(card_account_id, statement_id, statements)
+        rows_by_id = {row.id: row for row in all_rows}
+        period_rows = await _period_movements(statement, all_rows, installments)
+        items = [await _movement_dto(row, applied_rates, installments) for row in period_rows]
+        items += await _billed_installment_dtos(statement, rows_by_id, installments, applied_rates)
+        items.sort(key=lambda dto: dto.occurred_at, reverse=True)
+        total = len(items)
+        page_items = items[page.offset : page.offset + page.limit]
+        return PageResponse(items=page_items, total=total, limit=page.limit, offset=page.offset)
+
     total = len(all_rows)
     page_rows = all_rows[page.offset : page.offset + page.limit]
-
-    items = []
-    for row in page_rows:
-        rate = await applied_rates.get_by_id(row.applied_rate_id) if row.applied_rate_id else None
-        splits = (
-            await installments.get_by_movement_id(row.id)
-            if row.movement_type == CardMovementType.PURCHASE
-            else []
-        )
-        items.append(
-            CardMovementDTO(
-                id=row.id,
-                movement_type=row.movement_type.value,
-                amount=row.amount,
-                currency=row.currency,
-                description=row.description,
-                decline_reason=row.decline_reason,
-                occurred_at=row.occurred_at or row.created_at,
-                fx_pair=rate.pair if rate else None,
-                fx_applied_rate=rate.applied_rate if rate else None,
-                installment_count=len(splits) if len(splits) > 1 else None,
-                installment_amount=splits[0].amount if len(splits) > 1 else None,
-            )
-        )
+    items = [await _movement_dto(row, applied_rates, installments) for row in page_rows]
     return PageResponse(items=items, total=total, limit=page.limit, offset=page.offset)
+
+
+@router.get("/{card_account_id}/statements", response_model=List[StatementDTO])
+async def list_statements(
+    card_account_id: UUID,
+    repository: CardAccountRepositoryDep,
+    statements: StatementRepositoryDep,
+    customer: CurrentCustomerDep,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+):
+    """Every closed billing cycle for this account, newest first — powers the
+    customer-facing billing-cycle tab strip."""
+    await _owned_card_account(card_account_id, repository, customer)
+    rows = await statements.list_by_card_account_id(card_account_id, limit)
+    return [StatementDTO.model_validate(row) for row in rows]
+
+
+@router.get("/{card_account_id}/installment-payoff", response_model=InstallmentPayoffDTO)
+async def installment_payoff(
+    card_account_id: UUID,
+    repository: CardAccountRepositoryDep,
+    installments: InstallmentRepositoryDep,
+    customer: CurrentCustomerDep,
+):
+    """The "settle all installment balances early" amount — a plain sum of
+    unbilled installment amounts, safe to expose because installments carry
+    0% interest (see `InstallmentPayoffDTO`)."""
+    await _owned_card_account(card_account_id, repository, customer)
+    payoff_amount = await installments.sum_unbilled(card_account_id)
+    return InstallmentPayoffDTO(card_account_id=card_account_id, payoff_amount=payoff_amount)
+
+
+@router.get("/{card_account_id}/statements/{statement_id}/pdf")
+async def download_statement_pdf(
+    card_account_id: UUID,
+    statement_id: UUID,
+    repository: CardAccountRepositoryDep,
+    statements: StatementRepositoryDep,
+    movements: CardMovementRepositoryDep,
+    installments: InstallmentRepositoryDep,
+    customer: CurrentCustomerDep,
+):
+    """Renders the real statement PDF on demand — distinct from the
+    placeholder `render_statement_pdf(statement, [], billed_installments)`
+    call `close_statement` makes at close time (that one intentionally has no
+    movements yet); this one assembles the real period-scoped movements plus
+    the exact installments this statement billed."""
+    await _owned_card_account(card_account_id, repository, customer)
+    statement = await _owned_statement(card_account_id, statement_id, statements)
+
+    all_rows = await movements.get_by_card_account_id(card_account_id)
+    period_rows = await _period_movements(statement, all_rows, installments)
+    billed_installments = await installments.get_by_statement_id(statement.id)
+
+    pdf_bytes = render_statement_pdf(statement, period_rows, billed_installments)
+    filename = f"statement-{statement.period_end.isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _now() -> str:

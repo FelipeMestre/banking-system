@@ -44,3 +44,47 @@ def test_create_get_latest_exists_and_finalize_round_trip():
     assert finalized.paid_by_due_date is True
     assert finalized.status.value == "paid"
     assert still_pending == []
+
+
+async def _get_by_id_and_list_scenario():
+    repo = FakeStatementRepository()
+    account_a, account_b = uuid.uuid4(), uuid.uuid4()
+
+    oldest = await repo.create(
+        account_a, date(2026, 6, 20), date(2026, 7, 20), date(2026, 8, 10),
+        purchases_total=Decimal("100.00"), interest_total=Decimal("0.00"),
+        total_due=Decimal("100.00"), credit_balance=Decimal("0.00"),
+        late_fees_total=Decimal("0.00"), minimum_payment=Decimal("10.00"),
+    )
+    newest = await repo.create(
+        account_a, date(2026, 7, 20), date(2026, 8, 20), date(2026, 9, 10),
+        purchases_total=Decimal("200.00"), interest_total=Decimal("0.00"),
+        total_due=Decimal("200.00"), credit_balance=Decimal("0.00"),
+        late_fees_total=Decimal("0.00"), minimum_payment=Decimal("20.00"),
+    )
+    other_account = await repo.create(
+        account_b, date(2026, 7, 20), date(2026, 8, 20), date(2026, 9, 10),
+        purchases_total=Decimal("999.00"), interest_total=Decimal("0.00"),
+        total_due=Decimal("999.00"), credit_balance=Decimal("0.00"),
+        late_fees_total=Decimal("0.00"), minimum_payment=Decimal("50.00"),
+    )
+
+    found = await repo.get_by_id(oldest.id)
+    missing = await repo.get_by_id(uuid.uuid4())
+    listed = await repo.list_by_card_account_id(account_a, limit=10)
+    capped = await repo.list_by_card_account_id(account_a, limit=1)
+
+    return oldest, newest, other_account, found, missing, listed, capped
+
+
+def test_get_by_id_and_list_by_card_account_id_against_fake():
+    oldest, newest, other_account, found, missing, listed, capped = asyncio.run(
+        _get_by_id_and_list_scenario()
+    )
+
+    assert found.id == oldest.id
+    assert missing is None
+    # newest `period_end` first, scoped to the requested account only.
+    assert [row.id for row in listed] == [newest.id, oldest.id]
+    assert other_account.id not in [row.id for row in listed]
+    assert [row.id for row in capped] == [newest.id]
