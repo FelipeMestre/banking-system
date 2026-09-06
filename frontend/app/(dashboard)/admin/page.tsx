@@ -3,7 +3,7 @@ import { AdminTabs } from "./AdminTabs";
 
 export default function Page() {
   return (
-    <main className="mx-auto max-w-[960px] px-ds-6 py-ds-8">
+    <div className="mx-auto max-w-[960px]">
       <header className="mb-ds-6 flex items-start justify-between gap-ds-4">
         <div>
           <h1>Admin</h1>
@@ -22,6 +22,6 @@ export default function Page() {
         <BatchJobsPanel />
       </section>
       <AdminTabs />
-    </main>
+    </div>
   );
 }

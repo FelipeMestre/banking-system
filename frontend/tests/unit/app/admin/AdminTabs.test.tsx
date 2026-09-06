@@ -23,7 +23,7 @@ vi.mock("@/lib/auth/usePermissions", () => ({
 }));
 
 import { usePermissions } from "@/lib/auth/usePermissions";
-import { AdminTabs } from "@/app/admin/AdminTabs";
+import { AdminTabs } from "@/app/(dashboard)/admin/AdminTabs";
 
 const mockedUsePermissions = vi.mocked(usePermissions);
 
