@@ -176,6 +176,18 @@ class RateNotAvailableError(DomainError):
     """Frankfurter returned no usable rates. -> 502."""
 
 
+class InsufficientPermissionsError(DomainError):
+    """Caller lacks required RBAC permissions. -> 403
+
+    Backend is security boundary; frontend hiding is UX only. Carries
+    `required` and `had` so the handler can return them verbatim.
+    """
+
+    def __init__(self, required: list[str], had: list[str]):
+        self.required = required
+        self.had = had
+        super().__init__(f"missing permissions {required!r}, had {had!r}")
+
 class CardAccountNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
         super().__init__("card_account", identifier)

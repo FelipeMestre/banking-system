@@ -176,9 +176,14 @@ async def valid_owned_post(
 
 ## Authentication — JWT
 
-Use **`PyJWT`**, not `python-jose` (unmaintained).
+Use **`auth0-fastapi-api==1.0.0b5`** for this project's Auth0 RS256/JWKS/audience boundary (handles JWKS cache, `aud` `https://openbank.api/com/auth`, `permissions[]`/`scope` via `require_permissions`). Use **`PyJWT`** only for non-Auth0 JWT cases — never `python-jose` (unmaintained). `auth0-fastapi-api` is the blessed SDK for this codebase (blessed over stale `PyJWT` for the security boundary).
 
 ```python
+# This project — Auth0 boundary (blessed)
+from fastapi_plugin.fast_api_client import Auth0FastAPI
+from openbankapi.config.dependencies import require_permissions  # permissions[] primary, scope fallback
+
+# Generic JWT (non-Auth0) — PyJWT
 import jwt  # PyJWT
 from jwt.exceptions import InvalidTokenError
 

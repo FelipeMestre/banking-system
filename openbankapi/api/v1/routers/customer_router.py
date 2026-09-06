@@ -16,6 +16,8 @@ from openbankapi.api.v1.dtos.customer_dto import (
     CustomerUpdateDTO,
 )
 from openbankapi.api.v1.services.cache_aside import read_through
+from typing import Annotated
+
 from openbankapi.config.dependencies import (
     CacheDep,
     CurrentCustomerDep,
@@ -23,9 +25,13 @@ from openbankapi.config.dependencies import (
     CustomerRepositoryDep,
     CustomerServiceDep,
     SettingsDep,
+    require_permissions,
 )
 from openbankapi.domain.exceptions import CustomerNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
+
+ReadAdminDep = Annotated[dict, Depends(require_permissions("read:admin"))]
+WriteAdminDep = Annotated[dict, Depends(require_permissions("write:admin"))]
 
 
 
@@ -38,7 +44,7 @@ def _dto(entity) -> dict:
 
 
 @router.post("", status_code=201, response_model=CustomerResponseDTO)
-async def create(body: CustomerCreateDTO, repository: CustomerRepositoryDep):
+async def create(body: CustomerCreateDTO, repository: CustomerRepositoryDep, _claims: WriteAdminDep):
     return await repository.create(
         identification_number=body.identification_number,
         first_name=body.first_name, last_name=body.last_name,
@@ -47,7 +53,9 @@ async def create(body: CustomerCreateDTO, repository: CustomerRepositoryDep):
 
 
 @router.get("", response_model=PageResponse[CustomerResponseDTO])
-async def list_all(repository: CustomerRepositoryDep, page: PageParams = Depends()):
+async def list_all(
+    _claims: ReadAdminDep, repository: CustomerRepositoryDep, page: PageParams = Depends()
+):
     result = await repository.list(limit=page.limit, offset=page.offset)
     return PageResponse(
         items=[CustomerResponseDTO.model_validate(i) for i in result.items],
@@ -68,13 +76,9 @@ async def get_me(customer: CurrentCustomerDep):
 
 @router.patch("/{customer_id}/auth0-link", response_model=CustomerResponseDTO)
 async def link_auth0(
-    customer_id: UUID, body: CustomerAuth0LinkDTO, repository: CustomerRepositoryDep, cache: CacheDep
+    customer_id: UUID, body: CustomerAuth0LinkDTO, repository: CustomerRepositoryDep, cache: CacheDep, _claims: WriteAdminDep
 ):
-    """Link a Customer to an Auth0 identity (spec §1.3).
-
-    Intentionally left without its own auth scope for now — a documented gap,
-    consistent with every other CRUD endpoint in this codebase today.
-    """
+    """Link a Customer to an Auth0 identity (spec §1.3). Now requires write:admin."""
     updated = await repository.update(customer_id, auth0_sub=body.sub)
     if updated is None:
         raise CustomerNotFoundError(customer_id)
@@ -88,12 +92,9 @@ async def get(
     repository: CustomerRepositoryDep,
     cache: CacheDep,
     settings: SettingsDep,
-    claims: CurrentUserDep,
+    _claims: ReadAdminDep,
 ):
-    """Guarded by `CurrentUserDep` (bare authentication), same reasoning as
-    `account_router.get()`: the transfer recipient-preview lookup resolves
-    the recipient's name here after resolving their account, and a recipient
-    is by definition someone other than the caller."""
+    """Requires read:admin (spec). Previously CurrentUserDep, now admin read."""
     found = await read_through(
         cache, cache_key(ENTITY, customer_id),
         lambda: repository.get(customer_id), _dto, settings.cache_ttl_seconds,
@@ -109,6 +110,7 @@ async def update(
     body: CustomerUpdateDTO,
     repository: CustomerRepositoryDep,
     cache: CacheDep,
+    _claims: WriteAdminDep,
 ):
     updated = await repository.update(
         customer_id,
@@ -124,7 +126,7 @@ async def update(
 
 
 @router.delete("/{customer_id}", response_model=CustomerResponseDTO)
-async def soft_delete(customer_id: UUID, service: CustomerServiceDep, cache: CacheDep):
+async def soft_delete(customer_id: UUID, service: CustomerServiceDep, cache: CacheDep, _claims: WriteAdminDep):
     updated = await service.deactivate(customer_id)
     if updated is None:
         raise CustomerNotFoundError(customer_id)

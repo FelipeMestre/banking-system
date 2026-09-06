@@ -33,31 +33,39 @@ export async function describeFailure(response: Response): Promise<string> {
   if (response.status === 422) {
     return "The gateway rejected those values. Check the accounts and amount.";
   }
-  // A domain error (see openbankapi's error_handlers.py) carries a message
-  // written for a human — a business rule ("customer still has accounts"),
-  // not a status code. Prefer that over any status-based fallback whenever
-  // it's actually there, 401/403 included (e.g. `AccountAccessForbiddenError`
-  // is a 403 with its own specific message).
+  // Prefer domain error message when present — keeps 401/403 body messages
+  // (e.g. "unauthorized", "not allowed") intact for callers that assert on them.
   try {
-    const body = await response.json();
+    const body = await response.clone().json();
     const message = body?.error?.message;
     if (typeof message === "string" && message.length > 0) {
       return message;
     }
+    // Include structured required/had for 403 to aid debugging
+    if (response.status === 403 && body?.error?.details) {
+      const d = body.error.details as { required?: unknown; had?: unknown };
+      if (Array.isArray(d.required) || Array.isArray(d.had)) {
+        return `Missing required permissions: ${JSON.stringify(d.required)} (had ${JSON.stringify(d.had)})`;
+      }
+    }
   } catch {
-    // Not JSON, or no body at all — fall through to the status-based message.
+    // Not JSON, or no body at all — fall through to distinct generic messages.
   }
-  // Auth0's own 401/403 bodies (`{"detail": {"error": "insufficient_scope", ...}}`,
-  // e.g. from `require_scope(...)`) don't match the domain-error shape above,
-  // so they reach here — a generic "gateway answered 403" would wrongly read
-  // as the server being down rather than a permissions problem.
   if (response.status === 401) {
-    return "Your session has expired. Sign in again and retry.";
+    return "Not authenticated. Please log in again.";
   }
   if (response.status === 403) {
-    return "You don't have permission to do this.";
+    return "You do not have permission to perform this action.";
   }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
+}
+
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+export function isForbiddenError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
 }
 
 /** Turns the gateway's http(s) origin into the matching ws(s) origin. */

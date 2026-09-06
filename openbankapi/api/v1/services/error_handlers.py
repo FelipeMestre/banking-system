@@ -23,6 +23,7 @@ from ....domain.exceptions import (
     DomainError,
     DuplicateError,
     InsufficientFundsError,
+    InsufficientPermissionsError,
     InvalidAccountNumberError,
     InvalidCardNumberError,
     InvalidCardStatusError,
@@ -49,6 +50,7 @@ _STATUS = [
     (CardAccountAccessForbiddenError, 403),
     (CustomerAlreadyHasAccountError, 409),
     (NoActiveBranchAvailableError, 503),
+    (InsufficientPermissionsError, 403),
     (InvalidCardStatusError, 409),
     (InvalidCardNumberError, 400),
 ]
@@ -71,6 +73,16 @@ def install(app: FastAPI) -> None:
         status = status_for(error)
         if status >= 500:
             LOG.exception("unmapped domain error", exc_info=error)
+        # InsufficientPermissionsError needs structured details for 403 {required,had}
+        if isinstance(error, InsufficientPermissionsError):
+            return JSONResponse(
+                status_code=status,
+                content=error_body(
+                    type(error).__name__,
+                    str(error),
+                    {"required": error.required, "had": error.had},
+                ),
+            )
         return JSONResponse(
             status_code=status,
             content=error_body(type(error).__name__, str(error)),

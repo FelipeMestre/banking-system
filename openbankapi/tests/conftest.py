@@ -12,6 +12,7 @@ from openbankapi.config.dependencies import (
     get_account_repository,
     get_applied_rate_repository,
     get_branch_repository,
+    get_current_user,
     get_card_account_repository,
     get_card_movement_repository,
     get_card_repository,
@@ -21,6 +22,13 @@ from openbankapi.config.dependencies import (
     get_transaction_repository,
 )
 from openbankapi.infra.kafka.status_registry import StatusRegistry
+
+_DEFAULT_ADMIN_CLAIMS = {
+    "sub": "test-admin",
+    "permissions": ["read:admin", "write:admin"],
+    "scope": "read:admin write:admin",
+    "aud": "https://openbank.api/com/auth",
+}
 
 from .fakes import (
     FakeCustomerRepository,
@@ -69,6 +77,8 @@ def build(
     transactions=None,
     fx_repo=None,
     fx_cache_service=None,
+    with_admin: bool = True,
+    admin_claims: dict | None = None,
     card_accounts=None,
     cards=None,
     card_movements=None,
@@ -124,6 +134,14 @@ def build(
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
     app.dependency_overrides[get_transaction_repository] = lambda: transactions
+    if with_admin:
+        claims = admin_claims if admin_claims is not None else _DEFAULT_ADMIN_CLAIMS
+        # Use async lambda for get_current_user (it is async def)
+        async def _default_admin():
+            return claims
+
+        app.dependency_overrides[get_current_user] = _default_admin
+        
     app.dependency_overrides[get_card_account_repository] = lambda: card_accounts
     app.dependency_overrides[get_card_repository] = lambda: cards
     app.dependency_overrides[get_card_movement_repository] = lambda: card_movements

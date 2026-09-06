@@ -1,4 +1,4 @@
-import { describeFailure, gatewayOrigin } from "@/lib/api/client";
+import { ApiError, authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
 import type { Branch } from "../types";
 
 export interface CreateBranchBody {
@@ -8,13 +8,13 @@ export interface CreateBranchBody {
 }
 
 export async function createBranch(body: CreateBranchBody): Promise<Branch> {
-  const response = await fetch(`${gatewayOrigin()}/branches`, {
+  const response = await authorizedFetch(`${gatewayOrigin()}/branches`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(await describeFailure(response));
+    throw new ApiError(await describeFailure(response), response.status);
   }
   return (await response.json()) as Branch;
 }
