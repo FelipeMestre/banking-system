@@ -111,4 +111,64 @@ describe("CreditCardsPageScreen", () => {
 
     await waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(2));
   });
+
+  it("refreshes movements a second time shortly after approval, to catch the async movement-consumer write", async () => {
+    /**
+     * `card-payment-status` (in-memory, resolves instantly) and `card-events`
+     * → `card_movements` (a separate Kafka consumer's async DB insert) are
+     * two independent consumers off the same Flink decision. The WebSocket
+     * can legitimately deliver "approved" before the movement row lands in
+     * Postgres, so a single immediate refresh can race the insert and still
+     * show the stale list — this is the "once again didn't update" bug
+     * report. A second, delayed refresh must follow to catch the settled row.
+     */
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+      vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+      vi.spyOn(usedCreditModule, "getUsedCredit").mockResolvedValue({
+        card_account_id: "ca-1", used_credit_estimate: "0.00", credit_limit: "1500.00",
+        currency: "USD", is_estimate: true, movement_count: 0,
+      });
+      vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+      vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+      vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+        card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+      });
+      vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+      let deliverApproved: (() => void) | undefined;
+      vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        return () => {};
+      });
+
+      render(<CreditCardsPageScreen />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
+      await vi.waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      act(() => deliverApproved?.());
+      await vi.waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(2));
+
+      // Immediately after approval: only the immediate refresh has fired yet.
+      expect(movementsModule.getMovements).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+
+      expect(movementsModule.getMovements).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

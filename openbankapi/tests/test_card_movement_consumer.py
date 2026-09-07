@@ -10,6 +10,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from openbankapi.config import Settings
 from openbankapi.infra.kafka.consumers.card_movement_consumer import CardMovementConsumer
@@ -296,6 +297,51 @@ def test_router_to_domain_to_consumer_pipeline_links_description_for_a_purchase(
 
     rows = asyncio.run(scenario())
     assert rows[0].description == "Coffee shop"
+
+
+def test_router_to_domain_to_consumer_pipeline_stores_the_exact_typed_dollar_amount():
+    """True end-to-end regression for the dollars-vs-cents unit bug: a
+    purchase typed as "39.99" dollars must land in `card_movements` as
+    39.99, not 0.3999. `card_router.py` used to publish `amount_usd` as a
+    bare dollar value (no cents conversion); the consumer's `/100` — correct
+    for the payment flow's genuinely-cents `amount_usd` — silently corrupted
+    every purchase amount by 100x. Pipes the router's own cents-conversion
+    shape through the REAL `card_domain.decide()` and the REAL consumer, so
+    a future regression on either side fails this test."""
+    import card_domain
+
+    async def scenario():
+        # Exact shape `card_router.py` now publishes for a USD purchase:
+        # `amount_usd`/`credit_limit` as integer cents.
+        purchase_requested_event = {
+            "type": "purchase_requested",
+            "request_id": str(uuid.uuid4()),
+            "card_id": CARD_ID,
+            "card_account_id": CARD_ACCOUNT_ID,
+            "amount": "39.99",
+            "currency": "USD",
+            "amount_usd": 3999,
+            "credit_limit": 150000,
+            "installments": 1,
+            "description": None,
+            "applied_rate": None,
+            "ts": "2026-01-01T00:00:00Z",
+        }
+
+        decision = card_domain.decide(
+            card_domain.CardState(used_credit=0, processed=frozenset()),
+            purchase_requested_event,
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        purchase_approved_event = decision.card_events[0]
+        assert purchase_approved_event["type"] == "purchase_approved"
+
+        movement_repo = FakeCardMovementRepository()
+        await _consumer(movement_repo)._apply(json.dumps(purchase_approved_event).encode())
+        return movement_repo.rows
+
+    rows = asyncio.run(scenario())
+    assert rows[0].amount == Decimal("39.99")
 
 
 def test_redelivering_the_same_approved_event_does_not_duplicate_installments():

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 import { ApiError } from "@/lib/api/client";
 import { downloadStatementPdf } from "../api/download-statement-pdf";
@@ -117,6 +117,30 @@ export function CreditCardsPageScreen() {
 
   useEffect(() => loadMovements(), [loadMovements]);
 
+  // `card-payment-status` (in-memory, resolves instantly) and `card-events`
+  // → `card_movements` (a separate Kafka consumer's async DB insert) are two
+  // independent consumers off the same Flink decision — the WebSocket can
+  // legitimately deliver "approved" before the movement row lands in
+  // Postgres. One immediate refresh can race that insert and show the old
+  // list; a second, slightly delayed refresh catches the now-settled row.
+  const pendingMovementsRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingMovementsRefreshRef.current !== null) {
+        clearTimeout(pendingMovementsRefreshRef.current);
+      }
+    };
+  }, []);
+
+  const refreshMovementsAfterPayment = useCallback(() => {
+    loadMovements();
+    if (pendingMovementsRefreshRef.current !== null) {
+      clearTimeout(pendingMovementsRefreshRef.current);
+    }
+    pendingMovementsRefreshRef.current = setTimeout(loadMovements, 1500);
+  }, [loadMovements]);
+
   const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
 
   const handleDownload = useCallback(() => {
@@ -224,7 +248,7 @@ export function CreditCardsPageScreen() {
           onClose={() => setPayDialogOpen(false)}
           onPaid={() => {
             refreshDetail();
-            loadMovements();
+            refreshMovementsAfterPayment();
           }}
           presets={
             selectedStatement

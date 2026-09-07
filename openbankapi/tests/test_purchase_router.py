@@ -109,9 +109,28 @@ def test_structural_success_never_checks_credit_and_publishes_purchase_requested
     topic, key, value = purchases_harness.publisher.published[0]
     assert topic == purchases_harness.settings.card_events_topic
     assert value["type"] == "purchase_requested"
-    assert value["amount_usd"] == pytest.approx(999999999.00)
+    assert value["amount_usd"] == 99999999900
     assert "credit_limit" in value
     assert key == issued["card_account"]["id"]
+
+
+def test_usd_purchase_publishes_amount_usd_and_credit_limit_as_integer_cents(purchases_harness):
+    """Regression: `amount_usd`/`credit_limit` must be integer cents on the
+    wire — card-service's own documented convention (card-service/tests/
+    test_card_domain.py: "All amounts are integer cents") and the same unit
+    the payment flow already uses (`card_account_router.py`'s
+    `parseAmountToCents`). A stray dollar value here used to reach
+    `card_movement_consumer.py`'s `/100` conversion undivided, so a real
+    $39.99 purchase got stored as $0.40."""
+    issued = _issue(purchases_harness).json()
+    card_number = issued["card"]["card_number"]
+
+    response = _purchase(purchases_harness, card_number, amount="39.99")
+
+    assert response.status_code == 202
+    _, _, value = purchases_harness.publisher.published[0]
+    assert value["amount_usd"] == 3999
+    assert value["credit_limit"] == 150000
 
 
 def test_non_usd_purchase_embeds_applied_rate(purchases_harness):

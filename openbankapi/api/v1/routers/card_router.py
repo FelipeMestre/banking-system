@@ -111,16 +111,21 @@ async def request_purchase(
     if card_account.status is not CardAccountStatus.ACTIVE:
         raise InvalidCardStatusError(card_account.status.value, "purchase")
 
-    amount_usd = body.amount
-    applied_rate = None
+    # card-service's own convention (card-service/tests/test_card_domain.py:
+    # "All amounts are integer cents") — `amount_usd`/`credit_limit` on the
+    # wire must be cents, matching what the payment flow already sends
+    # (`card_account_router.py`'s `PayDialog` → `parseAmountToCents`).
     if body.currency != "USD":
         rates = await foreign_exchange_cache_service.get_rates()
         # `convert` works in integer cents (same contract as
-        # `transfer_service.py`'s fee-conversion call) — convert both ways.
+        # `transfer_service.py`'s fee-conversion call).
         amount_cents = int((body.amount * 100).to_integral_value())
         quote = convert(amount_cents, body.currency, "USD", "debit", rates)
-        amount_usd = Decimal(quote["final_amount"]) / 100
+        amount_usd = int(quote["final_amount"])
         applied_rate = quote["applied_rate"]
+    else:
+        amount_usd = int((body.amount * 100).to_integral_value())
+        applied_rate = None
 
     request_id = str(uuid.uuid4())
     wire = {
@@ -130,8 +135,8 @@ async def request_purchase(
         "card_account_id": str(card_account.id),
         "amount": str(body.amount),
         "currency": body.currency,
-        "amount_usd": float(amount_usd),
-        "credit_limit": float(card_account.credit_limit),
+        "amount_usd": amount_usd,
+        "credit_limit": int((card_account.credit_limit * 100).to_integral_value()),
         "installments": body.installments,
         "description": body.description,
         "applied_rate": applied_rate,
