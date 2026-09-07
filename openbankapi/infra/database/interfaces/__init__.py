@@ -5,7 +5,7 @@ from .location_repository import ILocationRepository
 from .branch_repository import IBranchRepository
 from .applied_rate_repository import IAppliedRateRepository
 from .transaction_repository import ITransactionRepository
-from .card_account_repository import ICardAccountRepository
+from .card_account_repository import ICardAccountRepository, ICardBalanceProjection
 from .card_repository import ICardRepository
 from .card_movement_repository import ICardMovementRepository
 from .installment_repository import IInstallmentRepository
@@ -21,6 +21,7 @@ __all__ = [
     "IAppliedRateRepository",
     "ITransactionRepository",
     "ICardAccountRepository",
+    "ICardBalanceProjection",
     "ICardRepository",
     "ICardMovementRepository",
     "IInstallmentRepository",

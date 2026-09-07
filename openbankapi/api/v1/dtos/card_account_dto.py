@@ -37,3 +37,4 @@ class CardAccountResponseDTO(BaseModel):
     paying_account_id: UUID
     credit_limit: Decimal
     status: str
+    used_credit: int

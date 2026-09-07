@@ -1,12 +1,14 @@
 """Postgres implementation of `ICardAccountRepository` (Credit Cards Phase 1)."""
 from __future__ import annotations
 
+import datetime as dt
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update as sql_update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..interfaces.common import Page
 from ..schemas.models import CardAccountORM
@@ -23,10 +25,13 @@ def _to_domain(row: CardAccountORM) -> CardAccount:
         status=CardAccountStatus(row.status),
         created_at=row.created_at,
         updated_at=row.updated_at,
+        used_credit=row.used_credit,
     )
 
 
 class PostgresCardAccountRepository(PostgresRepository):
+    _UPDATABLE = frozenset({"credit_limit", "status"})
+
     async def create(
         self, *, customer_id: UUID, paying_account_id: UUID, credit_limit: Union[int, Decimal]
     ) -> CardAccount:
@@ -81,3 +86,35 @@ class PostgresCardAccountRepository(PostgresRepository):
     async def get_issuance_date(self, card_account_id: UUID) -> date:
         row = await self._fetch_one(CardAccountORM, CardAccountORM.id == card_account_id)
         return row.created_at.date()
+
+
+class PostgresCardBalanceProjection:
+    """The only writer of `card_accounts.used_credit`.
+
+    Deliberately NOT a `PostgresRepository`: that base class expects an
+    already-open, request-scoped `AsyncSession` handed out by
+    `infra/database/session.get_db_session` — but this class is driven by the
+    `card-balances` Kafka consumer thread, not an HTTP request, so there is no
+    request to scope a session to. It keeps its own `sessionmaker` and opens
+    one session per call instead. Constructed once in `main.py` and handed
+    only to that consumer — nothing that serves an HTTP request may ever hold one.
+    """
+
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]):
+        self._sessionmaker = sessionmaker
+
+    async def apply_used_credit(self, card_account_id: UUID, used_credit: int) -> bool:
+        async with self._sessionmaker.begin() as session:
+            result = await session.execute(
+                sql_update(CardAccountORM)
+                .where(CardAccountORM.id == card_account_id)
+                .values(used_credit=used_credit, updated_at=dt.datetime.now(dt.timezone.utc))
+            )
+            return bool(result.rowcount)
+
+    async def read_used_credit(self, card_account_id: UUID) -> Optional[int]:
+        """Only used by tests and diagnostics."""
+        async with self._sessionmaker() as session:
+            return await session.scalar(
+                select(CardAccountORM.used_credit).where(CardAccountORM.id == card_account_id)
+            )

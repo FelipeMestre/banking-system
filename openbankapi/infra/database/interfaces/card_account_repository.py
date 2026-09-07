@@ -16,6 +16,20 @@ from .common import Page
 
 
 @runtime_checkable
+class ICardBalanceProjection(Protocol):
+    """The one capability that may write `used_credit`. Handed only to the consumer."""
+
+    async def apply_used_credit(self, card_account_id: UUID, used_credit: int) -> bool:
+        """Set the projected used_credit. Returns False if no such card account row.
+
+        An absent card account is not an error: Flink may produce a balance for
+        a card_account that reference data has not yet created, and the read model
+        simply has nothing to project onto.
+        """
+        ...
+
+
+@runtime_checkable
 class ICardAccountRepository(Protocol):
     async def create(
         self, *, customer_id: UUID, paying_account_id: UUID, credit_limit: Union[int, Decimal]
