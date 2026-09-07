@@ -103,7 +103,7 @@ export function TransactionsPanel({ accountNumber, currencyCode }: Props) {
     <div
       ref={scrollRef}
       data-testid="transactions-scroll-container"
-      className="max-h-[140px] overflow-y-auto pr-ds-1 sm:max-h-[300px] lg:max-h-[400px]"
+      className="scrollbar-app-bg max-h-[140px] overflow-y-auto pr-ds-1 sm:max-h-[300px] lg:max-h-[400px]"
     >
       <TransactionsList transactions={items} currencyCode={currencyCode} />
       {hasMore ? (

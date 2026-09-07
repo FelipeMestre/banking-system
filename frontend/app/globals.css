@@ -201,6 +201,27 @@
     margin-bottom: 5px;
     color: color-mix(in srgb, var(--color-text) 70%, transparent);
   }
+
+  /* A scrollbar whose track matches the app's own background (--color-bg)
+   * rather than the browser default, so a scroll container sitting on a
+   * card/surface doesn't show a mismatched gray track. Used by the
+   * movements and transactions list scroll containers. */
+  .scrollbar-app-bg {
+    scrollbar-color: var(--color-neutral-400) var(--color-bg);
+  }
+
+  .scrollbar-app-bg::-webkit-scrollbar {
+    background-color: var(--color-bg);
+  }
+
+  .scrollbar-app-bg::-webkit-scrollbar-track {
+    background-color: var(--color-bg);
+  }
+
+  .scrollbar-app-bg::-webkit-scrollbar-thumb {
+    background-color: var(--color-neutral-400);
+    border-radius: 9999px;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════

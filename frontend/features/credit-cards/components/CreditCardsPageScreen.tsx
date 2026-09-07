@@ -242,7 +242,7 @@ export function CreditCardsPageScreen() {
               </h6>
               <div
                 data-testid="movements-scroll-container"
-                className="max-h-[160px] overflow-y-auto pr-ds-1 sm:max-h-[190px] lg:max-h-[220px]"
+                className="scrollbar-app-bg max-h-[160px] overflow-y-auto pr-ds-1 sm:max-h-[190px] lg:max-h-[220px]"
               >
                 <MovementsList items={movements} />
               </div>
