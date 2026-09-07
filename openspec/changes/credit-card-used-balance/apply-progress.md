@@ -28,7 +28,7 @@
 | File | Action | What Was Done |
 |------|--------|---------------|
 | `openbankapi/infra/database/migrations/versions/2026-09-06_add_card_accounts_used_credit.py` | Created | `used_credit BIGINT NOT NULL DEFAULT 0 server_default="0"` reversible |
-| `openbankapi/infra/database/migrations/versions/2026-09-07_relax_transactions_for_deposits.py` | Modified | Fixed down_revision to c3d4e5f6a7b8 to linearize heads (single head) |
+| `openbankapi/infra/database/migrations/versions/2026-09-07_relax_transactions_for_deposits.py` | Modified (enabling repair, 0-line behavioral, chore) | Linearized `8f7e6d5c4b3a` down_revision `a1b2c3d4e5f6` → `c3d4e5f6a7b8` to fix pre-existing `MultipleHeads` blocking `alembic upgrade head`; single head now `f1a2b3c4d5e6` (`2026-09-06_add_card_accounts_used_credit.py`); rollback boundary `8f7e6d5c4b3a` via `c3d4e5f6a7b8` (reverting restores `a1b2c3d4e5f6` dual-head); no spec/design scope change |
 | `openbankapi/infra/database/schemas/models.py` | Modified | `CardAccountORM.used_credit` BigInteger server_default 0 + sole-writer docstring |
 | `openbankapi/domain/model/card_account.py` | Modified | `CardAccount.used_credit: int = 0` |
 | `openbankapi/domain/events/card_balance_updated.py` | Created | `CardBalanceUpdated.from_payload` negative allowed, raises ValueError/KeyError, no ge=0 |
@@ -73,6 +73,15 @@
 | c4 Flink | `/opt/anaconda3/bin/python3 -m pytest card-service/tests/test_domain_card_balance.py -v` 3 passed + `test_job_card_balance_sink.py` 2 passed | `pytest card-service/tests/` all pass; Row(card_account_id, json) AT_LEAST_ONCE murmur2 (no partitioner) | `card-service/domain.py` + `card-service/job.py` |
 | c5 Consumer | `/opt/anaconda3/bin/python3 -m pytest openbankapi/tests/test_card_balance_consumer.py -v` 6 passed | replay×3 converges 12345, poison dropped, unknown False no delete | `consumers/card_balance_consumer.py` |
 | c6 Config+compose | `docker compose config \| grep -q card-balances` found 4 hits | `docker compose config` shows CARD_BALANCES_TOPIC in all services; `kafka-init` 6p compact | `config/config.py` + `docker-compose.yml` + `main.py` |
+
+## Enabling Repair (0-line, chore — pre-existing blocker, no spec/design scope change)
+
+- **File**: `openbankapi/infra/database/migrations/versions/2026-09-07_relax_transactions_for_deposits.py` (`8f7e6d5c4b3a`) — down_revision linearization `a1b2c3d4e5f6` → `c3d4e5f6a7b8`.
+- **Pre-existing blocker**: `a1b2c3d4e5f6` (`2026-09-06_add_statement_totals.py`) had two divergent children `b2c3d4e5f6a7` → `c3d4e5f6a7b8` and `8f7e6d5c4b3a` → `9a8b7c6d5e4f`, causing `alembic upgrade head` to fail with `MultipleHeads` before any change in this task. Not introduced by this change.
+- **Repair**: single-line metadata fix `down_revision = "c3d4e5f6a7b8"` (8f7e now follows c3d). History is now linear: `f3c8d1a5e9b7 → a1b2c3d4e5f6 → b2c3d4e5f6a7 → c3d4e5f6a7b8 → 8f7e6d5c4b3a → 9a8b7c6d5e4f → f1a2b3c4d5e6` with single head `f1a2b3c4d5e6` (`2026-09-06_add_card_accounts_used_credit.py`).
+- **Rollback boundary**: revert that one line restores `a1b2c3d4e5f6` and re-creates dual heads (`c3d4e5f6a7b8` and `8f7e6d5c4b3a` as branches); no data or constraint change beyond ordering — `upgrade`/`downgrade` payload of `8f7e6d5c4b3a` unchanged.
+- **No spec/design scope change**: no new requirement, no design decision altered; the file is not listed in proposal Affected Areas for this change and the behavior (nullable `counterparty_account`, `type IN ('debit','credit','declined','deposit')`) is unchanged.
+- **Evidence**: `alembic history` shows single head `f1a2b3c4d5e6`; `alembic upgrade head` and `alembic downgrade -1`/`upgrade` succeed (documented in Issues Found); `tasks.md` 0.1 maps this as chore/enabler.
 
 ## Deviations from Design
 None — implementation matches design.md (sole-writer port, raw int no ge=0, Row shape, after-write cache only if rowcount, GET /cards untouched).

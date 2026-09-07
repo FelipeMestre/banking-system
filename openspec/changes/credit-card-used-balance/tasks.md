@@ -29,7 +29,7 @@ Chain strategy: size-exception
 
 - [x] 1.1 RED `openbankapi/tests/test_credit_card_migration.py` — V: `/opt/anaconda3/bin/python3 -m pytest openbankapi/tests/test_credit_card_migration.py -v` FAIL
 - [x] 1.2 GREEN `used_credit BIGINT NOT NULL DEFAULT 0 server_default="0"`  + ORM sole-writer docstring + `CardAccount.used_credit` — `openbankapi/infra/database/migrations/versions/2026-09-06_add_card_accounts_used_credit.py` — V: `/opt/anaconda3/bin/python3 -m pytest openbankapi/tests/test_credit_card_migration.py -v` PASS
-- [x] 1.3 RED `openbankapi/tests/test_card_balance_event.py` — V: `/opt/anaconda3/bin/python3 -m pytest card-service/tests/test_card_balance_event.py -v` FAIL
+- [x] 1.3 RED `card-service/tests/test_card_balance_event.py` (canonical; `openbankapi/tests/test_card_balance_event.py` is identical duplicate added in same commit aff2570) — V: `/opt/anaconda3/bin/python3 -m pytest card-service/tests/test_card_balance_event.py -v` FAIL
 - [x] 1.4 GREEN `from_payload` negative allowed — `openbankapi/domain/events/card_balance_updated.py` — V: `/opt/anaconda3/bin/python3 -m pytest card-service/tests/test_card_balance_event.py -v` PASS
 
 ## Phase 2: Ports & DTO
@@ -56,3 +56,7 @@ Chain strategy: size-exception
 
 - [x] 5.1 GREEN E2E $300→30000 S11 — `openbankapi/tests/test_card_balances_e2e.py` — V: `/opt/anaconda3/bin/python3 -m pytest openbankapi/tests/test_card_balances_e2e.py -v` PASS
 - [x] 5.2 GREEN final — `openspec/changes/credit-card-used-balance/specs/card-accounts/spec.md` (read-only) — V: `/opt/anaconda3/bin/python3 -m pytest -q` PASS
+
+## Enabling Repair (0-line chore — pre-existing blocker, no behavioral change)
+
+- [x] 0.1 Chore/enabler: Linearize `openbankapi/infra/database/migrations/versions/2026-09-07_relax_transactions_for_deposits.py` (`8f7e6d5c4b3a`) down_revision `a1b2c3d4e5f6` → `c3d4e5f6a7b8` to fix pre-existing `MultipleHeads` blocking `alembic upgrade head`; single head now `f1a2b3c4d5e6` (`2026-09-06_add_card_accounts_used_credit.py`); rollback boundary is `8f7e6d5c4b3a` via `c3d4e5f6a7b8` (reverting restores `a1b2c3d4e5f6` and re-creates dual heads `c3d4e5f6a7b8`/`8f7e6d5c4b3a`); no spec/design scope change — Evidence: `alembic history` linear `f3c8d1a5e9b7 → a1b2c3d4e5f6 → b2c3d4e5f6a7 → c3d4e5f6a7b8 → 8f7e6d5c4b3a → 9a8b7c6d5e4f → f1a2b3c4d5e6` single head; `alembic upgrade head` succeeds then `downgrade`/`upgrade` verified
