@@ -7,7 +7,7 @@ const PAGE_BODY = {
     {
       card_account: {
         id: "ca-1", customer_id: "cust-1", paying_account_id: "acc-1",
-        credit_limit: "1500.00", status: "active",
+        credit_limit: "1500.00", status: "active", used_credit: 15000,
       },
       card: {
         id: "card-1", card_account_id: "ca-1", card_number: "•••• •••• •••• 1234",

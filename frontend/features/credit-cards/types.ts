@@ -19,6 +19,7 @@ export interface CardAccount {
   paying_account_id: string;
   credit_limit: string;
   status: "active" | "blocked" | "closed";
+  used_credit: number;
 }
 
 /** Mirrors `CardMaskedDTO` (openbankapi/api/v1/dtos/card_dto.py) — the masking
