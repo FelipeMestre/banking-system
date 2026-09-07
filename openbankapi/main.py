@@ -24,6 +24,7 @@ from .infra.database.config.session import create_engine, create_sessionmaker
 from .infra.database.repositories import (
     PostgresAccountBalanceProjection,
     PostgresAppliedRateWriter,
+    PostgresCardBalanceProjection,
     PostgresCardMovementWriter,
     PostgresDepositWriter,
     PostgresInstallmentWriter,
@@ -37,6 +38,7 @@ from .infra.foreign_exchange_service.repository.frankfurter_repository import (
 )
 from .infra.kafka.consumers import (
     AccountBalanceConsumer,
+    CardBalanceConsumer,
     CardMovementConsumer,
     CardPaymentStatusConsumer,
     DepositStatusConsumer,
@@ -58,6 +60,7 @@ sessionmaker = create_sessionmaker(engine)
 # The balance writer is built separately and handed ONLY to the consumer below.
 # Nothing that serves an HTTP request ever holds one (spec §3.5). Every other
 balance_projection = PostgresAccountBalanceProjection(sessionmaker)
+card_balance_projection = PostgresCardBalanceProjection(sessionmaker)
 # Same reasoning applies to the transactions writer: it is driven by a Kafka
 # thread, not an HTTP request, so it keeps its own sessionmaker rather than
 # sharing the request-scoped session `TransactionRepositoryDep` uses.
@@ -95,9 +98,12 @@ card_payment_status_consumer = CardPaymentStatusConsumer(
 )
 deposit_status_consumer = DepositStatusConsumer(settings, deposit_status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
+
+card_balance_consumer = CardBalanceConsumer(settings, card_balance_projection, cache)
 transaction_consumer = TransactionConsumer(
     settings, transaction_writer, applied_rate_writer, deposit_writer
 )
+
 card_movement_consumer = CardMovementConsumer(
     settings, card_movement_writer, installment_writer, applied_rate_writer
 )
@@ -118,6 +124,7 @@ def _start(loop: asyncio.AbstractEventLoop) -> None:
     card_payment_status_consumer.start(loop)
     deposit_status_consumer.start(loop)
     balance_consumer.start(loop)
+    card_balance_consumer.start(loop)
     transaction_consumer.start(loop)
     card_movement_consumer.start(loop)
 
@@ -128,6 +135,7 @@ def _stop() -> None:
     card_payment_status_consumer.stop()
     deposit_status_consumer.stop()
     balance_consumer.stop()
+    card_balance_consumer.stop()
     transaction_consumer.stop()
     card_movement_consumer.stop()
     publisher.close()

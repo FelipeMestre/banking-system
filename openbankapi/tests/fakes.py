@@ -522,6 +522,7 @@ class FakeCardAccountRepository:
             status=CardAccountStatus.ACTIVE,
             created_at=_now(),
             updated_at=_now(),
+            used_credit=0,
         )
         self.rows[entity.id] = entity
         return entity
@@ -552,6 +553,7 @@ class FakeCardAccountRepository:
             status=CardAccountStatus(status),
             created_at=current.created_at,
             updated_at=_now(),
+            used_credit=current.used_credit,
         )
         self.rows[card_account_id] = updated
         return updated
@@ -570,11 +572,24 @@ class FakeCardAccountRepository:
             status=current.status,
             created_at=current.created_at,
             updated_at=_now(),
+            used_credit=current.used_credit,
         )
         self.rows[card_account_id] = updated
         return updated
 
-    async def list_active_ids(self) -> list[UUID]:
+    async def apply_used_credit(self, card_account_id: UUID, used_credit: int) -> bool:
+        current = self.rows.get(card_account_id)
+        if current is None:
+            return False
+        self.rows[card_account_id] = CardAccount(
+            id=current.id, customer_id=current.customer_id,
+            paying_account_id=current.paying_account_id, credit_limit=current.credit_limit,
+            status=current.status, created_at=current.created_at, updated_at=_now(),
+            used_credit=used_credit,
+        )
+        return True
+
+    async def list_active_ids(self) -> List[UUID]:
         """Every card_account still billable — everything except CLOSED
         (Credit Cards Phase 4 correction: a BLOCKED account still has an
         outstanding balance and must keep getting statements; blocking only

@@ -63,3 +63,44 @@ def test_downgrade_drops_all_five_tables_in_fk_order(fx_test_dsn):
             assert asyncio.run(_table_exists(fx_test_dsn, table)) is False, f"{table} not dropped"
     finally:
         migrate_to_head(fx_test_dsn)
+
+
+# --- credit-card-used-balance: used_credit column (Red before migration) ---
+
+
+async def _column_info(dsn: str, table: str, column: str):
+    engine = create_engine(dsn)
+    try:
+        async with engine.connect() as conn:
+            result = await conn.exec_driver_sql(
+                "SELECT column_name, data_type, is_nullable, column_default "
+                "FROM information_schema.columns "
+                f"WHERE table_name = '{table}' AND column_name = '{column}'"
+            )
+            row = result.fetchone()
+            return row
+    finally:
+        await engine.dispose()
+
+
+def test_card_accounts_has_used_credit_column(fx_test_dsn):
+    row = asyncio.run(_column_info(fx_test_dsn, "card_accounts", "used_credit"))
+    assert row is not None, "used_credit column missing"
+    _, data_type, is_nullable, column_default = row
+    assert data_type == "bigint", f"expected bigint got {data_type}"
+    assert is_nullable == "NO", "used_credit must be NOT NULL"
+    assert column_default is not None and "0" in column_default, f"DEFAULT 0 expected got {column_default}"
+
+
+def test_used_credit_downgrade_drops_column(fx_test_dsn):
+    # head has column; downgrade one step should drop it if migration present
+    row_before = asyncio.run(_column_info(fx_test_dsn, "card_accounts", "used_credit"))
+    assert row_before is not None, "precondition: column must exist at head"
+    downgrade_to("9a8b7c6d5e4f", fx_test_dsn)
+    try:
+        row = asyncio.run(_column_info(fx_test_dsn, "card_accounts", "used_credit"))
+        assert row is None, "used_credit should be dropped after downgrade"
+    finally:
+        migrate_to_head(fx_test_dsn)
+        row_after = asyncio.run(_column_info(fx_test_dsn, "card_accounts", "used_credit"))
+        assert row_after is not None, "column must be back after re-upgrade"

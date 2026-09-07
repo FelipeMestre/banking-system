@@ -69,6 +69,7 @@ PURCHASE_STATUS_TOPIC = os.getenv("PURCHASE_STATUS_TOPIC", "purchase-status")
 # `request_id` is only unique within its own domain's topic, and a purchase
 # and a payment could coincidentally share one (spec: kafka-topics).
 CARD_PAYMENT_STATUS_TOPIC = os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status")
+CARD_BALANCES_TOPIC = os.getenv("CARD_BALANCES_TOPIC", "card-balances")
 CONSUMER_GROUP = os.getenv("CARD_SERVICE_GROUP_ID", "card-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -83,6 +84,7 @@ STATUS_TAG = OutputTag("status-events", RECORD_TYPE)
 # separate from purchase's `STATUS_TAG` (design: kept as a distinct topic so
 # a purchase and a payment sharing a `request_id` never collide).
 CARD_PAYMENT_STATUS_TAG = OutputTag("card-payment-status-events", RECORD_TYPE)
+CARD_BALANCES_TAG = OutputTag("card-balance-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -171,6 +173,8 @@ class CardProcessor(KeyedProcessFunction):
             yield STATUS_TAG, Row(status["request_id"], json.dumps(status))
         for payment_status in decision.payment_status_events:
             yield CARD_PAYMENT_STATUS_TAG, Row(payment_status["request_id"], json.dumps(payment_status))
+        for bal in getattr(decision, "card_balance_events", ()):
+            yield CARD_BALANCES_TAG, Row(bal["card_account_id"], json.dumps(bal))
 
 
     def __contains__(self, request_id: str) -> bool:
@@ -250,6 +254,9 @@ def build_job():
     processed.get_side_output(CARD_PAYMENT_STATUS_TAG).sink_to(
         _kafka_sink(CARD_PAYMENT_STATUS_TOPIC)
     ).name("card-payment-status-sink")
+    processed.get_side_output(CARD_BALANCES_TAG).sink_to(
+        _kafka_sink(CARD_BALANCES_TOPIC)
+    ).name("card-balances-sink")
 
     env.execute(JOB_NAME)
 
