@@ -1,7 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { formatDecimalCurrency } from "../format-decimal";
+import { formatCents } from "@/lib/money";
+import { availableCents, formatDecimalCurrency } from "../format-decimal";
 import type { CardAccountListItem } from "../types";
 
 interface Props {
@@ -16,15 +17,9 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = 
   closed: "secondary",
 };
 
-/** Real card list for the logged-in customer (spec: "Real Card List for the
- * Logged-In Customer"). Each tile shows the masked number, expiration,
- * status, and credit_limit — nothing invented, nothing from Phase 4. Laid
- * out as a horizontal card-selector strip (design handoff's "Select a
- * card" section) — no per-card used-credit gauge here, since that figure
- * is only ever fetched for the one currently-selected card account
- * (`CardDetail`'s used-credit-estimate call); showing it on every tile
- * would mean an extra fetch per card, which nothing in this feature does
- * today. */
+/** Real card list for the logged-in customer; each tile shows masked number,
+ * expiration, status, credit_limit, plus compact Used/Avail hint derived from
+ * the list payload (no extra fetch). */
 export function CardList({ items, selectedCardAccountId, onSelect }: Props) {
   if (items.length === 0) {
     return <p className="m-0 text-sm text-neutral-600">You have no credit cards yet.</p>;
@@ -56,6 +51,14 @@ export function CardList({ items, selectedCardAccountId, onSelect }: Props) {
             <div className="flex items-center justify-between text-xs text-neutral-600">
               <span>{card ? `Expires ${card.expiration_date}` : ""}</span>
               <span>Limit {formatDecimalCurrency(cardAccount.credit_limit)}</span>
+            </div>
+            <div className="text-xs text-neutral-600">
+              {(() => {
+                const available = availableCents(cardAccount.credit_limit, cardAccount.used_credit);
+                const usedLabel = formatCents(cardAccount.used_credit);
+                const availLabel = available === null ? "—" : formatCents(available);
+                return `Used ${usedLabel} · Avail ${availLabel}`;
+              })()}
             </div>
           </button>
         </li>
