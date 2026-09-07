@@ -33,6 +33,7 @@ class CardAccount:
     status: CardAccountStatus
     created_at: datetime
     updated_at: datetime
+    used_credit: int = 0
 
     @property
     def is_active(self) -> bool:
