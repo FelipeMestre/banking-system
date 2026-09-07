@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AccountsAndTransactions } from "@/components/home/AccountsAndTransactions";
 import { CreditCardPanel } from "@/components/home/CreditCardPanel";
-import { CREDIT_CARD, SHOW_CREDIT_CARD } from "@/components/home/credit-card-fixture";
 import { QuickActions } from "@/components/home/QuickActions";
 import { TotalPosition } from "@/components/home/TotalPosition";
 import { LoadingScreen } from "@/components/ui/loading-screen";
@@ -113,7 +112,7 @@ export function HomeDashboard() {
       onSelectAccount={setSelectedAccountNumber}
       aside={
         <aside className="flex flex-col gap-[28px]">
-          {SHOW_CREDIT_CARD ? <CreditCardPanel card={CREDIT_CARD} /> : null}
+          <CreditCardPanel />
           <QuickActions />
           <TotalPosition totals={totalPositionByCurrency(accounts)} />
         </aside>

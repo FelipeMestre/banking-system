@@ -17,6 +17,7 @@ export { CurrentCycleSummary } from "./components/CurrentCycleSummary";
 export { StatementTotalsSidebar } from "./components/StatementTotalsSidebar";
 export { CreditCardsPageScreen } from "./components/CreditCardsPageScreen";
 export { deriveStatementStatusLabel, statementStatusBadgeVariant } from "./statement-status";
+export { availableCents, creditLimitDecimalToCents } from "./format-decimal";
 export type { StatementStatusLabel } from "./statement-status";
 export type { PayDialogPresets } from "./components/PayDialog";
 export type {
