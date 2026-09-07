@@ -36,7 +36,7 @@ services:
       kafka:
         condition: service_healthy
     restart: "no"
-    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-payment-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic deposit-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
+    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-payment-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
   flink-jobmanager:
     build:
@@ -135,6 +135,7 @@ services:
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
       CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -158,6 +159,7 @@ services:
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
       CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -179,6 +181,7 @@ services:
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
       CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/card_service/submit.sh"]
@@ -257,6 +260,7 @@ services:
       ACCOUNT_BALANCES_TOPIC: account-balances
       DEPOSIT_STATUS_TOPIC: deposit-status
       BALANCE_CONSUMER_GROUP: openbankapi-balances
+      CARD_BALANCES_TOPIC: card-balances
       DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL_SECONDS: "300"
