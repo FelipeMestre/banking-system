@@ -171,4 +171,162 @@ describe("CreditCardsPageScreen", () => {
       vi.useRealTimers();
     }
   });
+
+  it("dual-refetches card-accounts on PayDialog approved: 2x immediate, 3x after 1500ms", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+      const getCardAccountsSpy = vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+      vi.spyOn(usedCreditModule, "getUsedCredit").mockResolvedValue({
+        card_account_id: "ca-1", used_credit_estimate: "0.00", credit_limit: "1500.00",
+        currency: "USD", is_estimate: true, movement_count: 0,
+      });
+      vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+      vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+      vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+        card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+      });
+      vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+      let deliverApproved: (() => void) | undefined;
+      vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        return () => {};
+      });
+
+      render(<CreditCardsPageScreen />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => deliverApproved?.());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("prevents card-accounts timer stacking on rapid second approved", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+      const getCardAccountsSpy = vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+      vi.spyOn(usedCreditModule, "getUsedCredit").mockResolvedValue({
+        card_account_id: "ca-1", used_credit_estimate: "0.00", credit_limit: "1500.00",
+        currency: "USD", is_estimate: true, movement_count: 0,
+      });
+      vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+      vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+      vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+        card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+      });
+      vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+      let deliverApproved: (() => void) | undefined;
+      vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        return () => {};
+      });
+
+      render(<CreditCardsPageScreen />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => deliverApproved?.());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
+      act(() => deliverApproved?.());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears pending card-accounts timer on unmount", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+      const getCardAccountsSpy = vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+      vi.spyOn(usedCreditModule, "getUsedCredit").mockResolvedValue({
+        card_account_id: "ca-1", used_credit_estimate: "0.00", credit_limit: "1500.00",
+        currency: "USD", is_estimate: true, movement_count: 0,
+      });
+      vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+      vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+      vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+        card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+      });
+      vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+      let deliverApproved: (() => void) | undefined;
+      vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        return () => {};
+      });
+
+      const { unmount } = render(<CreditCardsPageScreen />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => deliverApproved?.());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
+
+      unmount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
