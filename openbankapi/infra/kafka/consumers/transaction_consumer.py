@@ -159,6 +159,7 @@ class TransactionConsumer:
             decline_reason=event.get("reason") if row_type == "declined" else None,
             ts=self._parse_ts(event.get("ts")),
             applied_rate_id=applied_rate_id,
+            description=event.get("description"),
         )
 
     async def _insert_deposit(self, event: dict[str, Any]) -> None:

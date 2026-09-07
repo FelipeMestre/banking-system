@@ -70,6 +70,8 @@ def to_wire(
         "fee_amount": event.fee_amount,
         "ts": event.ts,
     }
+    if event.description is not None:
+        wire["description"] = event.description
     if add_conversion_fields:
         wire["destination_amount"] = (
             destination_amount if destination_amount is not None else event.amount
@@ -96,7 +98,11 @@ class TransferService:
         self._foreign_exchange_cache_service = foreign_exchange_cache_service
 
     async def request_transfer(
-        self, source_account: str, destination_account: str, amount: int
+        self,
+        source_account: str,
+        destination_account: str,
+        amount: int,
+        description: Optional[str] = None,
     ) -> TransferRequested:
         """Append the request and return. Never waits on the ledger.
 
@@ -114,6 +120,7 @@ class TransferService:
             amount=amount,
             fee_amount=compute_fee(amount, self._settings.fee_flat_cents),
             ts=_now(),
+            description=description,
         )
 
         wire_kwargs: Dict[str, Any] = {}

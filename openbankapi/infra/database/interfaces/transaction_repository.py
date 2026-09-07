@@ -27,6 +27,7 @@ class ITransactionRepository(Protocol):
         decline_reason: str | None,
         ts: datetime,
         applied_rate_id: UUID | None = None,
+        description: str | None = None,
     ) -> UUID | None:
         """Insert one row. A redelivered `(request_id, account_number, type)`
         is a silent no-op, not an error (spec §3.2).

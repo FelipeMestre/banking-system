@@ -315,6 +315,9 @@ def _outgoing(
     }
     if conversion is not None:
         payload["conversion"] = conversion
+    description = event.get("description")
+    if description is not None:
+        payload["description"] = description
     return payload
 
 
@@ -340,13 +343,16 @@ def _incoming(
     }
     if conversion is not None:
         payload["conversion"] = conversion
+    description = event.get("description")
+    if description is not None:
+        payload["description"] = description
     return payload
 
 
 def _declined(
     event: Dict[str, Any], account: str, reason: str, now: str, amount: int
 ) -> Dict[str, Any]:
-    return {
+    payload = {
         "type": DECLINED_PAYMENT,
         "request_id": event["request_id"],
         "account_id": account,
@@ -355,6 +361,10 @@ def _declined(
         "reason": reason,
         "ts": now,
     }
+    description = event.get("description")
+    if description is not None:
+        payload["description"] = description
+    return payload
 
 
 def _status(

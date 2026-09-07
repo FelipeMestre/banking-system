@@ -85,7 +85,7 @@ async def _seed_account(session, *, currency: str, balance: int = 0) -> str:
 
 async def _settle_transfer(
     session, *, source_currency: str, destination_currency: str, amount: int,
-    source_balance: int, fee_flat_cents: int = 25,
+    source_balance: int, fee_flat_cents: int = 25, description: Optional[str] = None,
 ):
     """Runs the real pipeline: request -> ledger decision -> transaction rows.
 
@@ -100,7 +100,7 @@ async def _settle_transfer(
     cache_service = FixedRatesCacheService()
     service = TransferService(settings, publisher, account_repository, cache_service)
 
-    await service.request_transfer(source_account, destination_account, amount)
+    await service.request_transfer(source_account, destination_account, amount, description=description)
     _, _, wire_event = publisher.published[0]
 
     state = LedgerState(balance=source_balance, processed=frozenset())
@@ -150,6 +150,44 @@ def test_same_currency_transfer_produces_unchanged_transaction_rows(fx_test_dsn)
     assert debit.applied_rate_id is None
     assert credit_destination.applied_rate_id is None
     assert applied_rate_count == 0
+
+
+def test_description_is_threaded_through_router_domain_and_persisted_on_both_legs(fx_test_dsn):
+    """True end-to-end regression: `TransferService.request_transfer`'s
+    `description` must survive the real `account-service` `decide()` (which
+    reads `event.get("description")` inside `_outgoing`/`_incoming`, added
+    nowhere else) and land on both the debit and destination-credit
+    `transactions` rows via the real `TransactionConsumer`."""
+
+    async def scenario():
+        async with rollback_session(fx_test_dsn) as session:
+            return await _settle_transfer(
+                session, source_currency="USD", destination_currency="USD",
+                amount=1100, source_balance=5000, description="Rent for September",
+            )
+
+    wire_event, _, by_type, _, _, _ = _run(scenario())
+
+    assert wire_event["description"] == "Rent for September"
+    debit = by_type["debit"][0]
+    credit_destination = next(r for r in by_type["credit"] if r.amount == 1100)
+    assert debit.description == "Rent for September"
+    assert credit_destination.description == "Rent for September"
+
+
+def test_description_is_omitted_when_the_caller_never_provided_one(fx_test_dsn):
+    async def scenario():
+        async with rollback_session(fx_test_dsn) as session:
+            return await _settle_transfer(
+                session, source_currency="USD", destination_currency="USD",
+                amount=1100, source_balance=5000,
+            )
+
+    wire_event, _, by_type, _, _, _ = _run(scenario())
+
+    assert "description" not in wire_event
+    debit = by_type["debit"][0]
+    assert debit.description is None
 
 
 # --- EUR -> USD: full linkage --------------------------------------------------

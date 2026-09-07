@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class TransferRequested:
     amount: int
     fee_amount: int
     ts: str
+    description: Optional[str] = None
 
     @property
     def total_debit(self) -> int:

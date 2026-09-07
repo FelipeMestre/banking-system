@@ -2,12 +2,18 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useTransferDraft } from "@/features/transfers/hooks/useTransferDraft";
 import { findRecipient } from "@/features/transfers/api/find-recipient";
+import { requestTransfer } from "@/features/transfers/api/request-transfer";
+import { watchTransferStatus } from "@/features/transfers/api/watch-transfer-status";
 import type { Account } from "@/features/accounts";
 import type { RecipientPreview } from "@/features/transfers/types";
 
 vi.mock("@/features/transfers/api/find-recipient", () => ({ findRecipient: vi.fn() }));
+vi.mock("@/features/transfers/api/request-transfer", () => ({ requestTransfer: vi.fn() }));
+vi.mock("@/features/transfers/api/watch-transfer-status", () => ({ watchTransferStatus: vi.fn() }));
 
 const mockedFindRecipient = vi.mocked(findRecipient);
+const mockedRequestTransfer = vi.mocked(requestTransfer);
+const mockedWatchTransferStatus = vi.mocked(watchTransferStatus);
 
 const RECIPIENTS: Record<string, RecipientPreview> = {
   "7723490011": { account_number: "7723490011", currency: "USD", name: "Alex Morgan", initials: "AM" },
@@ -149,5 +155,64 @@ describe("useTransferDraft selectors", () => {
     await waitFor(() => expect(result.current.recipientError).toBe("gateway unreachable"));
     expect(result.current.hasRecipient).toBe(false);
     expect(result.current.recipientNotFound).toBe(false);
+  });
+
+  it("submits the trimmed description alongside the transfer", async () => {
+    mockRecipientLookup();
+    mockedRequestTransfer.mockResolvedValue({ request_id: "r1", status: "pending", fee_amount: 0 });
+    mockedWatchTransferStatus.mockImplementation((_requestId, watcher) => {
+      watcher.onStatus({ request_id: _requestId, status: "approved" });
+      return () => {};
+    });
+    const { result } = renderHook(() => useTransferDraft(mockAccounts));
+    act(() => {
+      result.current.setFromId("100000000001");
+      result.current.setToNumber("7723490011");
+      result.current.setAmount("5");
+      result.current.setDescription("  Rent  ");
+    });
+    await waitFor(() => expect(result.current.hasRecipient).toBe(true));
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() =>
+      expect(mockedRequestTransfer).toHaveBeenCalledWith({
+        source_account: "100000000001",
+        destination_account: "7723490011",
+        amount: 500,
+        description: "Rent",
+      }),
+    );
+  });
+
+  it("omits description entirely when left blank", async () => {
+    mockRecipientLookup();
+    mockedRequestTransfer.mockResolvedValue({ request_id: "r2", status: "pending", fee_amount: 0 });
+    mockedWatchTransferStatus.mockImplementation((_requestId, watcher) => {
+      watcher.onStatus({ request_id: _requestId, status: "approved" });
+      return () => {};
+    });
+    const { result } = renderHook(() => useTransferDraft(mockAccounts));
+    act(() => {
+      result.current.setFromId("100000000001");
+      result.current.setToNumber("7723490011");
+      result.current.setAmount("5");
+    });
+    await waitFor(() => expect(result.current.hasRecipient).toBe(true));
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() =>
+      expect(mockedRequestTransfer).toHaveBeenCalledWith({
+        source_account: "100000000001",
+        destination_account: "7723490011",
+        amount: 500,
+        description: undefined,
+      }),
+    );
   });
 });

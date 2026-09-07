@@ -18,9 +18,9 @@ const TYPE_LABEL: Record<Transaction["type"], string> = {
 
 /**
  * The selected account's latest transactions (spec §3.3), read straight off
- * the transactions read model — no running balance, description, or
- * reference: the read model does not project those, only what actually moved
- * (`type`, `amount`, `counterparty_account`, `ts`) and, for a decline, why.
+ * the transactions read model — no running balance or reference: the read
+ * model does not project those, only what actually moved (`type`, `amount`,
+ * `counterparty_account`, `description`, `ts`) and, for a decline, why.
  */
 export function TransactionsList({ transactions, currencyCode }: Props) {
   const symbol = currencySymbol(currencyCode);
@@ -37,13 +37,14 @@ export function TransactionsList({ transactions, currencyCode }: Props) {
             <TableHead>Date</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Counterparty</TableHead>
+            <TableHead>Description</TableHead>
             <TableHead className="text-right">Amount</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-neutral-600">
+              <TableCell colSpan={5} className="text-neutral-600">
                 No movements yet.
               </TableCell>
             </TableRow>
@@ -61,6 +62,9 @@ export function TransactionsList({ transactions, currencyCode }: Props) {
                 </TableCell>
                 <TableCell className="font-mono text-xs whitespace-normal break-all">
                   {row.counterparty_account ?? "—"}
+                </TableCell>
+                <TableCell className="text-sm whitespace-normal break-words text-neutral-700">
+                  {row.description ?? "—"}
                 </TableCell>
                 <TableCell className="text-right text-sm font-semibold">
                   {formatCents(row.amount, symbol)}

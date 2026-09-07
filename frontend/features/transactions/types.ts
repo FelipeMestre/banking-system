@@ -8,6 +8,7 @@ export interface Transaction {
   amount: number;
   counterparty_account: string | null;
   decline_reason: string | null;
+  description: string | null;
   /** ISO 8601 timestamp. */
   ts: string;
 }

@@ -4,6 +4,7 @@ export interface TransferRequestBody {
   source_account: string;
   destination_account: string;
   amount: number;
+  description?: string;
 }
 
 /** 202 Accepted from POST /transfer. */

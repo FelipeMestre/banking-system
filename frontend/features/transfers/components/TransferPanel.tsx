@@ -8,6 +8,7 @@ import { useTransferDraft } from "../hooks/useTransferDraft";
 import { FromAccountSelect } from "./FromAccountSelect";
 import { ToAccountField } from "./ToAccountField";
 import { AmountField } from "./AmountField";
+import { DescriptionField } from "./DescriptionField";
 import { ExchangeWarningBanner } from "./ExchangeWarningBanner";
 
 type Draft = ReturnType<typeof useTransferDraft>;
@@ -83,6 +84,7 @@ export function TransferPanel({
         symbol={symbol}
         currencyCode={currencyCode}
       />
+      <DescriptionField value={draft.description} onChange={draft.setDescription} />
 
       {accountsError ? (
         <p className="m-0 text-[0.9rem] text-neutral-600">{accountsError}</p>

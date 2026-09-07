@@ -30,6 +30,7 @@ def _to_domain(row: TransactionORM) -> Transaction:
         decline_reason=row.decline_reason,
         ts=row.ts,
         applied_rate_id=row.applied_rate_id,
+        description=row.description,
     )
 
 
@@ -60,6 +61,7 @@ class PostgresTransactionRepository(PostgresRepository):
         decline_reason: str | None,
         ts: datetime,
         applied_rate_id: UUID | None = None,
+        description: str | None = None,
     ) -> UUID | None:
         statement = (
             pg_insert(TransactionORM)
@@ -72,6 +74,7 @@ class PostgresTransactionRepository(PostgresRepository):
                 decline_reason=decline_reason,
                 ts=ts,
                 applied_rate_id=applied_rate_id,
+                description=description,
             )
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]
@@ -139,6 +142,7 @@ class PostgresTransactionWriter:
         decline_reason: str | None,
         ts: datetime,
         applied_rate_id: UUID | None = None,
+        description: str | None = None,
     ) -> UUID | None:
         statement = (
             pg_insert(TransactionORM)
@@ -151,6 +155,7 @@ class PostgresTransactionWriter:
                 decline_reason=decline_reason,
                 ts=ts,
                 applied_rate_id=applied_rate_id,
+                description=description,
             )
             .on_conflict_do_nothing(
                 index_elements=["request_id", "account_number", "type"]

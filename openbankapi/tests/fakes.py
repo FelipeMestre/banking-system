@@ -397,6 +397,7 @@ class FakeTransactionRepository:
         decline_reason: str | None,
         ts: dt.datetime,
         applied_rate_id: UUID | None = None,
+        description: str | None = None,
     ) -> UUID | None:
         key = (request_id, account_number, type)
         if key in self._seen:
@@ -414,6 +415,7 @@ class FakeTransactionRepository:
                 decline_reason=decline_reason,
                 ts=ts,
                 applied_rate_id=applied_rate_id,
+                description=description,
             )
         )
         return new_id

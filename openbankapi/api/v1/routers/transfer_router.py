@@ -45,6 +45,7 @@ async def request_transfer(body: TransferRequestDTO, service: TransferServiceDep
         source_account=body.source_account,
         destination_account=body.destination_account,
         amount=body.amount,
+        description=body.description,
     )
     return TransferAcceptedDTO(
         request_id=event.request_id, status="pending", fee_amount=event.fee_amount

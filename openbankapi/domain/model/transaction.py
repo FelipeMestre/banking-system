@@ -26,3 +26,4 @@ class Transaction:
     decline_reason: str | None
     ts: datetime
     applied_rate_id: UUID | None = None
+    description: str | None = None

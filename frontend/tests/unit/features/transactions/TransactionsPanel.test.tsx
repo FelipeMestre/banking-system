@@ -36,7 +36,7 @@ class FakeIntersectionObserver {
 function transaction(id: string): Transaction {
   return {
     id, request_id: `r-${id}`, type: "credit", amount: 1000,
-    counterparty_account: "9999999999999999", decline_reason: null, ts: "2026-09-04T00:00:00Z",
+    counterparty_account: "9999999999999999", decline_reason: null, description: null, ts: "2026-09-04T00:00:00Z",
   };
 }
 

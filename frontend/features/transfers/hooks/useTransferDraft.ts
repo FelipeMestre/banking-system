@@ -42,6 +42,7 @@ export function useTransferDraft(accounts: Account[] = []) {
   const [fromId, setFromId] = useState<string>("");
   const [toNumber, setToNumber] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<TransferResult>(null);
   const [recipientState, setRecipientState] = useState<RecipientState>({ kind: "idle" });
@@ -111,10 +112,12 @@ export function useTransferDraft(accounts: Account[] = []) {
     setResult(null);
 
     try {
+      const trimmedDescription = description.trim();
       const accepted = await requestTransfer({
         source_account: fromId,
         destination_account: toNumber.trim(),
         amount: cents,
+        description: trimmedDescription ? trimmedDescription : undefined,
       });
 
       await new Promise<void>((resolve) => {
@@ -140,7 +143,7 @@ export function useTransferDraft(accounts: Account[] = []) {
     } finally {
       setIsLoading(false);
     }
-  }, [hasRecipient, amount, fromId, toNumber, stopWatching]);
+  }, [hasRecipient, amount, fromId, toNumber, description, stopWatching]);
 
   const reset = useCallback(() => {
     stopWatching();
@@ -152,6 +155,7 @@ export function useTransferDraft(accounts: Account[] = []) {
     fromId,
     toNumber,
     amount,
+    description,
     isLoading,
     result,
     recipient,
@@ -165,6 +169,7 @@ export function useTransferDraft(accounts: Account[] = []) {
     setFromId,
     setToNumber,
     setAmount,
+    setDescription,
     setIsLoading,
     setResult,
     submit,

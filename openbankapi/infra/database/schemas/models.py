@@ -159,6 +159,7 @@ class TransactionORM(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     counterparty_account: Mapped[str | None] = mapped_column(String(16), nullable=True)
     decline_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[dt.datetime] = _created()
     # Nullable, additive (FX-16): only a settled leg that carried a currency

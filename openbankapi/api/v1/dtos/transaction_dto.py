@@ -22,6 +22,7 @@ class TransactionDTO(BaseModel):
     amount: int
     counterparty_account: Optional[str] = None
     decline_reason: Optional[str] = None
+    description: Optional[str] = None
     ts: datetime
 
 
