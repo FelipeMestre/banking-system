@@ -51,7 +51,13 @@ export function AdminTabs() {
       {TABS.map((tab) => {
         const Panel = PANELS[tab];
         return (
-          <TabsContent key={tab} value={tab}>
+          // `forceMount` + hide-when-inactive (rather than Radix's default
+          // unmount-on-switch) keeps each panel's already-fetched data and
+          // rendered height alive across tab switches. Unmounting used to
+          // drop every panel back to its own "Loading…" state on every
+          // switch, briefly collapsing the page's height and snapping the
+          // scroll position to the top — uncomfortable on a long table.
+          <TabsContent key={tab} value={tab} forceMount className="data-[state=inactive]:hidden">
             <Panel />
           </TabsContent>
         );
