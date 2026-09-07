@@ -335,4 +335,23 @@ describe("CreditCardsPageScreen", () => {
       vi.useRealTimers();
     }
   });
+
+  it("renders the movements list inside a fixed-height scroll container, not an unbounded page-growing list", async () => {
+    vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+    vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+    vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+    vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+    vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+      card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+    });
+
+    render(<CreditCardsPageScreen />);
+    await screen.findByText("•••• •••• •••• 1234");
+
+    const container = screen.getByTestId("movements-scroll-container");
+    expect(container.className).toContain("overflow-y-auto");
+    expect(container.className).toContain("max-h-[160px]");
+    expect(container.className).toContain("sm:max-h-[190px]");
+    expect(container.className).toContain("lg:max-h-[220px]");
+  });
 });

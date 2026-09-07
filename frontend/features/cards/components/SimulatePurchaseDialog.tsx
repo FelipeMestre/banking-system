@@ -163,8 +163,9 @@ export function SimulatePurchaseDialog({ onClose }: Props) {
       onClose={onClose}
       onAccept={handleAccept}
       acceptLabel={acceptLabel}
-      cancelLabel={result ? "Close" : "Cancel"}
+      cancelLabel="Cancel"
       acceptDisabled={acceptDisabled}
+      hideCancel={result !== null}
     >
       {cardsState.kind === "loading" ? (
         <LoadingScreen message="Loading cards…" fullScreen={false} showBranding={false} />

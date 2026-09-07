@@ -118,8 +118,9 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
       onClose={onClose}
       onAccept={handleAccept}
       acceptLabel={acceptLabel}
-      cancelLabel={result ? "Close" : "Cancel"}
+      cancelLabel="Cancel"
       acceptDisabled={acceptDisabled}
+      hideCancel={result !== null}
     >
       {result ? (
         <div className="flex flex-col gap-ds-3">

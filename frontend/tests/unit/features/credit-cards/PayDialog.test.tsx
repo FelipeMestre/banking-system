@@ -103,4 +103,23 @@ describe("PayDialog", () => {
 
     await waitFor(() => expect(onPaid).toHaveBeenCalledOnce());
   });
+
+  it("shows a single Close button once the payment resolves, not a Cancel and a Close saying the same thing", async () => {
+    vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({
+      request_id: "r1", status: "pending",
+    });
+    vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation(() => () => {});
+
+    render(<PayDialog cardAccountId="ca-1" onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+
+    // The dialog's own "X" icon button is separately aria-labeled "Close" —
+    // scope to the visible text so this only counts the footer buttons.
+    expect(await screen.findByText("Close")).toBeInTheDocument();
+    expect(screen.getAllByText("Close")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
 });
