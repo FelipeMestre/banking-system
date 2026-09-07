@@ -9,7 +9,6 @@ import { getCurrentCustomer } from "../api/get-current-customer";
 import { getInstallmentPayoff } from "../api/get-installment-payoff";
 import { getMovements } from "../api/get-movements";
 import { getStatements } from "../api/get-statements";
-import { getUsedCredit } from "../api/get-used-credit";
 import { CardDetail } from "./CardDetail";
 import { CardList } from "./CardList";
 import { CurrentCycleSummary } from "./CurrentCycleSummary";
@@ -22,7 +21,6 @@ import type {
   CardMovement,
   InstallmentPayoff,
   Statement,
-  UsedCreditEstimate,
 } from "../types";
 
 const CARD_ACCOUNTS_PAGE_SIZE = 50;
@@ -37,7 +35,6 @@ type CardsState =
 export function CreditCardsPageScreen() {
   const [cardsState, setCardsState] = useState<CardsState>({ kind: "loading" });
   const [selectedCardAccountId, setSelectedCardAccountId] = useState<string | null>(null);
-  const [estimate, setEstimate] = useState<UsedCreditEstimate | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
   const [movements, setMovements] = useState<CardMovement[]>([]);
@@ -85,7 +82,6 @@ export function CreditCardsPageScreen() {
 
   const refreshDetail = useCallback(() => {
     if (!selectedCardAccountId) return;
-    getUsedCredit(selectedCardAccountId).then(setEstimate).catch(() => setEstimate(null));
     getInstallmentPayoff(selectedCardAccountId).then(setPayoff).catch(() => setPayoff(null));
     getStatements({ cardAccountId: selectedCardAccountId, limit: STATEMENTS_PAGE_SIZE })
       .then((rows) => {
@@ -101,7 +97,6 @@ export function CreditCardsPageScreen() {
   }, [selectedCardAccountId]);
 
   useEffect(() => {
-    setEstimate(null);
     setStatements([]);
     setSelectedStatementId(null);
     setPayoff(null);
