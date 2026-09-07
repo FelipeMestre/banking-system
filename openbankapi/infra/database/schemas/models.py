@@ -195,7 +195,12 @@ class DepositORM(Base):
 
 
 class CardAccountORM(Base):
-    """The credit-card line: a customer's parent aggregate for `cards` (Phase 1)."""
+    """The credit-card line: a customer's parent aggregate for `cards` (Phase 1).
+
+    `used_credit` is a projection, not state this table owns.
+
+    Only writer is card-balances consumer via ICardBalanceProjection. No CRUD path can set it.
+    """
 
     __tablename__ = "card_accounts"
     __table_args__ = (
@@ -213,6 +218,7 @@ class CardAccountORM(Base):
     )
     credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    used_credit: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     created_at: Mapped[dt.datetime] = _created()
     updated_at: Mapped[dt.datetime] = _created()
 

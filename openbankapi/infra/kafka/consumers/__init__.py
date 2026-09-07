@@ -1,4 +1,5 @@
 from .account_balance_consumer import AccountBalanceConsumer
+from .card_balance_consumer import CardBalanceConsumer
 from .card_movement_consumer import CardMovementConsumer
 from .card_payment_status_consumer import CardPaymentStatusConsumer
 from .deposit_status_consumer import DepositStatusConsumer
@@ -8,6 +9,7 @@ from .transfer_status_consumer import TransferStatusConsumer
 
 __all__ = [
     "AccountBalanceConsumer",
+    "CardBalanceConsumer",
     "CardMovementConsumer",
     "CardPaymentStatusConsumer",
     "DepositStatusConsumer",

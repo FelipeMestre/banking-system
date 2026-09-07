@@ -58,10 +58,15 @@ class Decision:
     # kept as a separate field so `job.py` can sink each to its own topic
     # without inspecting event payloads (spec: kafka-topics).
     payment_status_events: Tuple[Dict[str, Any], ...] = ()
+    card_balance_events: Tuple[Dict[str, Any], ...] = ()
 
     @staticmethod
     def noop() -> "Decision":
         return Decision()
+
+
+def _card_balance(card_account_id: str, used_credit: int, now: datetime) -> Dict[str, Any]:
+    return {"card_account_id": str(card_account_id), "used_credit": int(used_credit), "ts": now.isoformat()}
 
 
 def decide(card_state: CardState, event: Dict[str, Any], now: datetime) -> Decision:
@@ -106,6 +111,7 @@ def _on_purchase_requested(card_state: CardState, event: Dict[str, Any], now: da
             dedup_keys=(request_id,),
             card_events=(_approved(event, now),),
             status_events=(_status(event, STATUS_APPROVED, now),),
+            card_balance_events=(_card_balance(event["card_account_id"], new_used_credit, now),),
         )
 
     return Decision(
@@ -132,6 +138,7 @@ def _on_card_payment_received(card_state: CardState, event: Dict[str, Any], now:
         dedup_keys=(request_id,),
         card_events=(_payment_applied(event, now),),
         payment_status_events=(_status(event, STATUS_APPROVED, now),),
+        card_balance_events=(_card_balance(event["card_account_id"], new_used_credit, now),),
     )
 
 

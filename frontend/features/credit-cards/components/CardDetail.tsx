@@ -1,50 +1,45 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDecimalCurrency } from "../format-decimal";
-import type { UsedCreditEstimate } from "../types";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatCents } from "@/lib/money";
+import { availableCents } from "../format-decimal";
+import type { CardAccount } from "../types";
 
 interface Props {
-  estimate: UsedCreditEstimate | null;
-  loading: boolean;
+  cardAccount: CardAccount;
+  isStale: boolean;
   onPay: () => void;
 }
 
-/**
- * Shows the derived used-credit approximation. The "approximate" label is
- * NOT conditional on anything — it must always be present, including
- * immediately after a fresh purchase (spec: "Race window is documented, not
- * hidden"), since this value can never be claimed authoritative or final.
- */
-export function CardDetail({ estimate, loading, onPay }: Props) {
+export function CardDetail({ cardAccount, isStale, onPay }: Props) {
+  const available = availableCents(cardAccount.credit_limit, cardAccount.used_credit);
+  const usedLabel = formatCents(cardAccount.used_credit);
+  const availableLabel = available === null ? "—" : formatCents(available);
+
   return (
-    <section className="flex flex-col gap-ds-3 border-2 border-divider p-ds-4">
-      {loading || estimate === null ? (
-        <p className="m-0 text-sm text-neutral-600">Loading used credit…</p>
-      ) : (
-        <>
-          <div>
-            <div className="mb-ds-1 font-body text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
-              Used credit (approximate)
-            </div>
-            <div className="flex items-baseline gap-ds-2">
-              <span className="font-heading text-[28px] font-extrabold tracking-[-0.02em] tabular-nums">
-                {formatDecimalCurrency(estimate.used_credit_estimate)}
-              </span>
-              <span className="text-sm text-neutral-600">
-                of {formatDecimalCurrency(estimate.credit_limit)}
-              </span>
-            </div>
-            <p className="m-0 mt-ds-1 text-xs text-neutral-600">
-              This is an approximate figure derived from recent activity — it may not reflect a
-              purchase or payment made moments ago.
-            </p>
+    <Card>
+      <CardContent className="flex flex-col gap-ds-3">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-ds-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600">Used</span>
+            <span className="font-heading text-[28px] font-extrabold tracking-[-0.02em] tabular-nums">
+              {usedLabel}
+            </span>
           </div>
-          <Button type="button" onClick={onPay}>
-            Pay
-          </Button>
-        </>
-      )}
-    </section>
+          <div className="flex flex-col items-end gap-ds-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600">Available</span>
+            <span className="font-heading text-[28px] font-extrabold tracking-[-0.02em] tabular-nums">
+              {availableLabel}
+            </span>
+          </div>
+        </div>
+        {isStale ? <Badge variant="secondary">Updating…</Badge> : null}
+        <Button type="button" onClick={onPay}>
+          Pay
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

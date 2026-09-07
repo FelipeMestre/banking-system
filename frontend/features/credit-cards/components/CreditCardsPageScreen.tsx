@@ -9,7 +9,6 @@ import { getCurrentCustomer } from "../api/get-current-customer";
 import { getInstallmentPayoff } from "../api/get-installment-payoff";
 import { getMovements } from "../api/get-movements";
 import { getStatements } from "../api/get-statements";
-import { getUsedCredit } from "../api/get-used-credit";
 import { CardDetail } from "./CardDetail";
 import { CardList } from "./CardList";
 import { CurrentCycleSummary } from "./CurrentCycleSummary";
@@ -22,7 +21,6 @@ import type {
   CardMovement,
   InstallmentPayoff,
   Statement,
-  UsedCreditEstimate,
 } from "../types";
 
 const CARD_ACCOUNTS_PAGE_SIZE = 50;
@@ -34,24 +32,16 @@ type CardsState =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: CardAccountListItem[] };
 
-/**
- * Composes the customer-facing Cards page from the real `card-accounts`,
- * used-credit-estimate, movements, statements, and installment-payoff
- * endpoints (`credit-card-monthly-batch-statements`). This supersedes the
- * previous phase's "Explicit Exclusion of Phase-4 Billing UI" decision — the
- * billing-cycle UI this page now renders is the deliberate subject of this
- * change, not an accidental scope creep.
- */
 export function CreditCardsPageScreen() {
   const [cardsState, setCardsState] = useState<CardsState>({ kind: "loading" });
   const [selectedCardAccountId, setSelectedCardAccountId] = useState<string | null>(null);
-  const [estimate, setEstimate] = useState<UsedCreditEstimate | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
   const [movements, setMovements] = useState<CardMovement[]>([]);
   const [payoff, setPayoff] = useState<InstallmentPayoff | null>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [isCardsStale, setIsCardsStale] = useState(false);
 
   const loadCards = useCallback(() => {
     setCardsState({ kind: "loading" });
@@ -75,9 +65,23 @@ export function CreditCardsPageScreen() {
 
   useEffect(() => loadCards(), [loadCards]);
 
+  const refreshCards = useCallback(() => {
+    return getCurrentCustomer()
+      .then((customer) => getCardAccounts({ customerId: customer.id, limit: CARD_ACCOUNTS_PAGE_SIZE, offset: 0 }))
+      .then((page) => {
+        setCardsState({ kind: "ready", items: page.items });
+        setSelectedCardAccountId((current) => {
+          if (current && page.items.some((i) => i.card_account.id === current)) return current;
+          return page.items[0]?.card_account.id ?? null;
+        });
+      })
+      .catch(() => {
+        // keep last cardsState on refresh failure; staleness will still clear via timer
+      });
+  }, []);
+
   const refreshDetail = useCallback(() => {
     if (!selectedCardAccountId) return;
-    getUsedCredit(selectedCardAccountId).then(setEstimate).catch(() => setEstimate(null));
     getInstallmentPayoff(selectedCardAccountId).then(setPayoff).catch(() => setPayoff(null));
     getStatements({ cardAccountId: selectedCardAccountId, limit: STATEMENTS_PAGE_SIZE })
       .then((rows) => {
@@ -93,7 +97,6 @@ export function CreditCardsPageScreen() {
   }, [selectedCardAccountId]);
 
   useEffect(() => {
-    setEstimate(null);
     setStatements([]);
     setSelectedStatementId(null);
     setPayoff(null);
@@ -117,18 +120,16 @@ export function CreditCardsPageScreen() {
 
   useEffect(() => loadMovements(), [loadMovements]);
 
-  // `card-payment-status` (in-memory, resolves instantly) and `card-events`
-  // → `card_movements` (a separate Kafka consumer's async DB insert) are two
-  // independent consumers off the same Flink decision — the WebSocket can
-  // legitimately deliver "approved" before the movement row lands in
-  // Postgres. One immediate refresh can race that insert and show the old
-  // list; a second, slightly delayed refresh catches the now-settled row.
   const pendingMovementsRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCardsRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (pendingMovementsRefreshRef.current !== null) {
         clearTimeout(pendingMovementsRefreshRef.current);
+      }
+      if (pendingCardsRefreshRef.current !== null) {
+        clearTimeout(pendingCardsRefreshRef.current);
       }
     };
   }, []);
@@ -140,6 +141,20 @@ export function CreditCardsPageScreen() {
     }
     pendingMovementsRefreshRef.current = setTimeout(loadMovements, 1500);
   }, [loadMovements]);
+
+  const refreshCardsAfterPayment = useCallback(() => {
+    refreshCards();
+    if (pendingCardsRefreshRef.current !== null) {
+      clearTimeout(pendingCardsRefreshRef.current);
+    }
+    setIsCardsStale(true);
+    pendingCardsRefreshRef.current = setTimeout(() => {
+      refreshCards().finally(() => {
+        setIsCardsStale(false);
+        pendingCardsRefreshRef.current = null;
+      });
+    }, 1500);
+  }, [refreshCards]);
 
   const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
 
@@ -183,11 +198,11 @@ export function CreditCardsPageScreen() {
         />
       </section>
 
-      {selectedCardAccountId ? (
+      {selectedCard ? (
         <div className="flex flex-col gap-ds-4">
           <CardDetail
-            estimate={estimate}
-            loading={estimate === null}
+            cardAccount={selectedCard.card_account}
+            isStale={isCardsStale}
             onPay={() => setPayDialogOpen(true)}
           />
 
@@ -249,6 +264,7 @@ export function CreditCardsPageScreen() {
           onPaid={() => {
             refreshDetail();
             refreshMovementsAfterPayment();
+            refreshCardsAfterPayment();
           }}
           presets={
             selectedStatement

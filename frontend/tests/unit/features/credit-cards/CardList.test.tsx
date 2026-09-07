@@ -1,15 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CardList } from "@/features/credit-cards/components/CardList";
+import * as cardAccountsModule from "@/features/credit-cards/api/get-card-accounts";
+import * as usedCreditModule from "@/features/credit-cards/api/get-used-credit";
 import type { CardAccountListItem } from "@/features/credit-cards/types";
 
 const TWO_CARDS: CardAccountListItem[] = [
   {
-    card_account: { id: "ca-1", customer_id: "c1", paying_account_id: "a1", credit_limit: "1500.00", status: "active" },
+    card_account: { id: "ca-1", customer_id: "c1", paying_account_id: "a1", credit_limit: "500.00", status: "active", used_credit: 15000 },
     card: { id: "card-1", card_account_id: "ca-1", card_number: "•••• •••• •••• 1234", expiration_date: "2029-01-01", status: "active" },
   },
   {
-    card_account: { id: "ca-2", customer_id: "c1", paying_account_id: "a1", credit_limit: "500.00", status: "blocked" },
+    card_account: { id: "ca-2", customer_id: "c1", paying_account_id: "a1", credit_limit: "500.00", status: "blocked", used_credit: 0 },
     card: { id: "card-2", card_account_id: "ca-2", card_number: "•••• •••• •••• 5678", expiration_date: "2027-06-01", status: "blocked" },
   },
 ];
@@ -22,8 +24,24 @@ describe("CardList", () => {
     expect(screen.getByText("•••• •••• •••• 5678")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.getByText("blocked")).toBeInTheDocument();
-    expect(screen.getByText("Limit $1500.00")).toBeInTheDocument();
-    expect(screen.getByText("Limit $500.00")).toBeInTheDocument();
+    expect(screen.getAllByText("Limit $500.00")).toHaveLength(2);
+  });
+
+  it("renders compact hint Used $x · Avail $y from list payload without extra fetch", () => {
+    render(<CardList items={TWO_CARDS} selectedCardAccountId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText("Used $150.00 · Avail $350.00")).toBeInTheDocument();
+    expect(screen.getByText("Used $0.00 · Avail $500.00")).toBeInTheDocument();
+  });
+
+  it("does not issue extra per-card fetches when rendering N items", () => {
+    const cardAccountsSpy = vi.spyOn(cardAccountsModule, "getCardAccounts");
+    const usedCreditSpy = vi.spyOn(usedCreditModule, "getUsedCredit");
+
+    render(<CardList items={TWO_CARDS} selectedCardAccountId={null} onSelect={vi.fn()} />);
+
+    expect(cardAccountsSpy).not.toHaveBeenCalled();
+    expect(usedCreditSpy).not.toHaveBeenCalled();
   });
 
   it("calls onSelect with the clicked card account's id", () => {

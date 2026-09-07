@@ -34,6 +34,8 @@ class Settings:
     purchase_status_consumer_group: str = ""  # empty -> unique per process
     card_payment_status_topic: str = "card-payment-status"
     card_payment_status_consumer_group: str = ""  # empty -> unique per process
+    card_balances_topic: str = "card-balances"
+    card_balance_consumer_group: str = "openbankapi-card-balances"
     deposit_status_topic: str = "deposit-status"
     deposit_status_consumer_group: str = ""  # empty -> unique per process
 
@@ -98,6 +100,8 @@ class Settings:
             purchase_status_consumer_group=os.getenv("PURCHASE_STATUS_CONSUMER_GROUP", ""),
             card_payment_status_topic=os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status"),
             card_payment_status_consumer_group=os.getenv("CARD_PAYMENT_STATUS_CONSUMER_GROUP", ""),
+            card_balances_topic=os.getenv("CARD_BALANCES_TOPIC", "card-balances"),
+            card_balance_consumer_group=os.getenv("CARD_BALANCE_CONSUMER_GROUP", "openbankapi-card-balances"),
             deposit_status_topic=os.getenv("DEPOSIT_STATUS_TOPIC", "deposit-status"),
             deposit_status_consumer_group=os.getenv("DEPOSIT_STATUS_CONSUMER_GROUP", ""),
             database_dsn=os.getenv(
