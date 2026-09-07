@@ -3,6 +3,8 @@ import {
   availableCents,
   creditLimitDecimalToCents,
   formatDecimalCurrency,
+  formatExpiry,
+  usagePercent,
 } from "@/features/credit-cards/format-decimal";
 import { formatCents } from "@/lib/money";
 
@@ -59,10 +61,49 @@ describe("formatDecimalCurrency", () => {
   });
 
   it("defaults to $ when no symbol is given", () => {
-    expect(formatDecimalCurrency("1500")).toBe("$1500.00");
+    expect(formatDecimalCurrency("120")).toBe("$120.00");
+  });
+
+  it("groups thousands, matching lib/money.ts's formatCents convention", () => {
+    expect(formatDecimalCurrency("1500")).toBe("$1,500.00");
+    expect(formatDecimalCurrency("15000.50")).toBe("$15,000.50");
+  });
+
+  it("groups thousands on a negative value, sign before the symbol", () => {
+    expect(formatDecimalCurrency("-1500")).toBe("-$1,500.00");
   });
 
   it("returns an em dash for a non-numeric value", () => {
     expect(formatDecimalCurrency("not-a-number")).toBe("—");
+  });
+});
+
+describe("usagePercent", () => {
+  it("computes a proportional percentage of the limit", () => {
+    expect(usagePercent("500.00", 15000)).toBe(30);
+  });
+
+  it("clamps a negative used_credit (a prepaid card) to 0%, never a negative bar", () => {
+    expect(usagePercent("500.00", -2000)).toBe(0);
+  });
+
+  it("clamps used_credit exceeding the limit to 100%, never an overflowing bar", () => {
+    expect(usagePercent("500.00", 60000)).toBe(100);
+  });
+
+  it("returns 0 when the limit is unparseable or non-positive", () => {
+    expect(usagePercent("not-a-number", 15000)).toBe(0);
+    expect(usagePercent("0", 15000)).toBe(0);
+  });
+});
+
+describe("formatExpiry", () => {
+  it("converts an ISO date to MM/YY", () => {
+    expect(formatExpiry("2029-09-01")).toBe("09/29");
+    expect(formatExpiry("2027-06-15")).toBe("06/27");
+  });
+
+  it("returns an em dash for a malformed date", () => {
+    expect(formatExpiry("not-a-date")).toBe("—");
   });
 });

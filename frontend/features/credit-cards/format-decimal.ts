@@ -6,10 +6,14 @@
  * `used_credit_estimate`, and every `CardMovement.amount` are `Decimal`
  * strings straight off `card_account_dto.py`/`card_usage_dto.py`.
  */
+const GROUPING = new Intl.NumberFormat("en-US");
+
 export function formatDecimalCurrency(value: string, symbol: string = "$"): string {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return "—";
-  return `${symbol}${parsed.toFixed(2)}`;
+  const sign = parsed < 0 ? "-" : "";
+  const [whole, fraction = "00"] = Math.abs(parsed).toFixed(2).split(".");
+  return `${sign}${symbol}${GROUPING.format(Number(whole))}.${fraction}`;
 }
 
 /**
@@ -42,4 +46,26 @@ export function availableCents(limit: string, used: number): number | null {
   if (limitCents === null) return null;
   if (!Number.isSafeInteger(used)) return null;
   return limitCents - used;
+}
+
+/**
+ * Usage as a 0-100 percentage of the limit, for a progress bar. Clamped at
+ * both ends: a negative `used` (the customer paid ahead, prepaying the card)
+ * reads as 0% used, not a negative bar; `used` exceeding the limit — the
+ * live authoritative balance can briefly outrun a limit lowered out of band
+ * — clamps at 100%, not an overflowing bar.
+ */
+export function usagePercent(limit: string, used: number): number {
+  const limitCents = creditLimitDecimalToCents(limit);
+  if (limitCents === null || limitCents <= 0 || !Number.isFinite(used)) return 0;
+  return Math.max(0, Math.min(100, (used / limitCents) * 100));
+}
+
+/** "YYYY-MM-DD" -> "MM/YY". String slicing, not `Date` parsing, so this
+ * can't drift a month depending on the reader's timezone. */
+export function formatExpiry(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-\d{2}/.exec(isoDate);
+  if (!match) return "—";
+  const [, year, month] = match;
+  return `${month}/${year!.slice(-2)}`;
 }

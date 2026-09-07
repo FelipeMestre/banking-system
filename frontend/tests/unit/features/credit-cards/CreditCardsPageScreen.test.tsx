@@ -43,7 +43,9 @@ describe("CreditCardsPageScreen", () => {
 
     expect(await screen.findByText("•••• •••• •••• 1234")).toBeInTheDocument();
     expect(screen.getByText("•••• •••• •••• 5678")).toBeInTheDocument();
-    expect(await screen.findByText("$150.00")).toBeInTheDocument();
+    // "$150.00" now appears twice — CardList's own tile shows the same used
+    // amount alongside CardDetail's larger figure.
+    expect(await screen.findAllByText("$150.00")).toHaveLength(2);
     expect(screen.getByText("$1,350.00")).toBeInTheDocument();
   });
 
@@ -313,7 +315,7 @@ describe("CreditCardsPageScreen", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      await vi.waitFor(() => expect(screen.getByText("$150.00")).toBeInTheDocument());
+      await vi.waitFor(() => expect(screen.getAllByText("$150.00")).toHaveLength(2));
       expect(screen.getByText("$1,350.00")).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
@@ -327,7 +329,7 @@ describe("CreditCardsPageScreen", () => {
         await vi.advanceTimersByTimeAsync(0);
       });
 
-      expect(screen.getByText("$150.00")).toBeInTheDocument();
+      expect(screen.getAllByText("$150.00")).toHaveLength(2);
       expect(screen.getByText("$1,350.00")).toBeInTheDocument();
       expect(screen.queryByText("$100.00")).not.toBeInTheDocument();
       expect(screen.getByText("Updating…")).toBeInTheDocument();
