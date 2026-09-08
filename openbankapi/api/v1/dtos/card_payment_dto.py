@@ -2,19 +2,27 @@
 
 `amount` is integer cents in the paying account's own currency — unlike
 `PurchaseRequestDTO`'s `Decimal` dollars, there is no separate `currency`
-field here: the paying account is fixed on `card_accounts.paying_account_id`
-(Phase 1) and the router resolves its currency server-side, never from the
-request body.
+field here: the router resolves the paying account's currency server-side,
+never from the request body.
+
+`source_account` names which of the caller's own accounts to debit. The
+router still resolves it server-side (never trusts a client-supplied id
+without an ownership check) — see `card_account_router.py::request_payment`.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# Account identifiers are 16-digit numbers (spec §3.5, §5) — same constraint
+# `transfer_dto.py`/`account_dto.py` each define locally for their own DTOs.
+AccountNumber = Annotated[str, StringConstraints(pattern=r"^[0-9]{16}$")]
 
 
 class CardPaymentRequestDTO(BaseModel):
     amount: int = Field(gt=0)
+    source_account: AccountNumber
 
 
 class CardPaymentAcceptedDTO(BaseModel):

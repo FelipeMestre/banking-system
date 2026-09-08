@@ -71,6 +71,7 @@ export interface CardMovement {
  * account's own currency (resolved server-side, never sent by the client). */
 export interface CardPaymentRequestBody {
   amount: number;
+  source_account: string;
 }
 
 /** Mirrors `CardPaymentAcceptedDTO`. */

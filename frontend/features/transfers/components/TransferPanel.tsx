@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { AccountSelect } from "@/components/shared/AccountSelect";
 import { currencySymbol } from "@/lib/money";
 import type { Account } from "@/features/accounts";
 import { useTransferDraft } from "../hooks/useTransferDraft";
-import { FromAccountSelect } from "./FromAccountSelect";
 import { ToAccountField } from "./ToAccountField";
 import { AmountField } from "./AmountField";
 import { DescriptionField } from "./DescriptionField";
@@ -69,7 +69,13 @@ export function TransferPanel({
         are immediate.
       </p>
 
-      <FromAccountSelect value={draft.fromId} onChange={draft.setFromId} accounts={accounts} />
+      <AccountSelect
+        id="from-account"
+        label="From account"
+        value={draft.fromId}
+        onChange={draft.setFromId}
+        accounts={accounts}
+      />
       <ToAccountField
         value={draft.toNumber}
         onChange={draft.setToNumber}

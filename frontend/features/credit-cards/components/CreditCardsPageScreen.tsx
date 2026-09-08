@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 import { ApiError } from "@/lib/api/client";
 import { downloadStatementPdf } from "../api/download-statement-pdf";
@@ -9,7 +10,6 @@ import { getCurrentCustomer } from "../api/get-current-customer";
 import { getInstallmentPayoff } from "../api/get-installment-payoff";
 import { getMovements } from "../api/get-movements";
 import { getStatements } from "../api/get-statements";
-import { CardDetail } from "./CardDetail";
 import { CardList } from "./CardList";
 import { CurrentCycleSummary } from "./CurrentCycleSummary";
 import { MovementsList } from "./MovementsList";
@@ -41,7 +41,6 @@ export function CreditCardsPageScreen() {
   const [payoff, setPayoff] = useState<InstallmentPayoff | null>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [isCardsStale, setIsCardsStale] = useState(false);
 
   const loadCards = useCallback(() => {
     setCardsState({ kind: "loading" });
@@ -147,10 +146,8 @@ export function CreditCardsPageScreen() {
     if (pendingCardsRefreshRef.current !== null) {
       clearTimeout(pendingCardsRefreshRef.current);
     }
-    setIsCardsStale(true);
     pendingCardsRefreshRef.current = setTimeout(() => {
       refreshCards().finally(() => {
-        setIsCardsStale(false);
         pendingCardsRefreshRef.current = null;
       });
     }, 1500);
@@ -200,20 +197,18 @@ export function CreditCardsPageScreen() {
 
       {selectedCard ? (
         <div className="flex flex-col gap-ds-4">
-          <CardDetail
-            cardAccount={selectedCard.card_account}
-            isStale={isCardsStale}
-            onPay={() => setPayDialogOpen(true)}
-          />
-
           <section className="flex flex-col gap-ds-2">
-            <h6 className="m-0">
-              Current cycle{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
-            </h6>
+            <div className="flex items-center justify-between">
+              <h6 className="m-0">
+                Current cycle{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
+              </h6>
+              <Button type="button" size="sm" onClick={() => setPayDialogOpen(true)}>
+                Pay
+              </Button>
+            </div>
             {selectedStatement ? (
               <CurrentCycleSummary
                 statement={selectedStatement}
-                onPay={() => setPayDialogOpen(true)}
                 onDownload={handleDownload}
                 downloading={downloading}
               />

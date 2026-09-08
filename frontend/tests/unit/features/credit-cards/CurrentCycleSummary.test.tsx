@@ -19,7 +19,6 @@ describe("CurrentCycleSummary", () => {
     render(
       <CurrentCycleSummary
         statement={makeStatement({})}
-        onPay={vi.fn()}
         onDownload={vi.fn()}
         downloading={false}
       />,
@@ -35,7 +34,6 @@ describe("CurrentCycleSummary", () => {
     const { rerender } = render(
       <CurrentCycleSummary
         statement={makeStatement({ credit_balance: "0.00" })}
-        onPay={vi.fn()}
         onDownload={vi.fn()}
         downloading={false}
       />,
@@ -45,7 +43,6 @@ describe("CurrentCycleSummary", () => {
     rerender(
       <CurrentCycleSummary
         statement={makeStatement({ credit_balance: "25.00" })}
-        onPay={vi.fn()}
         onDownload={vi.fn()}
         downloading={false}
       />,
@@ -53,23 +50,20 @@ describe("CurrentCycleSummary", () => {
     expect(screen.getByText("Credit balance")).toBeInTheDocument();
   });
 
-  it("calls onPay and onDownload", () => {
-    const onPay = vi.fn();
+  it("calls onDownload", () => {
     const onDownload = vi.fn();
     render(
-      <CurrentCycleSummary statement={makeStatement({})} onPay={onPay} onDownload={onDownload} downloading={false} />,
+      <CurrentCycleSummary statement={makeStatement({})} onDownload={onDownload} downloading={false} />,
     );
 
-    screen.getByRole("button", { name: "Pay" }).click();
     screen.getByRole("button", { name: "Download current statement" }).click();
 
-    expect(onPay).toHaveBeenCalledOnce();
     expect(onDownload).toHaveBeenCalledOnce();
   });
 
   it("disables the download button and shows a preparing label while downloading", () => {
     render(
-      <CurrentCycleSummary statement={makeStatement({})} onPay={vi.fn()} onDownload={vi.fn()} downloading={true} />,
+      <CurrentCycleSummary statement={makeStatement({})} onDownload={vi.fn()} downloading={true} />,
     );
 
     const button = screen.getByRole("button", { name: "Preparing…" });

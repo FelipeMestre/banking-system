@@ -41,6 +41,8 @@ from openbankapi.config.dependencies import (
     StatementRepositoryDep,
 )
 from openbankapi.domain.exceptions import (
+    AccountAccessForbiddenError,
+    AccountNotFoundError,
     CardAccountAccessForbiddenError,
     CardAccountNotFoundError,
     InvalidCardStatusError,
@@ -421,31 +423,33 @@ async def request_payment(
     card_accounts: CardAccountRepositoryDep,
     cards: CardRepositoryDep,
     accounts: AccountRepositoryDep,
+    customer: CurrentCustomerDep,
     publisher: PublisherDep,
     settings: SettingsDep,
     foreign_exchange_cache_service: ForeignExchangeCacheServiceDep,
 ):
-    """Pays down a card account's balance from its FIXED paying account
-    (Credit Cards Phase 3, spec: card-account-payments-api). The paying
-    account is never a request field — it is resolved from
-    `card_accounts.paying_account_id`, set at issuance and immutable.
+    """Pays down a card account's balance from a customer-chosen account
+    (Credit Cards Phase 3, spec: card-account-payments-api). `source_account`
+    must belong to the same customer as the card account — never trust a
+    client-supplied account id without that ownership check, or one customer
+    could drain another's account by naming it here.
 
     Structural checks only, mirroring `card_router.py::request_purchase`'s
     own reasoning: no credit-limit check happens here or anywhere on the
     payment path (spec: Non-Requirements) — the account-service Flink job is
     the sole authority on whether the paying account can afford this.
     """
-    card_account = await card_accounts.get_by_id(card_account_id)
-    if card_account is None:
-        raise CardAccountNotFoundError(card_account_id)
+    card_account = await _owned_card_account(card_account_id, card_accounts, customer)
 
     active_card = await cards.get_active_for_account(card_account_id)
     if active_card is None:
         raise InvalidCardStatusError("none", "payment")
 
-    paying_account = await accounts.get_by_id(card_account.paying_account_id)
+    paying_account = await accounts.get_by_account_number(body.source_account)
     if paying_account is None:
-        raise CardAccountNotFoundError(card_account.paying_account_id)
+        raise AccountNotFoundError(body.source_account)
+    if paying_account.customer_id != customer.id:
+        raise AccountAccessForbiddenError(body.source_account)
 
     # `amount` (what the paying account is debited) stays in the account's own
     # currency, unconverted — the account-service reservation is always in the

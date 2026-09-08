@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { TransferPanel } from "@/features/transfers/components/TransferPanel";
-import { FromAccountSelect } from "@/features/transfers/components/FromAccountSelect";
+import { AccountSelect } from "@/components/shared/AccountSelect";
 import { findRecipient } from "@/features/transfers/api/find-recipient";
 import type { Account } from "@/features/accounts";
 
@@ -122,8 +122,16 @@ describe("TransferPanel integration", () => {
     expect(confirm).not.toBeDisabled();
   });
 
-  it("FromAccountSelect renders options from accounts prop", async () => {
-    render(<FromAccountSelect value="100000000001" onChange={() => {}} accounts={mockAccounts} />);
+  it("AccountSelect renders options from accounts prop", async () => {
+    render(
+      <AccountSelect
+        id="from-account"
+        label="From account"
+        value="100000000001"
+        onChange={() => {}}
+        accounts={mockAccounts}
+      />,
+    );
     const trigger = screen.getByLabelText("From account");
     // trigger shows selected value derived from accounts prop
     expect(trigger).toHaveTextContent("USD account");
@@ -134,8 +142,10 @@ describe("TransferPanel integration", () => {
     expect(screen.getByRole("option", { name: /GBP account/ })).toBeInTheDocument();
   });
 
-  it("FromAccountSelect is disabled and shows placeholder when no accounts", async () => {
-    render(<FromAccountSelect value="" onChange={() => {}} accounts={[]} />);
+  it("AccountSelect is disabled and shows placeholder when no accounts", async () => {
+    render(
+      <AccountSelect id="from-account" label="From account" value="" onChange={() => {}} accounts={[]} />,
+    );
     const trigger = screen.getByLabelText("From account");
     expect(trigger).toBeDisabled();
   });

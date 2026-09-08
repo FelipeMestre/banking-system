@@ -35,6 +35,10 @@ export function HomeDashboard() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selectedAccountNumber, setSelectedAccountNumber] = useState<string | null>(null);
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
+  // Bumped after a bill payment so `CreditCardPanel` remounts and refetches
+  // — it has no refresh prop of its own, this forces a fresh fetch the same
+  // way any other "reset this subtree" `key` change does.
+  const [creditCardRefreshKey, setCreditCardRefreshKey] = useState(0);
 
   const refetchAccounts = useCallback(() => {
     let cancelled = false;
@@ -112,8 +116,8 @@ export function HomeDashboard() {
       onSelectAccount={setSelectedAccountNumber}
       aside={
         <aside className="flex flex-col gap-[28px]">
-          <CreditCardPanel />
-          <QuickActions />
+          <CreditCardPanel key={creditCardRefreshKey} />
+          <QuickActions onBillPaid={() => setCreditCardRefreshKey((n) => n + 1)} />
           <TotalPosition totals={totalPositionByCurrency(accounts)} />
         </aside>
       }

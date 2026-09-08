@@ -6,12 +6,16 @@ import { Dialog } from "@/components/ui/Dialog";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AccountSelect } from "@/components/shared/AccountSelect";
 import { parseAmountToCents } from "@/lib/money";
+import { getAccounts, type Account } from "@/features/accounts";
 import { formatDecimalCurrency } from "../format-decimal";
 import { getPaymentStatus } from "../api/get-payment-status";
 import { requestPayment } from "../api/request-payment";
 import { watchPaymentStatus } from "../api/watch-payment-status";
 import type { CardPaymentAccepted, CardPaymentStatus } from "../types";
+
+const ACCOUNTS_PAGE_SIZE = 50;
 
 /** Quick-select presets for the current cycle, when known. All three are
  * genuinely backed by real data: `minimum`/`full` come straight off the
@@ -45,11 +49,29 @@ interface Props {
  * `payments/{request_id}/status` endpoint.
  */
 export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [sourceAccount, setSourceAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CardPaymentAccepted | null>(null);
   const [liveStatus, setLiveStatus] = useState<CardPaymentStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAccounts({ limit: ACCOUNTS_PAGE_SIZE, offset: 0 })
+      .then((page) => {
+        if (cancelled) return;
+        setAccounts(page.items);
+        setSourceAccount((current) => current || (page.items[0]?.account_number ?? ""));
+      })
+      .catch(() => {
+        if (!cancelled) setAccounts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const watchedRequestId =
     result && liveStatus?.status !== "approved" && liveStatus?.status !== "declined"
@@ -58,11 +80,17 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
 
   const applyStatus = useCallback(
     (requestId: string, status: CardPaymentStatus) => {
-      setLiveStatus((current) => {
-        if (result?.request_id !== requestId) return current;
-        if (status.status === "approved") onPaid?.();
-        return status;
-      });
+      // The guard only ever needs `result` (closed over below), never the
+      // previous `liveStatus` — so this can be a plain `setLiveStatus(status)`
+      // rather than the updater-function form. Calling `onPaid?.()` (which
+      // triggers state updates in the parent, `CreditCardsPageScreen`) from
+      // inside a `setState` updater runs it during React's render phase,
+      // which is exactly what "Cannot update a component while rendering a
+      // different component" warns about — and can silently drop the
+      // parent's refresh, which is why the used-credit bar stayed stale.
+      if (result?.request_id !== requestId) return;
+      setLiveStatus(status);
+      if (status.status === "approved") onPaid?.();
     },
     [result, onPaid],
   );
@@ -83,14 +111,14 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
   }, [watchedRequestId, applyStatus]);
 
   const parsedCents = parseAmountToCents(amount);
-  const canSubmit = !pending && !result && parsedCents !== null;
+  const canSubmit = !pending && !result && parsedCents !== null && sourceAccount !== "";
 
   function handleSubmit() {
-    if (parsedCents === null) return;
+    if (parsedCents === null || sourceAccount === "") return;
     setError(null);
     setPending(true);
     setLiveStatus(null);
-    requestPayment(cardAccountId, { amount: parsedCents })
+    requestPayment(cardAccountId, { amount: parsedCents, source_account: sourceAccount })
       .then((accepted) => {
         setPending(false);
         setResult(accepted);
@@ -134,6 +162,13 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
         </div>
       ) : (
         <div className="flex flex-col gap-ds-3">
+          <AccountSelect
+            id="pay-from-account"
+            label="Pay from"
+            value={sourceAccount}
+            onChange={setSourceAccount}
+            accounts={accounts}
+          />
           {presets ? (
             <div className="flex flex-wrap gap-ds-2">
               {presets.minimum ? (

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreditCardsPageScreen } from "@/features/credit-cards/components/CreditCardsPageScreen";
 import * as customerModule from "@/features/credit-cards/api/get-current-customer";
 import * as cardAccountsModule from "@/features/credit-cards/api/get-card-accounts";
@@ -8,6 +8,7 @@ import * as statementsModule from "@/features/credit-cards/api/get-statements";
 import * as payoffModule from "@/features/credit-cards/api/get-installment-payoff";
 import * as requestPaymentModule from "@/features/credit-cards/api/request-payment";
 import * as watchModule from "@/features/credit-cards/api/watch-payment-status";
+import * as accountsModule from "@/features/accounts/api/get-accounts";
 import type { CardAccountListItem } from "@/features/credit-cards/types";
 import type { Page } from "@/lib/api/types";
 
@@ -26,6 +27,15 @@ const CARD_ACCOUNTS_PAGE: Page<CardAccountListItem> = {
 };
 
 describe("CreditCardsPageScreen", () => {
+  beforeEach(() => {
+    vi.spyOn(accountsModule, "getAccounts").mockResolvedValue({
+      items: [
+        { id: "a1", account_number: "1111222233334444", currency: "USD", customer_id: "cust-1", branch_id: "b1", balance: 500000, status: "active" },
+      ],
+      total: 1, limit: 50, offset: 0,
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -43,10 +53,7 @@ describe("CreditCardsPageScreen", () => {
 
     expect(await screen.findByText("•••• •••• •••• 1234")).toBeInTheDocument();
     expect(screen.getByText("•••• •••• •••• 5678")).toBeInTheDocument();
-    // "$150.00" now appears twice — CardList's own tile shows the same used
-    // amount alongside CardDetail's larger figure.
-    expect(await screen.findAllByText("$150.00")).toHaveLength(2);
-    expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+    expect(await screen.findByText("$150.00")).toBeInTheDocument();
   });
 
   /**
@@ -93,6 +100,7 @@ describe("CreditCardsPageScreen", () => {
     await waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+    await screen.findByLabelText("Pay from");
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
     await screen.findByText("pending");
@@ -127,6 +135,7 @@ describe("CreditCardsPageScreen", () => {
       await vi.waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(1));
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
       await act(async () => {
@@ -173,6 +182,7 @@ describe("CreditCardsPageScreen", () => {
       expect(getCardAccountsSpy).toHaveBeenCalledTimes(1);
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
       await act(async () => {
@@ -219,6 +229,7 @@ describe("CreditCardsPageScreen", () => {
       await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
       await act(async () => {
@@ -273,6 +284,7 @@ describe("CreditCardsPageScreen", () => {
       await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
       await act(async () => {
@@ -315,10 +327,10 @@ describe("CreditCardsPageScreen", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      await vi.waitFor(() => expect(screen.getAllByText("$150.00")).toHaveLength(2));
-      expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+      await vi.waitFor(() => expect(screen.getByText("$150.00")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "50.00" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
       await act(async () => {
@@ -329,10 +341,8 @@ describe("CreditCardsPageScreen", () => {
         await vi.advanceTimersByTimeAsync(0);
       });
 
-      expect(screen.getAllByText("$150.00")).toHaveLength(2);
-      expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+      expect(screen.getByText("$150.00")).toBeInTheDocument();
       expect(screen.queryByText("$100.00")).not.toBeInTheDocument();
-      expect(screen.getByText("Updating…")).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

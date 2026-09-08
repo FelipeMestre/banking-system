@@ -7,7 +7,6 @@ import type { Statement } from "../types";
 
 interface Props {
   statement: Statement;
-  onPay: () => void;
   onDownload: () => void;
   downloading: boolean;
 }
@@ -15,12 +14,13 @@ interface Props {
 /**
  * The selected billing cycle's headline numbers — `total_due`,
  * `minimum_payment`, `period_end` ("closing date"), and `due_date` — read
- * verbatim off the statement the customer picked from
- * `StatementCycleTabs`, plus a real PDF download and a Pay entry point.
+ * verbatim off the statement the customer picked from `StatementCycleTabs`,
+ * plus a real PDF download. The Pay entry point lives in the section's own
+ * title row (`CreditCardsPageScreen`), not here.
  * `credit_balance > 0` (a prior cycle overpaid) is a separate positive-
  * balance banner, not folded into `total_due`.
  */
-export function CurrentCycleSummary({ statement, onPay, onDownload, downloading }: Props) {
+export function CurrentCycleSummary({ statement, onDownload, downloading }: Props) {
   const hasCreditBalance = Number(statement.credit_balance) > 0;
 
   return (
@@ -60,9 +60,6 @@ export function CurrentCycleSummary({ statement, onPay, onDownload, downloading 
       </div>
 
       <div className="flex gap-ds-2">
-        <Button type="button" onClick={onPay}>
-          Pay
-        </Button>
         <Button type="button" variant="outline" onClick={onDownload} disabled={downloading}>
           {downloading ? "Preparing…" : "Download current statement"}
         </Button>

@@ -38,13 +38,13 @@ describe("MovementsList", () => {
 
     render(<MovementsList items={[declined, approved]} />);
 
-    expect(screen.getByText("Declined — insufficient_credit")).toBeInTheDocument();
-    const declinedRow = screen.getByText("Declined — insufficient_credit").closest("li")!;
-    const approvedRow = screen.getByText("Purchase").closest("li")!;
+    expect(screen.getByText("Reason: insufficient_credit")).toBeInTheDocument();
+    const declinedRow = screen.getByText("Reason: insufficient_credit").closest("li")!;
+    const approvedRow = screen.getByText("Card purchase").closest("li")!;
     expect(declinedRow.className).not.toBe(approvedRow.className);
   });
 
-  it("visually distinguishes a purchase from a payment via sign and label", () => {
+  it("visually distinguishes a purchase from a payment via sign, color, and label", () => {
     const purchase: CardMovement = {
       id: "m5", movement_type: "purchase", amount: "50.00", currency: "USD", occurred_at: "2026-09-04T00:00:00Z",
     };
@@ -54,9 +54,44 @@ describe("MovementsList", () => {
 
     render(<MovementsList items={[purchase, payment]} />);
 
-    expect(screen.getByText("+$50.00")).toBeInTheDocument();
-    expect(screen.getByText("-$30.00")).toBeInTheDocument();
-    expect(screen.getByText("Purchase")).toBeInTheDocument();
-    expect(screen.getByText("Payment")).toBeInTheDocument();
+    // A purchase owes more: shown plain (no sign), colored as the "increase" tone.
+    const purchaseAmount = screen.getByText("$50.00");
+    expect(purchaseAmount).toBeInTheDocument();
+    expect(purchaseAmount.className).toContain("text-destructive");
+
+    // A payment reduces what's owed: shown with a leading "+".
+    const paymentAmount = screen.getByText("+$30.00");
+    expect(paymentAmount).toBeInTheDocument();
+    expect(paymentAmount.className).not.toContain("text-destructive");
+
+    expect(screen.getAllByText("Purchase")).toHaveLength(1);
+    expect(screen.getAllByText("Payment")).toHaveLength(1);
+  });
+
+  it("shows a positive icon for an approved movement and a cross for a declined one", () => {
+    const approved: CardMovement = {
+      id: "m7", movement_type: "payment", amount: "300.00", currency: "USD", occurred_at: "2026-09-10T00:00:00Z",
+    };
+    const declined: CardMovement = {
+      id: "m8", movement_type: "declined", amount: "899.00", currency: "USD", occurred_at: "2026-09-12T00:00:00Z",
+    };
+
+    render(<MovementsList items={[approved, declined]} />);
+
+    const approvedRow = screen.getByText("Payment received").closest("li")!;
+    const declinedRow = screen.getByText("Attempted purchase").closest("li")!;
+    expect(approvedRow.querySelector("svg.lucide-circle-check")).toBeTruthy();
+    expect(declinedRow.querySelector("svg.lucide-circle-x")).toBeTruthy();
+  });
+
+  it("shows the movement date", () => {
+    const movement: CardMovement = {
+      id: "m9", movement_type: "purchase", amount: "18.40", currency: "USD",
+      occurred_at: "2026-09-02T00:00:00Z", description: "Blue Bottle Coffee",
+    };
+
+    render(<MovementsList items={[movement]} />);
+
+    expect(screen.getByText("Sep 2")).toBeInTheDocument();
   });
 });
