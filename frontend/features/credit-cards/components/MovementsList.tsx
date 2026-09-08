@@ -91,14 +91,14 @@ export function MovementsList({ items }: Props) {
           <li
             key={movement.id}
             className={cn(
-              "flex items-start gap-ds-3 p-ds-3",
+              "flex items-center gap-ds-3 p-ds-4",
               index > 0 && "border-t-2 border-divider",
               tone === "declined" && "text-neutral-500",
             )}
           >
             <div
               className={cn(
-                "flex h-16 w-11 shrink-0 items-center justify-center border-2",
+                "flex size-10 shrink-0 items-center justify-center border-2",
                 classes.box,
               )}
             >
