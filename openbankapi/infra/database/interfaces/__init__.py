@@ -8,6 +8,7 @@ from .transaction_repository import ITransactionRepository
 from .card_account_repository import ICardAccountRepository
 from .card_repository import ICardRepository
 from .card_movement_repository import ICardMovementRepository
+from .card_account_admin_action_repository import ICardAccountAdminActionRepository
 from .installment_repository import IInstallmentRepository
 from .statement_repository import IStatementRepository
 
@@ -22,6 +23,7 @@ __all__ = [
     "ICardAccountRepository",
     "ICardRepository",
     "ICardMovementRepository",
+    "ICardAccountAdminActionRepository",
     "IInstallmentRepository",
     "IStatementRepository",
     "Page",

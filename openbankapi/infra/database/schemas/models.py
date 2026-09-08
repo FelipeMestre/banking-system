@@ -24,7 +24,7 @@ from sqlalchemy import (
     false as sa_false,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -309,4 +309,30 @@ class InstallmentORM(Base):
     statement_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("statements.id"), nullable=True
     )
+    created_at: Mapped[dt.datetime] = _created()
+
+
+class CardAccountAdminActionORM(Base):
+    """Audit row for admin-initiated card account/card mutations (C1).
+
+    One row per mutation, same-UoW flush, never Kafka. Mirrors `deposits`
+    pattern but with `action` CHECK5, `reason` 300, `details` JSONB.
+    """
+
+    __tablename__ = "card_account_admin_actions"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('issue','update_limit','update_status','card_status','renew')",
+            name="card_account_admin_actions_action_check",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    card_account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("card_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    admin_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[dt.datetime] = _created()

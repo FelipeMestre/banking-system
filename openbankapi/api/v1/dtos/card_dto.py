@@ -9,6 +9,7 @@ make the unmasked path opt-in by construction and grep-able (design decision).
 from __future__ import annotations
 
 import datetime as dt
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
@@ -65,3 +66,4 @@ class CardStatusUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str = Field(pattern="^(active|blocked|replaced|expired)$")
+    reason: Optional[str] = Field(default=None, max_length=300)

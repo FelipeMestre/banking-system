@@ -44,3 +44,11 @@ class ICardMovementRepository(Protocol):
     async def sum_payments(self, card_account_id: UUID, period_start: date, period_end: date) -> Decimal:
         """Sum of `payment` movements in `[period_start, period_end]`."""
         ...
+
+    async def compute_current_balance(self, card_account_id: UUID) -> Decimal:
+        """Current outstanding balance across every movement ever posted
+        (single SQL `SUM(CASE ...)`, not an app-level loop — design D3):
+        `purchase`/`fee`/`interest`/`late_fee` increase it, `payment`/`refund`
+        decrease it, everything else is ignored. `Decimal("0.00")` when the
+        account has no movements at all."""
+        ...

@@ -10,6 +10,7 @@ from openbankapi.app import create_app
 from openbankapi.config import Settings
 from openbankapi.config.dependencies import (
     get_account_repository,
+    get_admin_action_repository,
     get_applied_rate_repository,
     get_branch_repository,
     get_current_user,
@@ -35,6 +36,7 @@ from .fakes import (
     FakeCustomerRepository,
     FakeAccountRepository,
     FakeAppliedRateRepository,
+    FakeCardAccountAdminActionRepository,
     FakeCardAccountRepository,
     FakeCardMovementRepository,
     FakeCardRepository,
@@ -55,6 +57,7 @@ class Harness:
         self, client, publisher, cache, registry, repos, settings,
         fx_cache_service=None, fx_repo=None, card_accounts=None, cards=None,
         card_movements=None, installments=None, applied_rates=None, statements=None,
+        admin_actions=None,
     ):
         self.client = client
         self.publisher = publisher
@@ -70,6 +73,7 @@ class Harness:
         self.installments = installments
         self.applied_rates = applied_rates
         self.statements = statements
+        self.admin_actions = admin_actions
 
 
 def build(
@@ -88,6 +92,7 @@ def build(
     installments=None,
     applied_rates=None,
     statements=None,
+    admin_actions=None,
 ) -> Harness:
     # lazy imports to avoid circular deps during app wiring
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import (
@@ -114,6 +119,7 @@ def build(
     installments = installments or FakeInstallmentRepository()
     applied_rates = applied_rates or FakeAppliedRateRepository()
     statements = statements or FakeStatementRepository()
+    admin_actions = admin_actions or FakeCardAccountAdminActionRepository()
 
     try:
         app = create_app(
@@ -153,12 +159,13 @@ def build(
     app.dependency_overrides[get_installment_repository] = lambda: installments
     app.dependency_overrides[get_applied_rate_repository] = lambda: applied_rates
     app.dependency_overrides[get_statement_repository] = lambda: statements
+    app.dependency_overrides[get_admin_action_repository] = lambda: admin_actions
     client = TestClient(app)
     # also attach for router tests that use app.state directly
     app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
                    (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo,
-                   card_accounts, cards, card_movements, installments, applied_rates, statements)
+                   card_accounts, cards, card_movements, installments, applied_rates, statements, admin_actions)
 
 
 @pytest.fixture

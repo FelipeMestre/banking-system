@@ -17,6 +17,9 @@ vi.mock("@/features/customers", () => ({
 vi.mock("@/features/locations", () => ({
   LocationsPanel: () => <div data-testid="locations-panel">Locations</div>,
 }));
+vi.mock("@/features/card-account-admin", () => ({
+  CardAccountAdminPanel: () => <div data-testid="card-account-admin-panel">Credit Cards</div>,
+}));
 
 vi.mock("@/lib/auth/usePermissions", () => ({
   usePermissions: vi.fn(),

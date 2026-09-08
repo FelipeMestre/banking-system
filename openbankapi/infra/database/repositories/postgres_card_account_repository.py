@@ -45,11 +45,12 @@ class PostgresCardAccountRepository(PostgresRepository):
         return _to_domain(row) if row else None
 
     async def list_by_customer(
-        self, customer_id: UUID, *, limit: int, offset: int
+        self, customer_id: UUID, *, limit: int, offset: int, status: Optional[str] = None
     ) -> Page[CardAccount]:
-        rows, total = await self._fetch_page(
-            CardAccountORM, CardAccountORM.customer_id == customer_id, limit=limit, offset=offset
-        )
+        conditions = [CardAccountORM.customer_id == customer_id]
+        if status is not None:
+            conditions.append(CardAccountORM.status == status)
+        rows, total = await self._fetch_page(CardAccountORM, *conditions, limit=limit, offset=offset)
         return page_of([_to_domain(r) for r in rows], total, limit, offset)
 
     async def update_status(self, card_account_id: UUID, *, status: str) -> Optional[CardAccount]:

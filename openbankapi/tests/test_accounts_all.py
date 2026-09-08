@@ -84,3 +84,27 @@ def test_all_paginates():
         assert body["limit"] == 1
         assert body["offset"] == 1
         assert len(body["items"]) == 1
+
+
+def test_all_filters_by_customer_id_when_provided():
+    h = build()
+    first, second = uuid.uuid4(), uuid.uuid4()
+    h.accounts.rows["1111111111111111"] = _account("1111111111111111", first)
+    h.accounts.rows["2222222222222222"] = _account("2222222222222222", second)
+    with h.client:
+        resp = h.client.get(f"/accounts/all?customer_id={first}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 1
+        numbers = {item["account_number"] for item in body["items"]}
+        assert numbers == {"1111111111111111"}
+
+
+def test_all_without_customer_id_is_unaffected():
+    h = build()
+    _seed_two_customers(h)
+    with h.client:
+        resp = h.client.get("/accounts/all")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2

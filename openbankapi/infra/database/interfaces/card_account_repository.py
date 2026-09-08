@@ -26,8 +26,12 @@ class ICardAccountRepository(Protocol):
     async def get_by_id(self, card_account_id: UUID) -> Optional[CardAccount]: ...
 
     async def list_by_customer(
-        self, customer_id: UUID, *, limit: int, offset: int
-    ) -> Page[CardAccount]: ...
+        self, customer_id: UUID, *, limit: int, offset: int, status: Optional[str] = None
+    ) -> Page[CardAccount]:
+        """`status` filters to one of `active|blocked|closed` when given
+        (design D4); omitted, every status is returned. Ordered
+        `created_at DESC, id DESC`."""
+        ...
 
     async def update_status(self, card_account_id: UUID, *, status: str) -> Optional[CardAccount]:
         """Set `status` unconditionally — the caller must validate the

@@ -19,6 +19,8 @@ from openbankapi.api.v1.dtos.card_dto import CardAdminListItemDTO, CardMaskedDTO
 from openbankapi.api.v1.dtos.common import PageParams
 from openbankapi.api.v1.dtos.purchase_dto import PurchaseAcceptedDTO, PurchaseRequestDTO
 from openbankapi.config.dependencies import (
+    AdminActionRepositoryDep,
+    AdminIdentityDep,
     CardAccountRepositoryDep,
     CardRepositoryDep,
     CustomerRepositoryDep,
@@ -68,14 +70,33 @@ async def list_all(
 
 
 @router.post("/{card_number}/status", response_model=CardMaskedDTO)
-async def update_status(card_number: str, body: CardStatusUpdateDTO, repository: CardRepositoryDep):
+async def update_status(
+    card_number: str,
+    body: CardStatusUpdateDTO,
+    repository: CardRepositoryDep,
+    admin_actions: AdminActionRepositoryDep,
+    admin_id: AdminIdentityDep,
+):
     current = await repository.get_by_number(card_number)
     if current is None:
         raise CardNotFoundError(card_number)
     target = CardStatus(body.status)
     if target not in CARD_TRANSITIONS.get(current.status, frozenset()):
         raise InvalidCardStatusError(current.status.value, target.value)
-    return await repository.update_status(current.id, status=body.status)
+    updated = await repository.update_status(current.id, status=body.status)
+    await admin_actions.record(
+        card_account_id=current.card_account_id,
+        action="card_status",
+        admin_id=admin_id,
+        reason=body.reason,
+        details={
+            "card_id": str(current.id),
+            "card_account_id": str(current.card_account_id),
+            "from_status": current.status.value,
+            "to_status": target.value,
+        },
+    )
+    return updated
 
 
 def _now() -> str:

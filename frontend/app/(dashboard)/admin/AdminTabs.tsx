@@ -5,11 +5,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountsList } from "@/features/accounts";
 import { BranchesPanel } from "@/features/branches";
+import { CardAccountAdminPanel } from "@/features/card-account-admin";
 import { CustomersPanel } from "@/features/customers";
 import { LocationsPanel } from "@/features/locations";
 import { usePermissions } from "@/lib/auth/usePermissions";
 
-const TABS = ["Accounts", "Customers", "Branches", "Locations"] as const;
+const TABS = ["Accounts", "Customers", "Branches", "Locations", "Credit Cards"] as const;
 type Tab = (typeof TABS)[number];
 
 const PANELS: Record<Tab, React.ComponentType> = {
@@ -17,6 +18,7 @@ const PANELS: Record<Tab, React.ComponentType> = {
   Branches: BranchesPanel,
   Customers: CustomersPanel,
   Locations: LocationsPanel,
+  "Credit Cards": CardAccountAdminPanel,
 };
 
 /**

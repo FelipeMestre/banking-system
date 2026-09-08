@@ -14,6 +14,7 @@ class CardAccountCreateDTO(BaseModel):
     customer_id: UUID
     paying_account_id: UUID
     credit_limit: Decimal = Field(gt=0)
+    reason: Optional[str] = Field(default=None, max_length=300)
 
 
 class CardAccountUpdateDTO(BaseModel):
@@ -22,11 +23,22 @@ class CardAccountUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     credit_limit: Optional[Decimal] = Field(default=None, gt=0)
+    reason: Optional[str] = Field(default=None, max_length=300)
 
 class CardAccountStatusUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str = Field(pattern="^(active|blocked|closed)$")
+    reason: Optional[str] = Field(default=None, max_length=300)
+
+
+class CardAccountRenewDTO(BaseModel):
+    """`POST /card-accounts/{id}/cards` was bodiless before this change — now
+    accepts an optional `reason` for the audit row (design D2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(default=None, max_length=300)
 
 
 class CardAccountResponseDTO(BaseModel):
