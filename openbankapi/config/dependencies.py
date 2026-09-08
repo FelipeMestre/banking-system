@@ -35,7 +35,7 @@ from fastapi_plugin.fast_api_client import Auth0FastAPI
 from starlette.requests import HTTPConnection
 
 from .config import Settings
-from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsError
+from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsError, InvalidAdminIdentityError
 from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.branch_service import BranchService
@@ -49,6 +49,7 @@ from ..infra.database.interfaces import (
     IAccountRepository,
     IAppliedRateRepository,
     IBranchRepository,
+    ICardAccountAdminActionRepository,
     ICardAccountRepository,
     ICardMovementRepository,
     ICardRepository,
@@ -62,6 +63,7 @@ from ..infra.database.repositories import (
     PostgresAccountRepository,
     PostgresAppliedRateRepository,
     PostgresBranchRepository,
+    PostgresCardAccountAdminActionRepository,
     PostgresCardAccountRepository,
     PostgresCardMovementRepository,
     PostgresCardRepository,
@@ -212,6 +214,30 @@ require_admin_batch_permission = require_permissions("admin:batch")
 RequireAdminBatchPermissionDep = Annotated[dict, Depends(require_admin_batch_permission)]
 
 
+# `write:admin` gates every card-account/card admin mutation this change adds
+# (issue, update_limit, update_status, renew, card_status — spec's five sync
+# points). `InsufficientPermissionsError` (403) already covers "authenticated
+# but lacking the permission"; `_require_admin_identity` below covers the
+# narrower "authenticated, has the permission, but the token carries no
+# usable `sub`" case, which is a 401 (design D3).
+require_write_admin_permission = require_permissions("write:admin")
+
+WriteAdminDep = Annotated[dict, Depends(require_write_admin_permission)]
+
+
+def _require_admin_identity(claims: WriteAdminDep) -> str:
+    """The admin's `sub` claim, or `InvalidAdminIdentityError` (401) if it is
+    missing/empty — called before any of the five audited mutations write
+    anything (design D3)."""
+    sub = claims.get("sub")
+    if not sub:
+        raise InvalidAdminIdentityError()
+    return sub
+
+
+AdminIdentityDep = Annotated[str, Depends(_require_admin_identity)]
+
+
 # --- repositories: request-scoped, built fresh on the shared session --------
 
 
@@ -291,6 +317,15 @@ def get_statement_repository(session: DbSession) -> IStatementRepository:
 
 
 StatementRepositoryDep = Annotated[IStatementRepository, Depends(get_statement_repository)]
+
+
+def get_admin_action_repository(session: DbSession) -> ICardAccountAdminActionRepository:
+    return PostgresCardAccountAdminActionRepository(session)
+
+
+AdminActionRepositoryDep = Annotated[
+    ICardAccountAdminActionRepository, Depends(get_admin_action_repository)
+]
 
 
 async def get_current_customer(

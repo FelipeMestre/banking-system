@@ -36,6 +36,28 @@ describe("getCardAccounts", () => {
     expect(requestedUrl).toContain("customer_id=cust-1");
   });
 
+  it("appends status to the query string when provided", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify(PAGE_BODY), { status: 200 }));
+
+    await getCardAccounts({ customerId: "cust-1", limit: 20, offset: 0, status: "active" });
+
+    const requestedUrl = fetchSpy.mock.calls[0]?.[0] as string;
+    expect(requestedUrl).toContain("status=active");
+  });
+
+  it("omits status from the query string when not provided", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify(PAGE_BODY), { status: 200 }));
+
+    await getCardAccounts({ customerId: "cust-1", limit: 20, offset: 0 });
+
+    const requestedUrl = fetchSpy.mock.calls[0]?.[0] as string;
+    expect(requestedUrl).not.toContain("status=");
+  });
+
   it("throws an ApiError carrying the response status on a 500", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 }),

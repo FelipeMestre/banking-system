@@ -48,7 +48,10 @@ def usage_harness():
     h2 = build(accounts=accounts, card_accounts=card_accounts, cards=cards)
     h2.customers.rows[owner.id] = owner
 
-    h2.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|owner"}
+    h2.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|owner",
+        "permissions": ["write:admin"],
+    }
     h2.customer_id, h2.paying_account_id, h2.owner = customer_id, paying_account.id, owner
     with h2.client:
         yield h2

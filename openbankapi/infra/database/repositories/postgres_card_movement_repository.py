@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -113,6 +113,29 @@ class PostgresCardMovementRepository(PostgresRepository):
         return await self.sum_by_type(
             card_account_id, CardMovementType.PAYMENT.value, period_start, period_end
         )
+
+    async def compute_current_balance(self, card_account_id: UUID) -> Decimal:
+        """Single `SUM(CASE ...)` across every movement ever posted (design
+        D3) — no app-level loop, no `func.date` (Supabase: no func-wrapped
+        indexed columns)."""
+        increases = (
+            CardMovementType.PURCHASE.value,
+            CardMovementType.FEE.value,
+            CardMovementType.INTEREST.value,
+            CardMovementType.LATE_FEE.value,
+        )
+        decreases = (CardMovementType.PAYMENT.value, CardMovementType.REFUND.value)
+        signed = case(
+            (CardMovementORM.movement_type.in_(increases), CardMovementORM.amount),
+            (CardMovementORM.movement_type.in_(decreases), -CardMovementORM.amount),
+            else_=0,
+        )
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(signed), 0))
+            .join(CardORM, CardMovementORM.card_id == CardORM.id)
+            .where(CardORM.card_account_id == card_account_id)
+        )
+        return Decimal(result.scalar_one())
 
 
 class PostgresCardMovementWriter:

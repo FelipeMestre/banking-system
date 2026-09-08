@@ -8,7 +8,10 @@ validator that someone could later relax.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
@@ -133,13 +136,20 @@ async def list_all_accounts(
     _claims: ReadAdminDep,
     repository: AccountRepositoryDep,
     page: PageParams = Depends(),
+    customer_id: Optional[UUID] = Query(default=None),
 ):
     """Cross-customer admin list — `ReadAdminDep` ONLY, no `CurrentCustomerDep`.
 
     Registered before any `/{account_number}` route so "all" is never
-    captured as an account number. Pages the unfiltered repository `list()`.
+    captured as an account number. Pages the unfiltered repository `list()`
+    unless `customer_id` is supplied, in which case it pages
+    `list_by_customer` for that one customer (e.g. the admin panel's account
+    picker for a customer already selected upstream).
     """
-    result = await repository.list(limit=page.limit, offset=page.offset)
+    if customer_id is not None:
+        result = await repository.list_by_customer(customer_id, limit=page.limit, offset=page.offset)
+    else:
+        result = await repository.list(limit=page.limit, offset=page.offset)
     return PageResponse(
         items=[AccountResponseDTO.model_validate(i) for i in result.items],
         total=result.total, limit=result.limit, offset=result.offset,

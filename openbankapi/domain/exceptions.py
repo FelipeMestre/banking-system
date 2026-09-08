@@ -249,3 +249,27 @@ class InvalidCardStatusError(DomainError):
         self.target_status = target_status
         super().__init__(f"cannot transition from {current_status} to {target_status}")
 
+
+class CardAccountNotCloseableError(DomainError):
+    """A card account cannot be closed while its computed balance is > 0. -> 409
+
+    Raised only when the requested target status is `closed` (design D3): the
+    guard compares the balance against zero, never against `credit_limit`.
+    """
+
+    def __init__(self, card_account_id: object, balance: object):
+        self.card_account_id = card_account_id
+        self.balance = balance
+        super().__init__(f"card account {card_account_id} has a nonzero balance ({balance}) and cannot be closed")
+
+
+class InvalidAdminIdentityError(DomainError):
+    """`WriteAdminDep`'s claims carry no usable admin identity (empty `sub`). -> 401
+
+    Raised before any write happens (design D3's `_require_admin_identity`) so
+    an unidentifiable admin never produces a mutation or an audit row.
+    """
+
+    def __init__(self):
+        super().__init__("admin identity (sub) is missing or empty")
+

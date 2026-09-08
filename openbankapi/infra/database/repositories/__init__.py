@@ -11,6 +11,7 @@ from .postgres_transaction_repository import PostgresTransactionRepository, Post
 from .postgres_card_account_repository import PostgresCardAccountRepository, PostgresCardBalanceProjection
 from .postgres_card_repository import PostgresCardRepository, generate_card_number
 from .postgres_card_movement_repository import PostgresCardMovementRepository, PostgresCardMovementWriter
+from .postgres_card_account_admin_action_repository import PostgresCardAccountAdminActionRepository
 from .postgres_installment_repository import PostgresInstallmentRepository, PostgresInstallmentWriter
 from .postgres_statement_repository import PostgresStatementRepository
 from .postgres_deposit_repository import PostgresDepositRepository, PostgresDepositWriter
@@ -32,6 +33,7 @@ __all__ = [
     "generate_card_number",
     "PostgresCardMovementRepository",
     "PostgresCardMovementWriter",
+    "PostgresCardAccountAdminActionRepository",
     "PostgresInstallmentRepository",
     "PostgresInstallmentWriter",
     "PostgresStatementRepository",

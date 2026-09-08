@@ -52,6 +52,11 @@ def payments_harness():
     h2.customer_id, h2.paying_account_id, h2.paying_account, h2.owner = (
         customer_id, paying_account.id, paying_account, owner,
     )
+    h2.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|test",
+        "permissions": ["write:admin"],
+    }
+    h2.customer_id, h2.paying_account_id, h2.paying_account = customer_id, paying_account.id, paying_account
     with h2.client:
         yield h2
 
