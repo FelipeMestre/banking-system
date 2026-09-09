@@ -44,7 +44,11 @@ def _wired_cards():
 @pytest.fixture
 def cards_harness():
     h = _wired_cards()
-    h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|test"}
+
+    async def _admin():
+        return {"sub": "auth0|test", "permissions": ["write:admin"]}
+
+    h.client.app.dependency_overrides[get_current_user] = _admin
     with h.client:
         yield h
 

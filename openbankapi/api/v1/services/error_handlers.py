@@ -17,6 +17,7 @@ from ....domain.exceptions import (
     AccountNotOperableError,
     BranchHasActiveAccountsError,
     CardAccountAccessForbiddenError,
+    CardAccountNotCloseableError,
     CustomerAccountsNotEmptyError,
     CustomerAlreadyHasAccountError,
     CustomerNotLinkedError,
@@ -25,6 +26,7 @@ from ....domain.exceptions import (
     InsufficientFundsError,
     InsufficientPermissionsError,
     InvalidAccountNumberError,
+    InvalidAdminIdentityError,
     InvalidCardNumberError,
     InvalidCardStatusError,
     NoActiveBranchAvailableError,
@@ -53,6 +55,8 @@ _STATUS = [
     (InsufficientPermissionsError, 403),
     (InvalidCardStatusError, 409),
     (InvalidCardNumberError, 400),
+    (CardAccountNotCloseableError, 409),
+    (InvalidAdminIdentityError, 401),
 ]
 
 
