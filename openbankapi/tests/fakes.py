@@ -836,6 +836,26 @@ class FakeCardMovementRepository:
                 total -= row.amount
         return total
 
+    _INCREASES = frozenset(
+        {CardMovementType.PURCHASE, CardMovementType.FEE, CardMovementType.INTEREST, CardMovementType.LATE_FEE}
+    )
+    _DECREASES = frozenset({CardMovementType.PAYMENT, CardMovementType.REFUND})
+
+    async def compute_current_balance(self, card_account_id: UUID) -> Decimal:
+        """Mirrors `PostgresCardMovementRepository.compute_current_balance`'s
+        single `SUM(CASE ...)` (design D3) — no `cards` reference required,
+        so this degrades gracefully to `Decimal("0")` when unwired."""
+        card_ids = self._card_ids_for(card_account_id) if self.cards is not None else set()
+        total = Decimal("0")
+        for row in self.rows:
+            if row.card_id not in card_ids:
+                continue
+            if row.movement_type in self._INCREASES:
+                total += row.amount
+            elif row.movement_type in self._DECREASES:
+                total -= row.amount
+        return total
+
 
 class FakeInstallmentRepository:
     """In-memory double for `IInstallmentRepository` — Credit Cards Phase 2."""
@@ -1026,6 +1046,54 @@ class FakeStatementRepository:
             status=new_status,
             created_at=current.created_at,
             updated_at=_now(),
+        )
+
+
+class AdminActionRow:
+    """Plain record shape for `FakeCardAccountAdminActionRepository.rows` —
+    no ORM/domain model of its own, matching the audit table's own columns."""
+
+    def __init__(
+        self,
+        *,
+        card_account_id: UUID,
+        action: str,
+        admin_id: str,
+        reason: Optional[str],
+        details: Optional[dict],
+    ):
+        self.id = uuid.uuid4()
+        self.card_account_id = card_account_id
+        self.action = action
+        self.admin_id = admin_id
+        self.reason = reason
+        self.details = details
+        self.created_at = _now()
+
+
+class FakeCardAccountAdminActionRepository:
+    """In-memory double for `ICardAccountAdminActionRepository` (D1/D2)."""
+
+    def __init__(self):
+        self.rows: List[AdminActionRow] = []
+
+    async def record(
+        self,
+        *,
+        card_account_id: UUID,
+        action: str,
+        admin_id: str,
+        reason: Optional[str],
+        details: Optional[dict],
+    ) -> None:
+        self.rows.append(
+            AdminActionRow(
+                card_account_id=card_account_id,
+                action=action,
+                admin_id=admin_id,
+                reason=reason,
+                details=details,
+            )
         )
 
 
