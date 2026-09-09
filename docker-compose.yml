@@ -301,6 +301,44 @@ services:
       DUE_DATE_OFFSET_DAYS: "20"
       MINIMUM_PAYMENT_RATE: "0.02"
 
+  seed:
+    # Demo seed — pure-event, idempotent. Runs once per `docker compose up`
+    # after migrations/kafka are healthy; re-running is a no-op (use --reset to force).
+    # Reuses the same image as openbankapi/batch-worker (openbankapi/Dockerfile).
+    # To disable auto-seed, comment this service out — manual run is:
+    #   docker compose run --rm seed python -m openbankapi.seed.run --auth0-sub auth0|6a90f3247c7a4be23a0edc80 --reset
+    # Or with profiles: add `profiles: ["seed"]` and run `docker compose --profile seed up`.
+    build:
+      context: ./openbankapi
+    image: banking-system/openbankapi:latest
+    container_name: banking-seed
+    restart: "no"
+    volumes:
+      - ./openbankapi:/app/openbankapi
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      ACCOUNT_EVENTS_TOPIC: account-events
+      TRANSFER_STATUS_TOPIC: transfer-status
+      ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      DEPOSIT_STATUS_TOPIC: deposit-status
+      DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
+      AUTH0_SEED_SUB: auth0|6a90f3247c7a4be23a0edc80
+      FEES_ACCOUNT: "0000000000000001"
+      FEE_FLAT_CENTS: "25"
+    command: ["bash", "-c", "sleep 10 && python -m openbankapi.seed.run --auth0-sub $${AUTH0_SEED_SUB:-auth0|6a90f3247c7a4be23a0edc80}"]
+
   kafka-ui:
     image: tchiotludo/akhq:0.25.1
     container_name: kafka-ui
