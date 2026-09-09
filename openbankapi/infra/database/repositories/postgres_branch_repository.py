@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
+from sqlalchemy import select
+
 from ....domain.model import Branch
 from ..interfaces.common import Page
 from ..schemas.models import BranchORM
@@ -60,5 +62,14 @@ class PostgresBranchRepository(PostgresRepository):
         # Soft delete: accounts reference this row, so it must survive.
         row = await self._update(
             BranchORM, BranchORM.id == branch_id, {"active": False}
+        )
+        return _to_domain(row) if row else None
+
+    async def get_oldest_active(self) -> Optional[Branch]:
+        row = await self._session.scalar(
+            select(BranchORM)
+            .where(BranchORM.active.is_(True))
+            .order_by(BranchORM.created_at.asc(), BranchORM.id.asc())
+            .limit(1)
         )
         return _to_domain(row) if row else None

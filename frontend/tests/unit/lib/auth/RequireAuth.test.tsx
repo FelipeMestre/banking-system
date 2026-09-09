@@ -41,7 +41,7 @@ describe("RequireAuth", () => {
       </RequireAuth>,
     );
 
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
     expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
   });

@@ -13,21 +13,32 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ....domain.exceptions import (
+    AccountAccessForbiddenError,
     AccountNotOperableError,
     BranchHasActiveAccountsError,
+    CardAccountAccessForbiddenError,
+    CardAccountNotCloseableError,
     CustomerAccountsNotEmptyError,
+    CustomerAlreadyHasAccountError,
     CustomerNotLinkedError,
     DomainError,
     DuplicateError,
     InsufficientFundsError,
+    InsufficientPermissionsError,
     InvalidAccountNumberError,
+    InvalidAdminIdentityError,
+    InvalidCardNumberError,
+    InvalidCardStatusError,
+    NoActiveBranchAvailableError,
     NotFoundError,
+    RateNotAvailableError,
     ReferencedEntityNotFoundError,
 )
 
 LOG = logging.getLogger("openbankapi.errors")
 
 _STATUS = [
+    (RateNotAvailableError, 502),
     (NotFoundError, 404),
     (CustomerNotLinkedError, 404),
     (ReferencedEntityNotFoundError, 422),
@@ -37,6 +48,15 @@ _STATUS = [
     (InsufficientFundsError, 409),
     (CustomerAccountsNotEmptyError, 409),
     (BranchHasActiveAccountsError, 409),
+    (AccountAccessForbiddenError, 403),
+    (CardAccountAccessForbiddenError, 403),
+    (CustomerAlreadyHasAccountError, 409),
+    (NoActiveBranchAvailableError, 503),
+    (InsufficientPermissionsError, 403),
+    (InvalidCardStatusError, 409),
+    (InvalidCardNumberError, 400),
+    (CardAccountNotCloseableError, 409),
+    (InvalidAdminIdentityError, 401),
 ]
 
 
@@ -57,6 +77,16 @@ def install(app: FastAPI) -> None:
         status = status_for(error)
         if status >= 500:
             LOG.exception("unmapped domain error", exc_info=error)
+        # InsufficientPermissionsError needs structured details for 403 {required,had}
+        if isinstance(error, InsufficientPermissionsError):
+            return JSONResponse(
+                status_code=status,
+                content=error_body(
+                    type(error).__name__,
+                    str(error),
+                    {"required": error.required, "had": error.had},
+                ),
+            )
         return JSONResponse(
             status_code=status,
             content=error_body(type(error).__name__, str(error)),
@@ -66,9 +96,15 @@ def install(app: FastAPI) -> None:
     async def _validation(_: Request, error: RequestValidationError):
         # Strip `input`: pydantic echoes the rejected value back, which would
         # put a date_of_birth in an HTTP response body (spec §3.4).
-        details = [
-            {k: v for k, v in item.items() if k != "input"} for item in error.errors()
-        ]
+        details = []
+        for item in error.errors():
+            filtered = {k: v for k, v in item.items() if k != "input"}
+            if "ctx" in filtered and isinstance(filtered["ctx"], dict):
+                ctx = dict(filtered["ctx"])
+                if "error" in ctx and isinstance(ctx["error"], Exception):
+                    ctx["error"] = str(ctx["error"])
+                filtered["ctx"] = ctx
+            details.append(filtered)
         return JSONResponse(
             status_code=422,
             content=error_body("ValidationError", "request validation failed", details),

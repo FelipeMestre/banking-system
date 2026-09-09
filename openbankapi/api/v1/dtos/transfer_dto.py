@@ -14,6 +14,7 @@ class TransferRequestDTO(BaseModel):
     destination_account: AccountNumber
     # Integer cents. Anything at or below zero is not a transfer.
     amount: int = Field(gt=0, le=10**12)
+    description: Optional[str] = Field(default=None, max_length=200)
 
 
 class TransferAcceptedDTO(BaseModel):

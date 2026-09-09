@@ -36,7 +36,7 @@ services:
       kafka:
         condition: service_healthy
     restart: "no"
-    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
+    command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-payment-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=604800000 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
   flink-jobmanager:
     build:
@@ -58,6 +58,9 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      DEPOSIT_STATUS_TOPIC: deposit-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -81,6 +84,9 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      DEPOSIT_STATUS_TOPIC: deposit-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -102,9 +108,83 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      CARD_EVENTS_TOPIC: card-events
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      DEPOSIT_STATUS_TOPIC: deposit-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     command: ["/opt/account_service/submit.sh"]
+
+  flink-card-jobmanager:
+    build:
+      context: ./card-service
+    image: banking-system/card-service:latest
+    container_name: flink-card-jobmanager
+    platform: linux/amd64
+    command: jobmanager
+    ports:
+      - "8082:8081"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-card-jobmanager
+        parallelism.default: 3
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      CARD_EVENTS_TOPIC: card-events
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - flink-card-checkpoints:/tmp/flink-checkpoints
+
+  flink-card-taskmanager:
+    build:
+      context: ./card-service
+    image: banking-system/card-service:latest
+    container_name: flink-card-taskmanager
+    platform: linux/amd64
+    command: taskmanager
+    depends_on:
+      - flink-card-jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-card-jobmanager
+        taskmanager.numberOfTaskSlots: 6
+        parallelism.default: 3
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      CARD_EVENTS_TOPIC: card-events
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - flink-card-checkpoints:/tmp/flink-checkpoints
+
+  # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
+  flink-card-job-submitter:
+    build:
+      context: ./card-service
+    image: banking-system/card-service:latest
+    container_name: flink-card-job-submitter
+    platform: linux/amd64
+    restart: "no"
+    depends_on:
+      - flink-card-taskmanager
+    environment:
+      FLINK_JOBMANAGER: flink-card-jobmanager:8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      CARD_EVENTS_TOPIC: card-events
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
+      CARD_BALANCES_TOPIC: card-balances
+      PROCESSED_IDS_TTL_DAYS: "7"
+      CHECKPOINT_INTERVAL_MS: "5000"
+    command: ["/opt/card_service/submit.sh"]
 
   postgres:
     image: postgres:16
@@ -178,7 +258,9 @@ services:
       ACCOUNT_EVENTS_TOPIC: account-events
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
+      DEPOSIT_STATUS_TOPIC: deposit-status
       BALANCE_CONSUMER_GROUP: openbankapi-balances
+      CARD_BALANCES_TOPIC: card-balances
       DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL_SECONDS: "300"
@@ -192,7 +274,32 @@ services:
       # Empty until an Auth0 "API" resource exists (Applications > APIs in the
       # dashboard, or `auth0 apis create`) — auth stays off (503 on the
       # protected routes) rather than the app failing to start until then.
-      AUTH0_AUDIENCE: "https://dev-ekwg1eyvfjrof0to.us.auth0.com/api/v2/"
+      AUTH0_AUDIENCE: "https://openbank.api/com/auth"
+
+  batch-worker:
+    # Reuses the exact same image/build context as `openbankapi` — the
+    # `batch/` package already ships inside it (Dockerfile's own `COPY .
+    # /app/openbankapi`). Runs `run_once` once immediately at startup (so a
+    # freshly (re)started worker doesn't wait up to an hour for its first
+    # tick), then hands off to the hourly cron baked into the image.
+    build:
+      context: ./openbankapi
+    container_name: batch-worker
+    command: sh -c "python -m openbankapi.batch.run_once && cron -f"
+    volumes:
+      - ./openbankapi:/app/openbankapi
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
+      CREDIT_CARD_APR: "0.24"
+      LATE_FEE_AMOUNT: "35.00"
+      CLOSE_DAY: "20"
+      DUE_DATE_OFFSET_DAYS: "20"
+      MINIMUM_PAYMENT_RATE: "0.02"
 
   kafka-ui:
     image: tchiotludo/akhq:0.25.1
@@ -215,3 +322,4 @@ volumes:
   postgres-data:
   redis-data:
   flink-checkpoints:
+  flink-card-checkpoints:

@@ -7,10 +7,12 @@ import { AddLocationDialog } from "./AddLocationDialog";
 import { DeleteLocationDialog } from "./DeleteLocationDialog";
 import { EditLocationDialog } from "./EditLocationDialog";
 import { LocationsList } from "./LocationsList";
+import { usePermissions } from "@/lib/auth/usePermissions";
 import type { Location } from "../types";
 
 /** What the Locations admin tab actually renders: the table plus the create/edit/delete/activate flows. */
 export function LocationsPanel() {
+  const { hasWriteAdmin } = usePermissions();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
   const [deleting, setDeleting] = useState<Location | null>(null);
@@ -19,17 +21,19 @@ export function LocationsPanel() {
 
   return (
     <div className="flex flex-col gap-ds-3">
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => setAddOpen(true)}>
-          Add location
-        </Button>
-      </div>
+      {hasWriteAdmin ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setAddOpen(true)}>
+            Add location
+          </Button>
+        </div>
+      ) : null}
 
       <LocationsList
         refreshToken={refreshToken}
-        onEdit={setEditing}
-        onDelete={setDeleting}
-        onActivate={setActivating}
+        onEdit={hasWriteAdmin ? setEditing : undefined}
+        onDelete={hasWriteAdmin ? setDeleting : undefined}
+        onActivate={hasWriteAdmin ? setActivating : undefined}
       />
 
       {addOpen ? (

@@ -127,6 +127,42 @@ class CustomerNotLinkedError(DomainError):
         super().__init__(f"no customer linked to this identity")
 
 
+class AccountAccessForbiddenError(DomainError):
+    """A resolved customer tried to reach an account they do not own. -> 403
+
+    Distinct from `AccountNotFoundError`: the account exists, the caller is
+    simply not entitled to see it (spec §3.4).
+    """
+
+    def __init__(self, account_number: str):
+        self.account_number = account_number
+        super().__init__(f"account {account_number} does not belong to this customer")
+
+
+class CustomerAlreadyHasAccountError(DomainError):
+    """A customer may only ever open one account through `POST /accounts/me`. -> 409
+
+    Status-agnostic on purpose: owning even one closed, zero-balance account
+    is still "already has an account" for the self-service flow — the generic
+    multi-account `POST /accounts` path (staff-only) is unaffected.
+    """
+
+    def __init__(self, customer_id: object):
+        self.customer_id = customer_id
+        super().__init__(f"customer {customer_id} already owns an account")
+
+
+class NoActiveBranchAvailableError(DomainError):
+    """No ACTIVE branch exists to resolve as the default for a new account. -> 503
+
+    Distinct from an unmapped bug: this is an operational/configuration state
+    (no active branch has been set up yet), not a defect in the request.
+    """
+
+    def __init__(self):
+        super().__init__("no active branch is available to open an account")
+
+
 class InsufficientFundsError(DomainError):
     """Raised only where a balance decision is legitimately local.
 
@@ -134,3 +170,106 @@ class InsufficientFundsError(DomainError):
     decline as an event, not an exception. Kept because the spec names it and
     because a future synchronous path would need it.
     """
+
+
+class RateNotAvailableError(DomainError):
+    """Frankfurter returned no usable rates. -> 502."""
+
+
+class InsufficientPermissionsError(DomainError):
+    """Caller lacks required RBAC permissions. -> 403
+
+    Backend is security boundary; frontend hiding is UX only. Carries
+    `required` and `had` so the handler can return them verbatim.
+    """
+
+    def __init__(self, required: list[str], had: list[str]):
+        self.required = required
+        self.had = had
+        super().__init__(f"missing permissions {required!r}, had {had!r}")
+
+class CardAccountNotFoundError(NotFoundError):
+    def __init__(self, identifier: object):
+        super().__init__("card_account", identifier)
+
+
+class CardNotFoundError(NotFoundError):
+    def __init__(self, identifier: object):
+        super().__init__("card", identifier)
+
+
+class CardAccountAccessForbiddenError(DomainError):
+    """A resolved customer tried to reach a card account they do not own. -> 403
+
+    Distinct from `CardAccountNotFoundError`: the card account exists, the
+    caller is simply not entitled to see it — modeled on
+    `AccountAccessForbiddenError`.
+    """
+
+    def __init__(self, card_account_id: object):
+        self.card_account_id = card_account_id
+        super().__init__(f"card account {card_account_id} does not belong to this customer")
+
+
+class StatementNotFoundError(NotFoundError):
+    """No statement matches this id, or it belongs to a different card
+    account than the one in the URL (Credit Cards Phase 4 frontend page).
+    Deliberately not distinguished from "wrong account" -> 404, not 403 —
+    mirrors how a mismatched nested resource is treated elsewhere in this
+    router rather than leaking whether the id exists at all."""
+
+    def __init__(self, identifier: object):
+        super().__init__("statement", identifier)
+
+
+class DuplicateCardNumberError(DuplicateError):
+    """A generated 16-digit card number collided. -> 409
+
+    Mirrors `DuplicateAccountNumberError`: the repository retries internally
+    on this one and only this one — see `postgres_card_repository.py`.
+    """
+
+    def __init__(self, value: object):
+        super().__init__("card_number", value)
+
+
+class InvalidCardNumberError(DomainError):
+    """A 16-digit card number was expected. -> 400"""
+
+    def __init__(self, value: object):
+        self.value = value
+        super().__init__(f"card_number must be 16 digits: {value!r}")
+
+
+class InvalidCardStatusError(DomainError):
+    """The requested status transition is not allowed from the current status. -> 409"""
+
+    def __init__(self, current_status: str, target_status: str):
+        self.current_status = current_status
+        self.target_status = target_status
+        super().__init__(f"cannot transition from {current_status} to {target_status}")
+
+
+class CardAccountNotCloseableError(DomainError):
+    """A card account cannot be closed while its computed balance is > 0. -> 409
+
+    Raised only when the requested target status is `closed` (design D3): the
+    guard compares the balance against zero, never against `credit_limit`.
+    """
+
+    def __init__(self, card_account_id: object, balance: object):
+        self.card_account_id = card_account_id
+        self.balance = balance
+        super().__init__(f"card account {card_account_id} has a nonzero balance ({balance}) and cannot be closed")
+
+
+class InvalidAdminIdentityError(DomainError):
+    """`WriteAdminDep`'s claims carry no usable admin identity (empty `sub`). -> 401
+
+    Raised before any write happens (design D3's `_require_admin_identity`) so
+    an unidentifiable admin never produces a mutation or an audit row.
+    """
+
+    def __init__(self):
+        super().__init__("admin identity (sub) is missing or empty")
+

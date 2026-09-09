@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCents, maskAccountNumber, parseCentsInput } from "../../../lib/money";
+import { formatAccountNumber, formatCents, maskAccountNumber, parseCentsInput } from "../../../lib/money";
 
 describe("formatCents", () => {
   it("formats the spec's worked example", () => {
@@ -68,5 +68,25 @@ describe("maskAccountNumber", () => {
       expect(masked.startsWith("•••• ")).toBe(true);
       expect(masked.slice(5).length).toBeLessThanOrEqual(4);
     }
+  });
+});
+
+describe("formatAccountNumber", () => {
+  it("groups a 16-digit account number into dash-separated 4-digit chunks", () => {
+    expect(formatAccountNumber("1111222233334444")).toBe("1111-2222-3333-4444");
+  });
+
+  it("never adds a trailing dash", () => {
+    expect(formatAccountNumber("12345678")).toBe("1234-5678");
+    expect(formatAccountNumber("1234")).toBe("1234");
+  });
+
+  it("keeps a non-multiple-of-4 remainder as-is rather than dropping it", () => {
+    expect(formatAccountNumber("123456789")).toBe("1234-5678-9");
+  });
+
+  it("never throws on empty or short input", () => {
+    expect(formatAccountNumber("")).toBe("");
+    expect(formatAccountNumber("12")).toBe("12");
   });
 });

@@ -28,3 +28,12 @@ class IBranchRepository(Protocol):
     async def deactivate(self, branch_id: UUID) -> Optional[Branch]:
         """Soft delete: `active = false`. The row stays; accounts reference it."""
         ...
+
+    async def get_oldest_active(self) -> Optional[Branch]:
+        """The ACTIVE branch with the earliest creation order.
+
+        Resolves the default branch for `POST /accounts/me` with no
+        hardcoded or configured branch id: earliest `created_at`, tied
+        broken by lowest `id`.
+        """
+        ...

@@ -5,12 +5,22 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from typing import Annotated
+
 from openbankapi.api.v1.dtos.common import PageParams, PageResponse
 from openbankapi.api.v1.dtos.location_dto import LocationCreateDTO, LocationResponseDTO, LocationUpdateDTO
 from openbankapi.api.v1.services.cache_aside import read_through
-from openbankapi.config.dependencies import CacheDep, LocationRepositoryDep, SettingsDep
+from openbankapi.config.dependencies import (
+    CacheDep,
+    LocationRepositoryDep,
+    SettingsDep,
+    require_permissions,
+)
 from openbankapi.domain.exceptions import LocationNotFoundError
 from openbankapi.infra.cache.interfaces import cache_key
+
+ReadAdminDep = Annotated[dict, Depends(require_permissions("read:admin"))]
+WriteAdminDep = Annotated[dict, Depends(require_permissions("write:admin"))]
 
 
 
@@ -23,12 +33,14 @@ def _dto(entity) -> dict:
 
 
 @router.post("", status_code=201, response_model=LocationResponseDTO)
-async def create(body: LocationCreateDTO, repository: LocationRepositoryDep):
+async def create(body: LocationCreateDTO, repository: LocationRepositoryDep, _claims: WriteAdminDep):
     return await repository.create(name=body.name)
 
 
 @router.get("", response_model=PageResponse[LocationResponseDTO])
-async def list_all(repository: LocationRepositoryDep, page: PageParams = Depends()):
+async def list_all(
+    _claims: ReadAdminDep, repository: LocationRepositoryDep, page: PageParams = Depends()
+):
     result = await repository.list(limit=page.limit, offset=page.offset)
     return PageResponse(
         items=[LocationResponseDTO.model_validate(i) for i in result.items],
@@ -40,7 +52,7 @@ async def list_all(repository: LocationRepositoryDep, page: PageParams = Depends
 
 @router.get("/{location_id}", response_model=LocationResponseDTO)
 async def get(
-    location_id: UUID, repository: LocationRepositoryDep, cache: CacheDep, settings: SettingsDep
+    location_id: UUID, repository: LocationRepositoryDep, cache: CacheDep, settings: SettingsDep, _claims: ReadAdminDep
 ):
     found = await read_through(
         cache, cache_key(ENTITY, location_id),
@@ -57,6 +69,7 @@ async def update(
     body: LocationUpdateDTO,
     repository: LocationRepositoryDep,
     cache: CacheDep,
+    _claims: WriteAdminDep,
 ):
     updated = await repository.update(location_id, name=body.name, active=body.active)
     if updated is None:
@@ -66,7 +79,7 @@ async def update(
 
 
 @router.delete("/{location_id}", response_model=LocationResponseDTO)
-async def soft_delete(location_id: UUID, repository: LocationRepositoryDep, cache: CacheDep):
+async def soft_delete(location_id: UUID, repository: LocationRepositoryDep, cache: CacheDep, _claims: WriteAdminDep):
     # The row survives: branches reference it, and history must stay readable.
     updated = await repository.deactivate(location_id)
     if updated is None:

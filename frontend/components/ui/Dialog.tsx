@@ -15,6 +15,10 @@ interface Props {
   cancelLabel?: string;
   /** Purely disables the Accept button — validity itself is the caller's business. */
   acceptDisabled?: boolean;
+  /** Omits the Cancel button entirely — for a resolved state where Cancel
+   * and Accept would otherwise say the same thing (e.g. both "Close" once
+   * a payment/purchase has settled). Only the Accept button remains. */
+  hideCancel?: boolean;
   /** The form (or whatever else) this popup wraps. Swap it out to reuse this chrome for another entity. */
   children: React.ReactNode;
 }
@@ -42,6 +46,7 @@ export function Dialog({
   acceptLabel = "Accept",
   cancelLabel = "Cancel",
   acceptDisabled = false,
+  hideCancel = false,
   children,
 }: Props) {
   const acceptRef = useRef<HTMLButtonElement>(null);
@@ -110,9 +115,11 @@ export function Dialog({
           <div className="text-sm opacity-85">{children}</div>
 
           <div className="mt-ds-2 flex justify-end gap-ds-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              {cancelLabel}
-            </Button>
+            {hideCancel ? null : (
+              <Button type="button" variant="outline" onClick={onClose}>
+                {cancelLabel}
+              </Button>
+            )}
             <Button ref={acceptRef} type="button" onClick={onAccept} disabled={acceptDisabled}>
               {acceptLabel}
             </Button>

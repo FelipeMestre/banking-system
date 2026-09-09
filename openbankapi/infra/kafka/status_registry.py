@@ -85,3 +85,7 @@ class StatusRegistry:
             waiters.remove(waiter)
         if not waiters:
             self._waiters.pop(request_id, None)
+
+
+# Deposit alias — reuse same class, separate instance (per design §3, distinct from transfer/purchase)
+DepositStatusRegistry = StatusRegistry

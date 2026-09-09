@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useRouter } from "next/navigation";
+import { LoadingScreen } from "@/components/ui/loading-screen";
 
 interface Props {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ export function RequireAuth({ children }: Props): React.ReactElement | null {
   }, [shouldRedirectToLogin, router]);
 
   if (isLoading) {
-    return <p>Loading…</p>;
+    return <LoadingScreen message="Loading…" />;
   }
 
   if (shouldRedirectToLogin) {

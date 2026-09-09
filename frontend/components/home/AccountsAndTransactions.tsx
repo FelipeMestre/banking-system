@@ -1,15 +1,22 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AccountCell } from "./AccountCell";
-import { TransactionsTable } from "./TransactionsTable";
-import type { AccountSummary } from "@/lib/placeholder-home";
-import type { Transaction } from "@/lib/types";
+import { useAccountVisibility } from "@/features/accounts/hooks/useAccountVisibility";
+import { TransactionsPanel } from "@/features/transactions";
+import type { AccountSummary } from "@/features/accounts";
 
 interface Props {
   accounts: AccountSummary[];
-  transactionsByAccount: Record<string, Transaction[]>;
   asOf: string;
+  /** Controlled: the parent owns which account is selected, since selecting
+   * a different account has to trigger a real fetch of that account's
+   * transactions (spec §3.3) — a fetch this component has no business
+   * starting itself. */
+  selectedAccountNumber: string;
+  onSelectAccount: (accountNumber: string) => void;
   /**
    * The aside (credit card panel, quick actions, total position) — passed in
    * rather than imported here so those purely-presentational pieces stay
@@ -19,53 +26,61 @@ interface Props {
   aside: React.ReactNode;
 }
 
-/**
- * Owns the one real interaction on this screen: which account is selected.
- * The accounts strip and the transactions table below it both react to the
- * same selection, so the state has to live above both of them — same
- * pattern as `TransferConsole` owning `Phase` for its child form/outcome.
- */
-export function AccountsAndTransactions({ accounts, transactionsByAccount, asOf, aside }: Props) {
-  const [selected, setSelected] = useState(0);
+export function AccountsAndTransactions({
+  accounts,
+  asOf,
+  selectedAccountNumber,
+  onSelectAccount,
+  aside,
+}: Props) {
   const firstAccount = accounts[0];
+  const { visible: showDetails, toggle: toggleShowDetails } = useAccountVisibility();
 
   if (!firstAccount) {
     return <p className="text-neutral-600">No accounts to show.</p>;
   }
 
-  // `selected` only ever moves to indexes AccountCell.onSelect hands it, which
-  // only ever come from mapping over this same `accounts` array — but that
-  // isn't visible to the type checker, so fall back to the account already
-  // proven to exist above rather than asserting the index is always in range.
-  const account = accounts[selected] ?? firstAccount;
+  const account = accounts.find((a) => a.account_number === selectedAccountNumber) ?? firstAccount;
 
   return (
     <>
       <div className="mb-[14px] flex items-baseline justify-between">
         <h6 className="m-0 text-xs">Accounts</h6>
-        <span className="text-xs text-neutral-600">Balances as of {asOf}</span>
+        <div className="flex items-center gap-ds-3">
+          <span className="text-xs text-neutral-600">Balances as of {asOf}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={showDetails ? "Hide account details" : "Show account details"}
+            aria-pressed={showDetails}
+            onClick={toggleShowDetails}
+          >
+            {/* The icon mirrors the CURRENT state, not the click's next
+                action: an open eye means details are showing right now, a
+                crossed-out eye means they're currently masked. */}
+            {showDetails ? <Eye size={16} /> : <EyeOff size={16} />}
+          </Button>
+        </div>
       </div>
 
       <div
         className="grid border-2 border-divider border-r-0"
         style={{ gridTemplateColumns: `repeat(${accounts.length}, minmax(0, 1fr))` }}
       >
-        {accounts.map((acct, index) => (
+        {accounts.map((acct) => (
           <AccountCell
             key={acct.account_number}
             account={acct}
-            selected={index === selected}
-            onSelect={() => setSelected(index)}
+            selected={acct.account_number === account.account_number}
+            onSelect={() => onSelectAccount(acct.account_number)}
+            showDetails={showDetails}
           />
         ))}
       </div>
 
       <div className="mt-[36px] grid grid-cols-[minmax(0,1fr)_300px] items-start gap-ds-8">
-        <TransactionsTable
-          accountLabel={account.label}
-          currencyCode={account.currency}
-          transactions={transactionsByAccount[account.account_number] ?? []}
-        />
+        <TransactionsPanel accountNumber={account.account_number} currencyCode={account.currency} />
         {/* The key is load-bearing, not decorative: `aside` is JSX authored in
             a Server Component (the page) and handed across into this Client
             Component as a prop. Rendered bare, that crossing makes React's

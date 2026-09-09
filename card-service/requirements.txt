@@ -1,0 +1,2 @@
+# Must match the Flink version of the base image in Dockerfile.
+apache-flink==1.20.5

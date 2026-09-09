@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+from openbankapi.config.dependencies import get_current_user
 from openbankapi.tests.conftest import build
 
 
@@ -93,4 +94,46 @@ def test_soft_delete_a_nonexistent_customer_is_a_clean_404():
     h = build()
     with h.client:
         response = h.client.delete(f"/customers/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+
+# --- CurrentUserDep guard: GET /customers/{customer_id} ---------------------
+# Backs the transfer recipient-preview lookup (find-recipient.ts), which
+# resolves a recipient's name after resolving their account — so this route
+# must accept any authenticated caller, not just the customer's own record.
+
+
+def test_get_by_customer_id_requires_auth():
+    h = build()
+    with h.client:
+        customer_id = _create_customer(h.client, "ID-AUTH-001").json()["id"]
+        # Clear admin to test unauthenticated path -> 503 when auth0 not configured
+        h.client.app.dependency_overrides.pop(get_current_user, None)
+        response = h.client.get(f"/customers/{customer_id}")
+        assert response.status_code == 503
+
+
+def test_get_by_customer_id_resolves_for_any_authenticated_caller():
+    h = build()
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|someone-else",
+        "permissions": ["read:admin", "write:admin"],
+        "scope": "read:admin write:admin",
+    }
+    with h.client:
+        customer_id = _create_customer(h.client, "ID-AUTH-002").json()["id"]
+        response = h.client.get(f"/customers/{customer_id}")
+        assert response.status_code == 200
+        assert response.json()["id"] == customer_id
+
+
+def test_get_by_customer_id_unknown_is_404():
+    h = build()
+    h.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|someone-else",
+        "permissions": ["read:admin"],
+        "scope": "read:admin",
+    }
+    with h.client:
+        response = h.client.get(f"/customers/{uuid.uuid4()}")
         assert response.status_code == 404

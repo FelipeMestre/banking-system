@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LoadingScreen } from "@/components/ui/loading-screen";
 import { currencySymbol, formatCents } from "@/lib/money";
-import { getAccounts } from "../api/get-accounts";
+import { getAccounts, getAllAccounts } from "../api/get-accounts";
 import type { Account } from "../types";
 
 const PAGE_SIZE = 10;
@@ -24,7 +25,13 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: Account[]; total: number };
 
-export function AccountsList() {
+interface Props {
+  scope?: "mine" | "all";
+  /** Bump this (e.g. after a deposit) to force a refetch at the current page. */
+  refreshToken?: number;
+}
+
+export function AccountsList({ scope = "mine", refreshToken }: Props = {}) {
   const [offset, setOffset] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -32,7 +39,8 @@ export function AccountsList() {
     let cancelled = false;
     setState({ kind: "loading" });
 
-    getAccounts({ limit: PAGE_SIZE, offset })
+    const fetchPage = scope === "all" ? getAllAccounts : getAccounts;
+    fetchPage({ limit: PAGE_SIZE, offset })
       .then((page) => {
         if (!cancelled) setState({ kind: "ready", items: page.items, total: page.total });
       })
@@ -48,10 +56,10 @@ export function AccountsList() {
     return () => {
       cancelled = true;
     };
-  }, [offset]);
+  }, [offset, scope, refreshToken]);
 
   if (state.kind === "loading") {
-    return <p className="m-0 text-[0.9rem] text-neutral-600">Loading accounts…</p>;
+    return <LoadingScreen message="Loading accounts…" fullScreen={false} showBranding={false} />;
   }
 
   if (state.kind === "error") {
