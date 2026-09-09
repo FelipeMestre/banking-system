@@ -3,7 +3,7 @@
 export interface Transaction {
   id: string;
   request_id: string;
-  type: "debit" | "credit" | "declined" | "deposit";
+  type: "debit" | "credit" | "declined" | "deposit" | "withdrawal";
   /** Integer cents. */
   amount: number;
   counterparty_account: string | null;
