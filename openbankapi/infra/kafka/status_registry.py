@@ -89,3 +89,6 @@ class StatusRegistry:
 
 # Deposit alias — reuse same class, separate instance (per design §3, distinct from transfer/purchase)
 DepositStatusRegistry = StatusRegistry
+
+# Withdrawal alias — reuse same class, separate instance (distinct from transfer/purchase/deposit)
+WithdrawalStatusRegistry = StatusRegistry

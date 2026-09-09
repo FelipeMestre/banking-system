@@ -43,6 +43,11 @@ CHEAT_ACCOUNT = "cheatAccount"
 DEPOSIT = "deposit"
 DEPOSIT_CONFIRMED = "deposit_confirmed"
 
+WITHDRAWAL = "withdrawal"
+WITHDRAWAL_CONFIRMED = "withdrawal_confirmed"
+DECLINED_WITHDRAWAL = "declined_withdrawal"
+LEG_WITHDRAWAL = "withdrawal"
+
 
 def dedup_key(request_id: str, leg: str) -> str:
     return f"{request_id}:{leg}"
@@ -94,6 +99,10 @@ class Decision:
     # `account_events` (spec: card-account-payments-api Insufficient funds).
     card_events: Tuple[Dict[str, Any], ...] = ()
     card_status_events: Tuple[Dict[str, Any], ...] = ()
+    # Withdrawal: its own explicit field and its own explicit OutputTag in
+    # job.py, rather than replicating deposit's `new_balance`-in-status_events
+    # shape-sniffing (an existing wart, not a pattern to repeat).
+    withdrawal_status_events: Tuple[Dict[str, Any], ...] = ()
 
     @staticmethod
     def noop() -> "Decision":
@@ -119,6 +128,8 @@ def decide(account: str, event: Dict[str, Any], state: LedgerState, now: str) ->
 
     if event_type == DEPOSIT:
         return _on_deposit(account, event, state, now)
+    if event_type == WITHDRAWAL:
+        return _on_withdrawal(account, event, state, now)
     if event_type == TRANSFER_REQUESTED:
         return _on_transfer_requested(account, event, state, now)
     if event_type == INCOMING_PAYMENT:
@@ -434,6 +445,114 @@ def _deposit_status(event: Dict[str, Any], new_balance: int, amount_applied: int
     }
     applied_rate = event.get("applied_rate")
     if applied_rate is not None:
+        payload["applied_rate"] = applied_rate
+    return payload
+
+
+def _on_withdrawal(
+    account: str, event: Dict[str, Any], state: LedgerState, now: str
+) -> Decision:
+    """Mirrors `_on_transfer_requested`'s insufficient-funds decline branch:
+    unlike a deposit, a withdrawal can be declined, exactly like an ATM."""
+    request_id = event["request_id"]
+    key = dedup_key(request_id, LEG_WITHDRAWAL)
+    if state.is_processed(key):
+        return Decision.noop()
+
+    amount_applied = event["amount_applied"]
+
+    if not _is_valid_amount(amount_applied):
+        return Decision(
+            dedup_keys=(key,),
+            account_events=(_withdrawal_declined(event, account, REASON_INVALID_AMOUNT, now),),
+            withdrawal_status_events=(
+                _withdrawal_status(event, STATUS_DECLINED, now, reason=REASON_INVALID_AMOUNT),
+            ),
+        )
+
+    balance = state.balance or 0
+    if balance < amount_applied:
+        return Decision(
+            dedup_keys=(key,),
+            account_events=(_withdrawal_declined(event, account, REASON_INSUFFICIENT_FUNDS, now),),
+            withdrawal_status_events=(
+                _withdrawal_status(event, STATUS_DECLINED, now, reason=REASON_INSUFFICIENT_FUNDS),
+            ),
+        )
+
+    debited = balance - amount_applied
+    return Decision(
+        new_balance=debited,
+        dedup_keys=(key,),
+        account_events=(_withdrawal_confirmed(event, amount_applied, now),),
+        withdrawal_status_events=(
+            _withdrawal_status(
+                event,
+                STATUS_APPROVED,
+                now,
+                new_balance=debited,
+                amount_applied=amount_applied,
+                applied_rate=event.get("applied_rate"),
+            ),
+        ),
+        balance_events=(_balance_updated(account, debited, now),),
+    )
+
+
+def _withdrawal_confirmed(event: Dict[str, Any], amount_applied: int, now: str) -> Dict[str, Any]:
+    payload = {
+        "type": WITHDRAWAL_CONFIRMED,
+        "request_id": event["request_id"],
+        "account_id": event["account_id"],
+        "amount": amount_applied,
+        "currency": event["currency"],
+        "leg": LEG_WITHDRAWAL,
+        "ts": now,
+    }
+    if "admin_id" in event:
+        payload["admin_id"] = event["admin_id"]
+    if event.get("reason") is not None:
+        payload["reason"] = event["reason"]
+    applied_rate = event.get("applied_rate")
+    if applied_rate is not None:
+        payload["applied_rate"] = applied_rate
+    return payload
+
+
+def _withdrawal_declined(
+    event: Dict[str, Any], account: str, reason: str, now: str
+) -> Dict[str, Any]:
+    payload = {
+        "type": DECLINED_WITHDRAWAL,
+        "request_id": event["request_id"],
+        "account_id": account,
+        "amount": event.get("amount_applied", event.get("amount")),
+        "reason": reason,
+        "ts": now,
+    }
+    if "admin_id" in event:
+        payload["admin_id"] = event["admin_id"]
+    return payload
+
+
+def _withdrawal_status(
+    event: Dict[str, Any],
+    status: str,
+    now: str,
+    *,
+    new_balance: Optional[int] = None,
+    amount_applied: Optional[int] = None,
+    reason: Optional[str] = None,
+    applied_rate: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"request_id": event["request_id"], "status": status, "ts": now}
+    if new_balance is not None:
+        payload["new_balance"] = new_balance
+    if amount_applied is not None:
+        payload["amount_applied"] = amount_applied
+    if reason:
+        payload["reason"] = reason
+    if status == STATUS_APPROVED and applied_rate is not None:
         payload["applied_rate"] = applied_rate
     return payload
 

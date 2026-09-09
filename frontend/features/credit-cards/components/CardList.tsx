@@ -47,7 +47,10 @@ export function CardList({ items, selectedCardAccountId, onSelect }: Props) {
               type="button"
               onClick={() => onSelect(cardAccount.id)}
               aria-current={isSelected ? "true" : undefined}
-              className="relative flex w-full flex-col gap-ds-3 overflow-hidden border-2 border-divider bg-surface p-ds-4 pt-[18px] text-left hover:border-neutral-400"
+              className={
+                "relative hover:cursor-pointer hover:bg-neutral-200 flex w-full flex-col gap-ds-3 overflow-hidden border-2 border-divider p-ds-4 pt-[18px] text-left hover:border-neutral-400 " +
+                (isSelected ? "bg-neutral-200" : "bg-neutral-100")
+              }
             >
               <span
                 aria-hidden="true"

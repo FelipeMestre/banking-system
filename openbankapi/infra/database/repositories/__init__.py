@@ -15,6 +15,7 @@ from .postgres_card_account_admin_action_repository import PostgresCardAccountAd
 from .postgres_installment_repository import PostgresInstallmentRepository, PostgresInstallmentWriter
 from .postgres_statement_repository import PostgresStatementRepository
 from .postgres_deposit_repository import PostgresDepositRepository, PostgresDepositWriter
+from .postgres_withdrawal_repository import PostgresWithdrawalRepository, PostgresWithdrawalWriter
 
 __all__ = [
     "PostgresCustomerRepository",
@@ -39,4 +40,6 @@ __all__ = [
     "PostgresStatementRepository",
     "PostgresDepositRepository",
     "PostgresDepositWriter",
+    "PostgresWithdrawalRepository",
+    "PostgresWithdrawalWriter",
 ]

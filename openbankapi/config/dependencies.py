@@ -138,6 +138,15 @@ def get_deposit_status_registry(conn: HTTPConnection) -> StatusRegistry:
 DepositStatusRegistryDep = Annotated[StatusRegistry, Depends(get_deposit_status_registry)]
 
 
+def get_withdrawal_status_registry(conn: HTTPConnection) -> StatusRegistry:
+    # A FIFTH separate instance: `request_id` is only unique within its own
+    # domain's Kafka topic.
+    return conn.app.state.withdrawal_status_registry
+
+
+WithdrawalStatusRegistryDep = Annotated[StatusRegistry, Depends(get_withdrawal_status_registry)]
+
+
 def get_foreign_exchange_cache_service(conn: HTTPConnection):
     return conn.app.state.foreign_exchange_cache_service
 

@@ -145,7 +145,8 @@ class TransactionORM(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('debit', 'credit', 'declined', 'deposit')", name="transactions_type_check"
+            "type IN ('debit', 'credit', 'declined', 'deposit', 'withdrawal')",
+            name="transactions_type_check",
         ),
         UniqueConstraint(
             "request_id", "account_number", "type", name="transactions_request_id_account_number_type_key"
@@ -181,6 +182,30 @@ class DepositORM(Base):
     __tablename__ = "deposits"
     __table_args__ = (
         UniqueConstraint("movement_id", name="deposits_movement_id_key"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    movement_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    admin_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[dt.datetime] = _created()
+
+
+class WithdrawalORM(Base):
+    """Audit row linking a `transactions` withdrawal movement to the admin who created it.
+
+    One row per `transactions` row of `type='withdrawal'`, enforced by
+    `UNIQUE(movement_id)`. Mirrors `DepositORM` field-for-field.
+    """
+
+    __tablename__ = "withdrawals"
+    __table_args__ = (
+        UniqueConstraint("movement_id", name="withdrawals_movement_id_key"),
     )
 
     id: Mapped[uuid.UUID] = _pk()

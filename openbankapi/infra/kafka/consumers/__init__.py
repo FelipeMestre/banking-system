@@ -6,6 +6,7 @@ from .deposit_status_consumer import DepositStatusConsumer
 from .purchase_status_consumer import PurchaseStatusConsumer
 from .transaction_consumer import TransactionConsumer
 from .transfer_status_consumer import TransferStatusConsumer
+from .withdrawal_status_consumer import WithdrawalStatusConsumer
 
 __all__ = [
     "AccountBalanceConsumer",
@@ -16,4 +17,5 @@ __all__ = [
     "PurchaseStatusConsumer",
     "TransactionConsumer",
     "TransferStatusConsumer",
+    "WithdrawalStatusConsumer",
 ]

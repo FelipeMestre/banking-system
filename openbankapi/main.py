@@ -29,6 +29,7 @@ from .infra.database.repositories import (
     PostgresDepositWriter,
     PostgresInstallmentWriter,
     PostgresTransactionWriter,
+    PostgresWithdrawalWriter,
 )
 from .infra.foreign_exchange_service.config.foreign_exchange_config import (
     ForeignExchangeConfig,
@@ -45,6 +46,7 @@ from .infra.kafka.consumers import (
     PurchaseStatusConsumer,
     TransactionConsumer,
     TransferStatusConsumer,
+    WithdrawalStatusConsumer,
 )
 from .infra.kafka.repositories import KafkaEventPublisherRepository
 from .infra.kafka.status_registry import StatusRegistry
@@ -69,6 +71,7 @@ transaction_writer = PostgresTransactionWriter(sessionmaker)
 # links to is written off the same Kafka thread, not a request.
 applied_rate_writer = PostgresAppliedRateWriter(sessionmaker)
 deposit_writer = PostgresDepositWriter(sessionmaker)
+withdrawal_writer = PostgresWithdrawalWriter(sessionmaker)
 # Credit Cards Phase 2: `CardMovementConsumer` is driven by a Kafka thread
 # too, same reasoning as `transaction_writer`/`applied_rate_writer` above.
 card_movement_writer = PostgresCardMovementWriter(sessionmaker)
@@ -91,17 +94,19 @@ status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 purchase_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 card_payment_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 deposit_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
+withdrawal_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
 purchase_status_consumer = PurchaseStatusConsumer(settings, purchase_status_registry)
 card_payment_status_consumer = CardPaymentStatusConsumer(
     settings, card_payment_status_registry
 )
 deposit_status_consumer = DepositStatusConsumer(settings, deposit_status_registry)
+withdrawal_status_consumer = WithdrawalStatusConsumer(settings, withdrawal_status_registry)
 balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
 
 card_balance_consumer = CardBalanceConsumer(settings, card_balance_projection, cache)
 transaction_consumer = TransactionConsumer(
-    settings, transaction_writer, applied_rate_writer, deposit_writer
+    settings, transaction_writer, applied_rate_writer, deposit_writer, withdrawal_writer
 )
 
 card_movement_consumer = CardMovementConsumer(
@@ -123,6 +128,7 @@ def _start(loop: asyncio.AbstractEventLoop) -> None:
     purchase_status_consumer.start(loop)
     card_payment_status_consumer.start(loop)
     deposit_status_consumer.start(loop)
+    withdrawal_status_consumer.start(loop)
     balance_consumer.start(loop)
     card_balance_consumer.start(loop)
     transaction_consumer.start(loop)
@@ -134,6 +140,7 @@ def _stop() -> None:
     purchase_status_consumer.stop()
     card_payment_status_consumer.stop()
     deposit_status_consumer.stop()
+    withdrawal_status_consumer.stop()
     balance_consumer.stop()
     card_balance_consumer.stop()
     transaction_consumer.stop()
@@ -155,6 +162,7 @@ app = create_app(
     purchase_status_registry=purchase_status_registry,
     card_payment_status_registry=card_payment_status_registry,
     deposit_status_registry=deposit_status_registry,
+    withdrawal_status_registry=withdrawal_status_registry,
     auth0=auth0,
     on_start=_start,
     on_stop=_stop,

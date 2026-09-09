@@ -33,6 +33,7 @@ from ....config import Settings
 from ...database.interfaces.applied_rate_repository import IAppliedRateRepository
 from ...database.interfaces.deposit_repository import IDepositRepository
 from ...database.interfaces.transaction_repository import ITransactionRepository
+from ...database.interfaces.withdrawal_repository import IWithdrawalRepository
 
 LOG = logging.getLogger("openbankapi.kafka.transactions")
 
@@ -43,6 +44,8 @@ _EVENT_TO_ROW_TYPE = {
     "incoming_payment": "credit",
     "declined_payment": "declined",
     "deposit_confirmed": "deposit",
+    "withdrawal_confirmed": "withdrawal",
+    "declined_withdrawal": "declined",
 }
 
 
@@ -53,6 +56,7 @@ class TransactionConsumer:
         repository: ITransactionRepository,
         applied_rate_repository: IAppliedRateRepository | None = None,
         deposit_repository: IDepositRepository | None = None,
+        withdrawal_repository: IWithdrawalRepository | None = None,
     ):
         self._settings = settings
         self._repository = repository
@@ -60,6 +64,7 @@ class TransactionConsumer:
         # unmodified — it just never links an applied-rate row.
         self._applied_rate_repository = applied_rate_repository
         self._deposit_repository = deposit_repository
+        self._withdrawal_repository = withdrawal_repository
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -141,12 +146,17 @@ class TransactionConsumer:
         if row_type == "deposit":
             await self._insert_deposit(event)
             return
+        if row_type == "withdrawal":
+            await self._insert_withdrawal(event)
+            return
         if row_type == "debit":
             counterparty = event["destination_account"]
         elif row_type == "credit":
             counterparty = event["source_account"]
         else:
-            counterparty = event["destination_account"]
+            # `declined` is reached by both `declined_payment` (always carries
+            # `destination_account`) and `declined_withdrawal` (never does).
+            counterparty = event.get("destination_account")
 
         applied_rate_id = await self._resolve_applied_rate_id(row_type, event)
 
@@ -191,6 +201,40 @@ class TransactionConsumer:
             await self._repository.set_applied_rate(movement_id, rate_uuid)
         if self._deposit_repository is not None:
             await self._deposit_repository.insert(
+                movement_id=movement_id,
+                admin_id=event.get("admin_id", ""),
+                reason=event.get("reason"),
+            )
+
+    async def _insert_withdrawal(self, event: dict[str, Any]) -> None:
+        # Guard orphan applied_rates: insert movement first with no rate, RETURNING
+        movement_id = await self._repository.insert(
+            request_id=uuid.UUID(str(event["request_id"])),
+            account_number=event["account_id"],
+            type="withdrawal",
+            amount=event["amount"],
+            counterparty_account=None,
+            decline_reason=None,
+            ts=self._parse_ts(event.get("ts")),
+            applied_rate_id=None,
+        )
+        if movement_id is None:
+            return
+        # Cross-currency: link applied_rate after confirming movement is new
+        applied_data = event.get("applied_rate") or event.get("conversion")
+        if applied_data is not None and self._applied_rate_repository is not None:
+            new_rate_id = await self._applied_rate_repository.insert(
+                pair=applied_data["pair"],
+                mid_rate=applied_data["mid_rate"],
+                applied_rate=applied_data["applied_rate"],
+                margin=applied_data["margin"],
+                direction=applied_data["direction"],
+                source_ts=self._parse_ts(applied_data["source_ts"]),
+            )
+            rate_uuid = uuid.UUID(str(new_rate_id))
+            await self._repository.set_applied_rate(movement_id, rate_uuid)
+        if self._withdrawal_repository is not None:
+            await self._withdrawal_repository.insert(
                 movement_id=movement_id,
                 admin_id=event.get("admin_id", ""),
                 reason=event.get("reason"),

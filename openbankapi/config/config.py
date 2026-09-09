@@ -38,6 +38,8 @@ class Settings:
     card_balance_consumer_group: str = "openbankapi-card-balances"
     deposit_status_topic: str = "deposit-status"
     deposit_status_consumer_group: str = ""  # empty -> unique per process
+    withdrawal_status_topic: str = "withdrawal-status"
+    withdrawal_status_consumer_group: str = ""  # empty -> unique per process
 
     # --- Postgres / Redis ---
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
@@ -104,6 +106,8 @@ class Settings:
             card_balance_consumer_group=os.getenv("CARD_BALANCE_CONSUMER_GROUP", "openbankapi-card-balances"),
             deposit_status_topic=os.getenv("DEPOSIT_STATUS_TOPIC", "deposit-status"),
             deposit_status_consumer_group=os.getenv("DEPOSIT_STATUS_CONSUMER_GROUP", ""),
+            withdrawal_status_topic=os.getenv("WITHDRAWAL_STATUS_TOPIC", "withdrawal-status"),
+            withdrawal_status_consumer_group=os.getenv("WITHDRAWAL_STATUS_CONSUMER_GROUP", ""),
             database_dsn=os.getenv(
                 "DATABASE_DSN", "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
             ),

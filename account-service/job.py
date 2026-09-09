@@ -59,6 +59,7 @@ ACCOUNT_BALANCES_TOPIC = os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances")
 CARD_EVENTS_TOPIC = os.getenv("CARD_EVENTS_TOPIC", "card-events")
 CARD_PAYMENT_STATUS_TOPIC = os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status")
 DEPOSIT_STATUS_TOPIC = os.getenv("DEPOSIT_STATUS_TOPIC", "deposit-status")
+WITHDRAWAL_STATUS_TOPIC = os.getenv("WITHDRAWAL_STATUS_TOPIC", "withdrawal-status")
 CONSUMER_GROUP = os.getenv("ACCOUNT_SERVICE_GROUP_ID", "account-service")
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "5000"))
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///tmp/flink-checkpoints")
@@ -83,6 +84,7 @@ BALANCES_TAG = OutputTag("balance-events", RECORD_TYPE)
 CARD_TAG = OutputTag("card-events", RECORD_TYPE)
 CARD_STATUS_TAG = OutputTag("card-payment-status-events", RECORD_TYPE)
 DEPOSIT_STATUS_TAG = OutputTag("deposit-status-events", RECORD_TYPE)
+WITHDRAWAL_STATUS_TAG = OutputTag("withdrawal-status-events", RECORD_TYPE)
 
 KEY_FIELD, PAYLOAD_FIELD = 0, 1
 
@@ -171,6 +173,10 @@ class AccountProcessor(KeyedProcessFunction):
             yield CARD_TAG, Row(card_event["card_account_id"], json.dumps(card_event))
         for card_status in decision.card_status_events:
             yield CARD_STATUS_TAG, Row(card_status["request_id"], json.dumps(card_status))
+        for withdrawal_status in decision.withdrawal_status_events:
+            yield WITHDRAWAL_STATUS_TAG, Row(
+                withdrawal_status["request_id"], json.dumps(withdrawal_status)
+            )
 
 
 def _row_field_schema(field_index: int) -> SerializationSchema:
@@ -256,6 +262,9 @@ def build_job():
     processed.get_side_output(DEPOSIT_STATUS_TAG).sink_to(
         _kafka_sink(DEPOSIT_STATUS_TOPIC)
     ).name("deposit-status-sink")
+    processed.get_side_output(WITHDRAWAL_STATUS_TAG).sink_to(
+        _kafka_sink(WITHDRAWAL_STATUS_TOPIC)
+    ).name("withdrawal-status-sink")
 
     env.execute(JOB_NAME)
 

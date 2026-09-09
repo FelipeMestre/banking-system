@@ -13,6 +13,7 @@ class TransactionType(str, Enum):
     CREDIT = "credit"
     DECLINED = "declined"
     DEPOSIT = "deposit"
+    WITHDRAWAL = "withdrawal"
 
 
 @dataclass(frozen=True)
