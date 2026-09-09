@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 import { ApiError } from "@/lib/api/client";
 import { downloadStatementPdf } from "../api/download-statement-pdf";
@@ -155,20 +154,24 @@ export function CreditCardsPageScreen() {
 
   const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
 
+  const handleDownloadStatement = useCallback(
+    (statement: Statement) => {
+      if (!selectedCardAccountId) return;
+      setDownloading(true);
+      downloadStatementPdf(selectedCardAccountId, statement.id, `statement-${statement.period_end}.pdf`)
+        .catch(() => {
+          // Best-effort: the customer can retry the download; nothing else on
+          // the page depends on this succeeding.
+        })
+        .finally(() => setDownloading(false));
+    },
+    [selectedCardAccountId],
+  );
+
   const handleDownload = useCallback(() => {
-    if (!selectedCardAccountId || !selectedStatement) return;
-    setDownloading(true);
-    downloadStatementPdf(
-      selectedCardAccountId,
-      selectedStatement.id,
-      `statement-${selectedStatement.period_end}.pdf`,
-    )
-      .catch(() => {
-        // Best-effort: the customer can retry the download; nothing else on
-        // the page depends on this succeeding.
-      })
-      .finally(() => setDownloading(false));
-  }, [selectedCardAccountId, selectedStatement]);
+    if (!selectedStatement) return;
+    handleDownloadStatement(selectedStatement);
+  }, [selectedStatement, handleDownloadStatement]);
 
   if (cardsState.kind === "loading") {
     return <LoadingScreen message="Loading your cards…" fullScreen={false} showBranding={false} />;
@@ -183,7 +186,7 @@ export function CreditCardsPageScreen() {
   );
 
   return (
-    <div className="flex flex-col gap-ds-4">
+    <div className="flex flex-col gap-[48px]">
       <h1 className="m-0 font-heading text-[20px] font-extrabold tracking-[-0.01em]">Your cards</h1>
 
       <section className="flex flex-col gap-ds-2">
@@ -196,26 +199,22 @@ export function CreditCardsPageScreen() {
       </section>
 
       {selectedCard ? (
-        <div className="flex flex-col gap-ds-4">
+        <div className="flex flex-col gap-[48px]">
           <section className="flex flex-col gap-ds-2">
-            <div className="flex items-center justify-between">
-              <h6 className="m-0">
-                Current cycle{selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
-              </h6>
-              <Button type="button" size="sm" onClick={() => setPayDialogOpen(true)}>
-                Pay
-              </Button>
-            </div>
             {selectedStatement ? (
               <CurrentCycleSummary
                 statement={selectedStatement}
                 onDownload={handleDownload}
                 downloading={downloading}
+                onPay={() => setPayDialogOpen(true)}
               />
             ) : (
-              <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
-                No billing cycle has closed yet.
-              </p>
+              <>
+                <h6 className="m-0">Current cycle</h6>
+                <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
+                  No billing cycle has closed yet.
+                </p>
+              </>
             )}
           </section>
 
@@ -227,6 +226,8 @@ export function CreditCardsPageScreen() {
               statements={statements}
               selectedStatementId={selectedStatementId}
               onSelect={setSelectedStatementId}
+              onDownload={handleDownloadStatement}
+              downloading={downloading}
             />
           </section>
 
