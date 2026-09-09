@@ -55,7 +55,7 @@ export interface UsedCreditEstimate {
 /** Mirrors `CardMovementDTO` (openbankapi/api/v1/dtos/card_usage_dto.py). */
 export interface CardMovement {
   id: string;
-  movement_type: "purchase" | "payment" | "fee" | "interest" | "refund" | "declined";
+  movement_type: "purchase" | "payment" | "fee" | "interest" | "refund" | "declined" | "late_fee";
   amount: string;
   currency: string;
   occurred_at: string;

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import sys
 
-from .config import Settings
-from .domain.model import is_valid_account_number
-from .domain.service import AccountService
-from .infra.kafka.repositories import KafkaEventPublisherRepository
+from openbankapi.config import Settings
+from openbankapi.domain.model import is_valid_account_number
+from openbankapi.domain.service import AccountService
+from openbankapi.infra.kafka.repositories import KafkaEventPublisherRepository
 
 
 def _parse(pair: str):

@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<CardMovement["movement_type"], string> = {
   interest: "Interest",
   refund: "Refund",
   declined: "Declined",
+  late_fee: "Late fee",
 };
 
 // A movement without its own description still needs a title — this is what
@@ -31,6 +32,7 @@ const DEFAULT_TITLE: Record<CardMovement["movement_type"], string> = {
   interest: "Interest charge",
   refund: "Refund received",
   declined: "Attempted purchase",
+  late_fee: "Late fee",
 };
 
 type Tone = "increase" | "decrease" | "declined";
@@ -38,7 +40,8 @@ type Tone = "increase" | "decrease" | "declined";
 // Purchases/fees/interest increase what is owed; payments/refunds reduce it —
 // the same classification the backend's used-credit-estimate endpoint sums
 // by. A declined movement never happened, so it gets its own neutral tone
-// instead of either sign.
+// instead of either sign. A late fee is billed the same way a card fee is —
+// it increases what is owed, same as any other charge.
 const TONE: Record<CardMovement["movement_type"], Tone> = {
   purchase: "increase",
   fee: "increase",
@@ -46,6 +49,7 @@ const TONE: Record<CardMovement["movement_type"], Tone> = {
   payment: "decrease",
   refund: "decrease",
   declined: "declined",
+  late_fee: "increase",
 };
 
 const ICON: Record<CardMovement["movement_type"], LucideIcon> = {
@@ -55,6 +59,7 @@ const ICON: Record<CardMovement["movement_type"], LucideIcon> = {
   payment: CheckCircle2,
   refund: CheckCircle2,
   declined: XCircle,
+  late_fee: Lock,
 };
 
 const TONE_CLASSES: Record<Tone, { icon: string; box: string; amount: string }> = {
