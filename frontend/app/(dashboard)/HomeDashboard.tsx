@@ -13,6 +13,7 @@ import {
   totalPositionByCurrency,
   type Account,
 } from "@/features/accounts";
+import { useAccountVisibility } from "@/features/accounts/hooks/useAccountVisibility";
 import { ApiError } from "@/lib/api/client";
 
 const ACCOUNTS_PAGE_SIZE = 50;
@@ -39,6 +40,10 @@ export function HomeDashboard() {
   // — it has no refresh prop of its own, this forces a fresh fetch the same
   // way any other "reset this subtree" `key` change does.
   const [creditCardRefreshKey, setCreditCardRefreshKey] = useState(0);
+  // Shared here, not inside AccountsAndTransactions, so the same toggle also
+  // masks CreditCardPanel in the aside — two independent hook instances would
+  // each own their own React state and drift out of sync on every click.
+  const { visible: showDetails, toggle: toggleShowDetails } = useAccountVisibility();
 
   const refetchAccounts = useCallback(() => {
     let cancelled = false;
@@ -114,9 +119,11 @@ export function HomeDashboard() {
       asOf="just now"
       selectedAccountNumber={selectedAccountNumber ?? accounts[0]?.account_number ?? ""}
       onSelectAccount={setSelectedAccountNumber}
+      showDetails={showDetails}
+      onToggleShowDetails={toggleShowDetails}
       aside={
         <aside className="flex flex-col gap-[28px]">
-          <CreditCardPanel key={creditCardRefreshKey} />
+          <CreditCardPanel key={creditCardRefreshKey} showDetails={showDetails} />
           <QuickActions onBillPaid={() => setCreditCardRefreshKey((n) => n + 1)} />
           <TotalPosition totals={totalPositionByCurrency(accounts)} />
         </aside>

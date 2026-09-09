@@ -43,12 +43,29 @@ describe("CreditCardPanel (homepage)", () => {
       total: 1, limit: 50, offset: 0,
     } as Page<CardAccountListItem>);
 
-    render(<CreditCardPanel />);
+    render(<CreditCardPanel showDetails />);
 
     expect(await screen.findByText("•••• •••• •••• 1234")).toBeInTheDocument();
     expect(screen.getByText("1,150.00")).toBeInTheDocument();
     expect(screen.getByText("$350.00 used")).toBeInTheDocument();
     expect(screen.getByText("of $1,500.00")).toBeInTheDocument();
+  });
+
+  it("masks the card number, available limit, and used/total figures when showDetails is false", async () => {
+    vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+    vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue({
+      items: [item({ id: "ca-1", creditLimit: "1500.00", usedCredit: 35000, cardNumber: "•••• •••• •••• 1234" })],
+      total: 1, limit: 50, offset: 0,
+    } as Page<CardAccountListItem>);
+
+    render(<CreditCardPanel showDetails={false} />);
+
+    expect(await screen.findByText("•••• •••• •••• ••••")).toBeInTheDocument();
+    expect(screen.getByText("••••••")).toBeInTheDocument();
+    expect(screen.getByText("•••• used")).toBeInTheDocument();
+    expect(screen.getByText("of ••••")).toBeInTheDocument();
+    expect(screen.queryByText("•••• •••• •••• 1234")).not.toBeInTheDocument();
+    expect(screen.queryByText("1,150.00")).not.toBeInTheDocument();
   });
 
   it("defaults to the card with the biggest credit limit when the customer has several", async () => {
@@ -62,7 +79,7 @@ describe("CreditCardPanel (homepage)", () => {
       total: 3, limit: 50, offset: 0,
     } as Page<CardAccountListItem>);
 
-    render(<CreditCardPanel />);
+    render(<CreditCardPanel showDetails />);
 
     expect(await screen.findByText("•••• •••• •••• 2222")).toBeInTheDocument();
     expect(screen.queryByText("•••• •••• •••• 1111")).not.toBeInTheDocument();
@@ -75,7 +92,7 @@ describe("CreditCardPanel (homepage)", () => {
       items: [], total: 0, limit: 50, offset: 0,
     } as Page<CardAccountListItem>);
 
-    const { container } = render(<CreditCardPanel />);
+    const { container } = render(<CreditCardPanel showDetails />);
 
     await waitFor(() => expect(cardAccountsModule.getCardAccounts).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
@@ -84,7 +101,7 @@ describe("CreditCardPanel (homepage)", () => {
   it("renders nothing, not an error, when the card accounts request fails", async () => {
     vi.spyOn(customerModule, "getCurrentCustomer").mockRejectedValue(new Error("gateway unreachable"));
 
-    const { container } = render(<CreditCardPanel />);
+    const { container } = render(<CreditCardPanel showDetails />);
 
     await waitFor(() => expect(customerModule.getCurrentCustomer).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();

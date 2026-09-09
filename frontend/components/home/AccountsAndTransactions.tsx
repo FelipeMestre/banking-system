@@ -4,7 +4,6 @@ import { Fragment } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AccountCell } from "./AccountCell";
-import { useAccountVisibility } from "@/features/accounts/hooks/useAccountVisibility";
 import { TransactionsPanel } from "@/features/transactions";
 import type { AccountSummary } from "@/features/accounts";
 
@@ -17,6 +16,13 @@ interface Props {
    * starting itself. */
   selectedAccountNumber: string;
   onSelectAccount: (accountNumber: string) => void;
+  /**
+   * Also controlled by the parent — this same flag masks the credit card
+   * panel in the `aside`, so the "Balances as of just now" toggle hides and
+   * unhides both sections together, not just the accounts strip.
+   */
+  showDetails: boolean;
+  onToggleShowDetails: () => void;
   /**
    * The aside (credit card panel, quick actions, total position) — passed in
    * rather than imported here so those purely-presentational pieces stay
@@ -31,10 +37,11 @@ export function AccountsAndTransactions({
   asOf,
   selectedAccountNumber,
   onSelectAccount,
+  showDetails,
+  onToggleShowDetails,
   aside,
 }: Props) {
   const firstAccount = accounts[0];
-  const { visible: showDetails, toggle: toggleShowDetails } = useAccountVisibility();
 
   if (!firstAccount) {
     return <p className="text-neutral-600">No accounts to show.</p>;
@@ -54,7 +61,7 @@ export function AccountsAndTransactions({
             size="icon"
             aria-label={showDetails ? "Hide account details" : "Show account details"}
             aria-pressed={showDetails}
-            onClick={toggleShowDetails}
+            onClick={onToggleShowDetails}
           >
             {/* The icon mirrors the CURRENT state, not the click's next
                 action: an open eye means details are showing right now, a

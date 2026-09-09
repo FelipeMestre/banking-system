@@ -19,6 +19,12 @@ type State =
   | { kind: "empty" }
   | { kind: "ready"; item: CardAccountListItem };
 
+interface Props {
+  /** Mirrors the "Balances as of just now" eye toggle on the accounts strip
+   * — one device-level preference masks both sections at once. */
+  showDetails: boolean;
+}
+
 /** The card with the highest credit limit wins the default spot on the
  * homepage — the customer's single most significant line of credit. */
 function pickBiggestLimit(items: CardAccountListItem[]): CardAccountListItem | null {
@@ -37,7 +43,7 @@ function pickBiggestLimit(items: CardAccountListItem[]): CardAccountListItem | n
  * has no cards: this is a secondary homepage widget, not content the rest
  * of the page depends on.
  */
-export function CreditCardPanel() {
+export function CreditCardPanel({ showDetails }: Props) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -77,7 +83,7 @@ export function CreditCardPanel() {
           </div>
           <div className="text-right">
             <div className="mt-[4px] text-xs tracking-[0.06em] text-neutral-600 tabular-nums">
-              {card?.card_number ?? "—"}
+              {showDetails ? (card?.card_number ?? "—") : "•••• •••• •••• ••••"}
             </div>
           </div>
         </div>
@@ -89,7 +95,7 @@ export function CreditCardPanel() {
           <div className="flex items-baseline gap-[5px]">
             <span className="font-heading text-[15px] font-extrabold text-neutral-700">$</span>
             <span className="font-heading text-[32px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">
-              {formatCents(availableCentsValue, "")}
+              {showDetails ? formatCents(availableCentsValue, "") : "••••••"}
             </span>
           </div>
         </div>
@@ -99,8 +105,8 @@ export function CreditCardPanel() {
         </div>
 
         <div className="flex items-center justify-between text-xs text-neutral-600 tabular-nums">
-          <span>{formatCents(usedCents)} used</span>
-          <span>of {formatCents(totalCents)}</span>
+          <span>{showDetails ? `${formatCents(usedCents)} used` : "•••• used"}</span>
+          <span>{showDetails ? `of ${formatCents(totalCents)}` : "of ••••"}</span>
         </div>
       </div>
     </section>

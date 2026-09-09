@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountsAndTransactions } from "@/components/home/AccountsAndTransactions";
@@ -22,16 +23,37 @@ function mockTransactionsFetch() {
   );
 }
 
-function renderScreen() {
-  return render(
+/**
+ * `showDetails` is owned by the parent (`HomeDashboard`, via
+ * `useAccountVisibility`) so the same toggle also masks `CreditCardPanel` —
+ * this component is a pure controlled consumer of it. This harness plays the
+ * parent's role for these tests; the hook's own persistence behavior
+ * (localStorage, surviving a remount) is covered directly in
+ * `useAccountVisibility.test.ts`, not duplicated here.
+ */
+function Harness({
+  initialShowDetails = false,
+  onSelectAccount = () => {},
+}: {
+  initialShowDetails?: boolean;
+  onSelectAccount?: (accountNumber: string) => void;
+}) {
+  const [showDetails, setShowDetails] = useState(initialShowDetails);
+  return (
     <AccountsAndTransactions
       accounts={ACCOUNTS}
       asOf="just now"
       selectedAccountNumber="1111222233334444"
-      onSelectAccount={() => {}}
+      onSelectAccount={onSelectAccount}
+      showDetails={showDetails}
+      onToggleShowDetails={() => setShowDetails((current) => !current)}
       aside={null}
-    />,
+    />
   );
+}
+
+function renderScreen(props?: Parameters<typeof Harness>[0]) {
+  return render(<Harness {...props} />);
 }
 
 describe("AccountsAndTransactions — account detail visibility", () => {
@@ -40,7 +62,6 @@ describe("AccountsAndTransactions — account detail visibility", () => {
   });
 
   afterEach(() => {
-    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -80,28 +101,14 @@ describe("AccountsAndTransactions — account detail visibility", () => {
     expect(icon).not.toContain("lucide-eye-off");
   });
 
-  it("a fresh mount with a previously-revealed setting shows the open-eye icon immediately, never the crossed-out one", async () => {
-    window.localStorage.setItem("openbank:accounts-visible", "true");
-
-    renderScreen();
+  it("renders unmasked with the open-eye icon when the parent's showDetails prop starts true", async () => {
+    renderScreen({ initialShowDetails: true });
 
     const toggle = await screen.findByRole("button", { name: "Hide account details" });
     const icon = toggle.querySelector("svg")?.getAttribute("class");
     expect(icon).toContain("lucide-eye");
     expect(icon).not.toContain("lucide-eye-off");
-  });
-
-  it("persists the revealed state across a full remount (logout/login)", async () => {
-    const first = renderScreen();
-    const toggle = await screen.findByRole("button", { name: "Show account details" });
-    fireEvent.click(toggle);
     expect(screen.getByText("1111-2222-3333-4444")).toBeInTheDocument();
-    first.unmount();
-
-    renderScreen();
-
-    await waitFor(() => expect(screen.getByText("1111-2222-3333-4444")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Hide account details" })).toBeInTheDocument();
   });
 });
 
@@ -115,7 +122,6 @@ describe("AccountsAndTransactions — copy account number", () => {
   });
 
   afterEach(() => {
-    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -138,15 +144,8 @@ describe("AccountsAndTransactions — copy account number", () => {
 
   it("clicking copy does not also select the account (event must not bubble)", async () => {
     const onSelectAccount = vi.fn();
-    render(
-      <AccountsAndTransactions
-        accounts={ACCOUNTS}
-        asOf="just now"
-        selectedAccountNumber="1111222233334444"
-        onSelectAccount={onSelectAccount}
-        aside={null}
-      />,
-    );
+    renderScreen({ onSelectAccount });
+
     const visibilityToggle = await screen.findByRole("button", { name: "Show account details" });
     fireEvent.click(visibilityToggle);
 
