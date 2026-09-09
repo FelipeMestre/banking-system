@@ -14,7 +14,7 @@ const ACCOUNT: Account = {
   status: "active",
 };
 
-vi.mock("@/features/deposits/components/AccountPicker", () => ({
+vi.mock("@/components/shared/AccountPicker", () => ({
   AccountPicker: ({ onSelect }: { onSelect: (account: Account) => void }) => (
     <button type="button" data-testid="pick-account" onClick={() => onSelect(ACCOUNT)}>
       Pick account

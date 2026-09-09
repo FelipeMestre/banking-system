@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { Account } from "@/features/accounts/types";
 import type { Customer } from "@/features/customers/types";
 import { currencySymbol, formatAccountNumber, formatCents } from "@/lib/money";
-import { useAccountOptions } from "../hooks/useAccountOptions";
+import { useAccountOptions } from "./useAccountOptions";
 
 interface Props {
   selected: Account | null;
@@ -21,11 +21,12 @@ function customerLabel(customerById: Map<string, Customer>, customerId: string):
 }
 
 /**
- * Presentational account picker for the deposit flow. Shows the real
- * (grouped, not masked) account number alongside the resolved customer name
- * so the admin can confirm they're crediting the right person — filtering is
- * client-side substring match on the account number, over the single page
- * `useAccountOptions` already fetched (no backend search endpoint).
+ * Presentational account picker for admin cross-customer flows (deposits,
+ * withdrawals, ...). Shows the real (grouped, not masked) account number
+ * alongside the resolved customer name so the admin can confirm they're
+ * acting on the right person's account — filtering is client-side substring
+ * match on the account number, over the single page `useAccountOptions`
+ * already fetched (no backend search endpoint).
  */
 export function AccountPicker({ selected, onSelect }: Props) {
   const { accounts, customerById, loading, error } = useAccountOptions();
@@ -48,9 +49,9 @@ export function AccountPicker({ selected, onSelect }: Props) {
   return (
     <div className="flex flex-col gap-ds-2">
       <div className="field">
-        <Label htmlFor="deposit-account-filter">Filter by account number</Label>
+        <Label htmlFor="account-picker-filter">Filter by account number</Label>
         <Input
-          id="deposit-account-filter"
+          id="account-picker-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
           autoComplete="off"

@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<Transaction["type"], string> = {
   credit: "Credit",
   declined: "Declined",
   deposit: "Deposit",
+  withdrawal: "Withdrawal",
 };
 
 /**
