@@ -78,7 +78,7 @@ def test_migration_creates_card_account_admin_actions_shape(fx_test_dsn):
 
 def test_downgrade_drops_card_account_admin_actions(fx_test_dsn):
     assert asyncio.run(_table_exists(fx_test_dsn, "card_account_admin_actions")) is True
-    downgrade_to("8f7e6d5c4b3a", fx_test_dsn)
+    downgrade_to("d4e5f6a7b8c9", fx_test_dsn)
     try:
         assert asyncio.run(_table_exists(fx_test_dsn, "card_account_admin_actions")) is False
     finally:

@@ -1,7 +1,7 @@
 """add card account admin actions audit table
 
-Revision ID: d4e5f6a7b8c9
-Revises: 8f7e6d5c4b3a
+Revision ID: c48a3cea9507
+Revises: d4e5f6a7b8c9
 Create Date: 2026-09-08 00:00:00.000000
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 
-revision: str = "d4e5f6a7b8c9"
-down_revision: Union[str, Sequence[str], None] = "8f7e6d5c4b3a"
+revision: str = "c48a3cea9507"
+down_revision: Union[str, Sequence[str], None] = "d4e5f6a7b8c9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -67,6 +67,15 @@ def _masked_view(card_account, active_card) -> dict:
     }
 
 
+def _masked_listing_view(card_account, active_card) -> dict:
+    """Same as `_masked_view`, minus `used_credit` — B1 requires the admin
+    listing to never expose it (design: keep the bulk listing off the
+    per-account Flink projection read, unlike the single-account `GET`)."""
+    view = _masked_view(card_account, active_card)
+    view["card_account"].pop("used_credit", None)
+    return view
+
+
 @router.get("/{card_account_id}")
 async def get(card_account_id: UUID, repository: CardAccountRepositoryDep, cards: CardRepositoryDep):
     card_account = await repository.get_by_id(card_account_id)
@@ -90,7 +99,7 @@ async def list_by_customer(
     items = []
     for card_account in result.items:
         active_card = await cards.get_active_for_account(card_account.id)
-        items.append(_masked_view(card_account, active_card))
+        items.append(_masked_listing_view(card_account, active_card))
     return {"items": items, "total": result.total, "limit": result.limit, "offset": result.offset}
 
 
