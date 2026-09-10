@@ -31,7 +31,7 @@ from openbankapi.infra.database.repositories.postgres_applied_rate_repository im
 from openbankapi.infra.database.repositories.postgres_transaction_repository import (
     PostgresTransactionRepository,
 )
-from openbankapi.infra.database.schemas.models import AccountORM, AppliedRateORM, BranchORM, CustomerORM, LocationORM
+from openbankapi.infra.database.schemas.models import AccountORM, AppliedRateORM, CustomerORM
 from openbankapi.infra.kafka.consumers.transaction_consumer import TransactionConsumer
 from openbankapi.tests.db_fixtures import rollback_session
 from openbankapi.tests.fakes import FakePublisher
@@ -55,16 +55,8 @@ class FixedRatesCacheService:
 
 
 async def _seed_account(session, *, currency: str, balance: int = 0) -> str:
-    """A committed-to-the-session reference-data trio: location, branch,
-    customer, account — mirroring what `POST /accounts` would create."""
-    location = LocationORM(name="Test HQ", active=True)
-    session.add(location)
-    await session.flush()
-
-    branch = BranchORM(code=f"B{uuid.uuid4().hex[:6]}", name="Test Branch", location_id=location.id, active=True)
-    session.add(branch)
-    await session.flush()
-
+    """A committed-to-the-session reference-data pair: customer, account —
+    mirroring what `POST /accounts` would create."""
     customer = CustomerORM(
         identification_number=str(uuid.uuid4().int)[:15],
         first_name="Test", last_name="Customer",
@@ -76,7 +68,7 @@ async def _seed_account(session, *, currency: str, balance: int = 0) -> str:
     account_number = str(abs(hash(uuid.uuid4())) % (10**16)).rjust(16, "0")
     account = AccountORM(
         account_number=account_number, currency=currency,
-        customer_id=customer.id, branch_id=branch.id, balance=balance, status="active",
+        customer_id=customer.id, balance=balance, status="active",
     )
     session.add(account)
     await session.flush()

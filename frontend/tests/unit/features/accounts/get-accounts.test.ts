@@ -6,7 +6,7 @@ const PAGE_BODY = {
   items: [
     {
       id: "a1", account_number: "1111111111111111", currency: "USD",
-      customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+      customer_id: "c1", balance: 0, status: "active",
     },
   ],
   total: 1, limit: 50, offset: 0,

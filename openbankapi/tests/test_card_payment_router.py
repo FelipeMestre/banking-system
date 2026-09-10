@@ -22,8 +22,6 @@ from openbankapi.tests.fakes import (
 
 @pytest.fixture
 def payments_harness():
-    branch_id = uuid.uuid4()
-
     async def _resolve_customer(repo):
         return await repo.create(
             identification_number=f"id-{uuid.uuid4().hex[:10]}", first_name="Ada", last_name="Lovelace",
@@ -34,12 +32,12 @@ def payments_harness():
     owner = asyncio.run(_resolve_customer(customers_repo))
     customer_id = owner.id
 
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    accounts = FakeAccountRepository(known_customers={customer_id})
     h = build(accounts=accounts)
     h.customers.rows[owner.id] = owner
     with h.client:
         account_response = h.client.post(
-            "/accounts", json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)}
+            "/accounts", json={"currency": "USD", "customer_id": str(customer_id)}
         )
     paying_account = accounts.rows[account_response.json()["account_number"]]
 
@@ -121,7 +119,7 @@ def test_customer_can_pay_from_a_second_account_they_own(payments_harness):
     # directly on the repository instead, the same way the fixture itself
     # resolves the owning customer.
     second_account = asyncio.run(
-        h.accounts.create(currency="USD", customer_id=h.customer_id, branch_id=h.paying_account.branch_id)
+        h.accounts.create(currency="USD", customer_id=h.customer_id)
     )
 
     issued = _issue(h).json()
@@ -140,7 +138,7 @@ def test_paying_from_an_account_owned_by_another_customer_is_forbidden(payments_
     stranger_customer_id = uuid.uuid4()
     h.accounts.known_customers.add(stranger_customer_id)
     stranger_account = asyncio.run(
-        h.accounts.create(currency="USD", customer_id=stranger_customer_id, branch_id=h.paying_account.branch_id)
+        h.accounts.create(currency="USD", customer_id=stranger_customer_id)
     )
 
     issued = _issue(h).json()

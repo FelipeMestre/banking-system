@@ -141,8 +141,6 @@ async def test_idempotency_guard_skips_when_seeded():
     ), patch("openbankapi.seed.run.PostgresCustomerRepository") as MockCustRepo, patch(
         "openbankapi.seed.run.PostgresCardAccountRepository"
     ) as MockCardRepo, patch(
-        "openbankapi.seed.run._ensure_branch", new_callable=AsyncMock
-    ) as mock_branch, patch(
         "openbankapi.seed.run._ensure_customer", new_callable=AsyncMock
     ) as mock_cust, patch(
         "openbankapi.seed.run._ensure_accounts", new_callable=AsyncMock

@@ -48,9 +48,8 @@ def _as_read(h, sub: str):
 
 
 def _harness_with_two_customers_and_accounts():
-    branch_id = uuid.uuid4()
     owner_id, other_id = uuid.uuid4(), uuid.uuid4()
-    accounts = FakeAccountRepository(known_customers={owner_id, other_id}, known_branches={branch_id})
+    accounts = FakeAccountRepository(known_customers={owner_id, other_id})
     h = build(accounts=accounts)
     with h.client:
         owner_customer_id = _linked_customer(h, "auth0|owner")
@@ -60,11 +59,11 @@ def _harness_with_two_customers_and_accounts():
         h.accounts.known_customers |= {owner_customer_id, other_customer_id}
         owner_account = h.client.post(
             "/accounts",
-            json={"currency": "USD", "customer_id": str(owner_customer_id), "branch_id": str(branch_id)},
+            json={"currency": "USD", "customer_id": str(owner_customer_id)},
         ).json()
         other_account = h.client.post(
             "/accounts",
-            json={"currency": "USD", "customer_id": str(other_customer_id), "branch_id": str(branch_id)},
+            json={"currency": "USD", "customer_id": str(other_customer_id)},
         ).json()
         yield h, owner_account["account_number"], other_account["account_number"]
 

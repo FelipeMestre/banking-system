@@ -19,11 +19,9 @@ def _consumer(repo, cache):
 
 
 async def _seeded_repo():
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    repo = FakeCardAccountRepository(known_customers={customer_id}, known_accounts={branch_id})
-    # need paying account id: we use branch_id as proxy for account id? Fake needs known_accounts set to contain paying_account_id
-    # Create via repo.create
-    account = await repo.create(customer_id=customer_id, paying_account_id=branch_id, credit_limit=100000)
+    customer_id, paying_account_id = uuid.uuid4(), uuid.uuid4()
+    repo = FakeCardAccountRepository(known_customers={customer_id}, known_accounts={paying_account_id})
+    account = await repo.create(customer_id=customer_id, paying_account_id=paying_account_id, credit_limit=100000)
     return repo, account.id
 
 

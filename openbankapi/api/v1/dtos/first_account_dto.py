@@ -25,9 +25,9 @@ class FirstAccountCreateDTO(BaseModel):
     required when the caller's Auth0 identity has no linked Customer yet.
 
     `extra="ignore"`, deliberately unlike every other request DTO in this
-    codebase: the spec requires `currency`/`branch_id` sent by any caller to
-    be silently ignored, never rejected — the account is always USD at the
-    server-resolved default branch regardless of what a client sends here.
+    codebase: the spec requires `currency` sent by any caller to be silently
+    ignored, never rejected — the account is always USD regardless of what a
+    client sends here.
     """
 
     model_config = ConfigDict(extra="ignore")

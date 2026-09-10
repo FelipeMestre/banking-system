@@ -6,8 +6,6 @@ from .account import (
     AccountStatus,
     is_valid_account_number,
 )
-from .location import Location
-from .branch import Branch
 from .applied_rate import AppliedRate
 from .transaction import Transaction, TransactionType
 from .card_account import CARD_ACCOUNT_TRANSITIONS, CardAccount, CardAccountStatus
@@ -27,8 +25,6 @@ __all__ = [
     "Customer",
     "Account",
     "AccountStatus",
-    "Location",
-    "Branch",
     "AppliedRate",
     "ACCOUNT_NUMBER_LENGTH",
     "is_valid_account_number",

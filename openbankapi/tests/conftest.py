@@ -12,14 +12,12 @@ from openbankapi.config.dependencies import (
     get_account_repository,
     get_admin_action_repository,
     get_applied_rate_repository,
-    get_branch_repository,
     get_current_user,
     get_card_account_repository,
     get_card_movement_repository,
     get_card_repository,
     get_customer_repository,
     get_installment_repository,
-    get_location_repository,
     get_statement_repository,
     get_transaction_repository,
 )
@@ -41,9 +39,7 @@ from .fakes import (
     FakeCardMovementRepository,
     FakeCardRepository,
     FakeInstallmentRepository,
-    FakeLocationRepository,
     FakePublisher,
-    FakeBranchRepository,
     FakeCache,
     FakeStatementRepository,
     FakeTransactionRepository,
@@ -63,7 +59,7 @@ class Harness:
         self.publisher = publisher
         self.cache = cache
         self.registry = registry
-        self.locations, self.branches, self.customers, self.accounts, self.transactions = repos
+        self.customers, self.accounts, self.transactions = repos
         self.settings = settings
         self.fx_cache_service = fx_cache_service
         self.fx_repo = fx_repo
@@ -80,7 +76,6 @@ def build(
     *,
     cache=None,
     accounts=None,
-    branches=None,
     transactions=None,
     fx_repo=None,
     fx_cache_service=None,
@@ -104,8 +99,6 @@ def build(
     cache = cache or FakeCache()
     registry = StatusRegistry()
 
-    locations = FakeLocationRepository()
-    branches = branches or FakeBranchRepository()
     customers = FakeCustomerRepository()
     accounts = accounts or FakeAccountRepository()
     transactions = transactions or FakeTransactionRepository()
@@ -140,8 +133,6 @@ def build(
             status_registry=registry,
         )
         app.state.foreign_exchange_cache_service = fx_cache_service  # type: ignore[attr-defined]
-    app.dependency_overrides[get_location_repository] = lambda: locations
-    app.dependency_overrides[get_branch_repository] = lambda: branches
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
     app.dependency_overrides[get_transaction_repository] = lambda: transactions
@@ -164,7 +155,7 @@ def build(
     # also attach for router tests that use app.state directly
     app.state.fx_repo = fx_repo  # type: ignore[attr-defined]
     return Harness(client, publisher, cache, registry,
-                   (locations, branches, customers, accounts, transactions), settings, fx_cache_service, fx_repo,
+                   (customers, accounts, transactions), settings, fx_cache_service, fx_repo,
                    card_accounts, cards, card_movements, installments, applied_rates, statements, admin_actions)
 
 
@@ -187,9 +178,9 @@ def fx_test_dsn() -> str:
 @pytest.fixture
 def wired():
     """A harness whose reference data already exists, ready for account work."""
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    customer_id = uuid.uuid4()
+    accounts = FakeAccountRepository(known_customers={customer_id})
     h = build(accounts=accounts)
-    h.customer_id, h.branch_id = customer_id, branch_id
+    h.customer_id = customer_id
     with h.client:
         yield h

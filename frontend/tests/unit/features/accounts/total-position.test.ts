@@ -5,7 +5,7 @@ import type { Account } from "../../../../features/accounts/types";
 function account(overrides: Partial<Account>): Account {
   return {
     id: "id", account_number: "1111111111111111", currency: "USD",
-    customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+    customer_id: "c1", balance: 0, status: "active",
     ...overrides,
   };
 }

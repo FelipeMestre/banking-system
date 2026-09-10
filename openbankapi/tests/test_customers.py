@@ -25,12 +25,10 @@ def _create_customer(client, identification_number: str = "ID-001"):
 
 
 def _open_account(h, customer_id: uuid.UUID) -> str:
-    branch_id = uuid.uuid4()
     h.accounts.known_customers.add(customer_id)
-    h.accounts.known_branches.add(branch_id)
     created = h.client.post(
         "/accounts",
-        json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)},
+        json={"currency": "USD", "customer_id": str(customer_id)},
     )
     assert created.status_code == 201
     return created.json()["account_number"]

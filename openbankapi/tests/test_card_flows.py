@@ -12,12 +12,12 @@ from openbankapi.tests.fakes import FakeAccountRepository, FakeCardAccountReposi
 
 @pytest.fixture
 def cards_harness():
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    customer_id = uuid.uuid4()
+    accounts = FakeAccountRepository(known_customers={customer_id})
     h = build(accounts=accounts)
     with h.client:
         account_response = h.client.post(
-            "/accounts", json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)}
+            "/accounts", json={"currency": "USD", "customer_id": str(customer_id)}
         )
     paying_account = accounts.rows[account_response.json()["account_number"]]
 

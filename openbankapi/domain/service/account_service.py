@@ -13,9 +13,9 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from ...config import Settings
-from ...infra.database.interfaces import IAccountRepository, IBranchRepository, ICustomerRepository
+from ...infra.database.interfaces import IAccountRepository, ICustomerRepository
 from ...infra.kafka.interfaces.event_publisher import IEventPublisher
-from ..exceptions import CustomerAlreadyHasAccountError, NoActiveBranchAvailableError
+from ..exceptions import CustomerAlreadyHasAccountError
 from ..model import Account, Customer
 
 
@@ -29,13 +29,11 @@ class AccountService:
         settings: Settings,
         repository: IAccountRepository,
         publisher: IEventPublisher,
-        branch_repository: Optional[IBranchRepository] = None,
         customer_repository: Optional[ICustomerRepository] = None,
     ):
         self._settings = settings
         self._repository = repository
         self._publisher = publisher
-        self._branch_repository = branch_repository
         self._customer_repository = customer_repository
 
     async def open_first_account(self, customer: Customer) -> Account:
@@ -46,14 +44,10 @@ class AccountService:
         succeed). The lock is acquired first so the guard check below can
         never race with another request for the same customer.
         """
-        assert self._branch_repository is not None, "AccountService needs a branch_repository for open_first_account"
         await self._repository.lock_customer_for_account_creation(customer.id)
         if await self._repository.has_any_account_for_customer(customer.id):
             raise CustomerAlreadyHasAccountError(customer.id)
-        branch = await self._branch_repository.get_oldest_active()
-        if branch is None:
-            raise NoActiveBranchAvailableError()
-        return await self.open_account(currency="USD", customer_id=customer.id, branch_id=branch.id)
+        return await self.open_account(currency="USD", customer_id=customer.id)
 
     async def open_first_account_for_identity(
         self,
@@ -100,9 +94,7 @@ class AccountService:
             )
         return await self.open_first_account(customer)
 
-    async def open_account(
-        self, *, currency: str, customer_id: UUID, branch_id: UUID
-    ) -> Account:
+    async def open_account(self, *, currency: str, customer_id: UUID) -> Account:
         """Create the account row.
 
         No opening balance is written here, ever. A new account starts at 0 on
@@ -110,9 +102,7 @@ class AccountService:
         0, and Flink lazily initialises an account's keyed state to 0 the first
         time it sees any event for that key. They agree at t=0 for free.
         """
-        return await self._repository.create(
-            currency=currency, customer_id=customer_id, branch_id=branch_id
-        )
+        return await self._repository.create(currency=currency, customer_id=customer_id)
 
     def credit_opening_balance(self, account_number: str, amount: int) -> Dict[str, Any]:
         """Give an account a non-zero opening balance the event-sourced way.

@@ -31,7 +31,7 @@ describe("CreateAccountDialog", () => {
   it("calls createAccount and onSuccess when Accept is selected", async () => {
     vi.spyOn(createAccountModule, "createAccount").mockResolvedValue({
       id: "a1", account_number: "1111111111111111", currency: "USD",
-      customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+      customer_id: "c1", balance: 0, status: "active",
     });
     const onSuccess = vi.fn();
     render(<CreateAccountDialog onClose={vi.fn()} onSuccess={onSuccess} />);
@@ -63,7 +63,7 @@ describe("CreateAccountDialog", () => {
   it("renders KYC fields, blocks Accept until required fields are filled, and includes them in createAccount when requiresKyc is true", async () => {
     const createAccountSpy = vi.spyOn(createAccountModule, "createAccount").mockResolvedValue({
       id: "a1", account_number: "1111111111111111", currency: "USD",
-      customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+      customer_id: "c1", balance: 0, status: "active",
     });
     const onSuccess = vi.fn();
     render(<CreateAccountDialog onClose={vi.fn()} onSuccess={onSuccess} requiresKyc />);

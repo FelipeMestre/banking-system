@@ -4,8 +4,6 @@ from .postgres_account_repository import (
     PostgresAccountRepository,
     generate_account_number,
 )
-from .postgres_location_repository import PostgresLocationRepository
-from .postgres_branch_repository import PostgresBranchRepository
 from .postgres_applied_rate_repository import PostgresAppliedRateRepository, PostgresAppliedRateWriter
 from .postgres_transaction_repository import PostgresTransactionRepository, PostgresTransactionWriter
 from .postgres_card_account_repository import PostgresCardAccountRepository, PostgresCardBalanceProjection
@@ -21,8 +19,6 @@ __all__ = [
     "PostgresCustomerRepository",
     "PostgresAccountBalanceProjection",
     "PostgresAccountRepository",
-    "PostgresLocationRepository",
-    "PostgresBranchRepository",
     "PostgresAppliedRateRepository",
     "PostgresAppliedRateWriter",
     "PostgresTransactionRepository",

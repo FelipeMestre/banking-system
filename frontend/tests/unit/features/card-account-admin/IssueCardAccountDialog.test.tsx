@@ -11,7 +11,6 @@ const ACCOUNT = {
   account_number: "1234567890123456",
   currency: "USD",
   customer_id: CUSTOMER_ID,
-  branch_id: "b-1",
   balance: 0,
   status: "active" as const,
 };

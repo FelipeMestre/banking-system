@@ -52,9 +52,7 @@ async def create(body: AccountCreateDTO, service: AccountServiceDep, _claims: Wr
     """`account_number` is generated server-side: it is the Kafka partition
     key, so it must be correct by construction (spec §8.2). A collision on
     the generated value is retried internally and never becomes a 500."""
-    return await service.open_account(
-        currency=body.currency, customer_id=body.customer_id, branch_id=body.branch_id
-    )
+    return await service.open_account(currency=body.currency, customer_id=body.customer_id)
 
 
 @router.post("/me", status_code=201, response_model=AccountResponseDTO)
@@ -66,9 +64,8 @@ async def create_first_account(
 ):
     """Self-service first account (spec: zero client-supplied account params).
 
-    `currency`/`branch_id` in a client-sent body are always ignored, never
-    read — currency is always USD and the branch is always the
-    server-resolved oldest active branch (see `open_first_account`).
+    `currency` in a client-sent body is always ignored, never read —
+    currency is always USD (see `open_first_account`).
 
     Runs under `CurrentUserDep` (raw claims), not `CurrentCustomerDep`, so an
     identity with no linked `Customer` reaches this body instead of 404ing
@@ -202,8 +199,7 @@ async def update(
     _claims: WriteAdminDep,
 ):
     updated = await repository.update(
-        account_number, currency=body.currency,
-        branch_id=body.branch_id, status=body.status,
+        account_number, currency=body.currency, status=body.status,
     )
     if updated is None:
         raise AccountNotFoundError(account_number)

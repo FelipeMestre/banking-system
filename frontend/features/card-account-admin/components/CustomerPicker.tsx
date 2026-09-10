@@ -6,9 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getCustomers } from "@/features/customers/api/get-customers";
 import type { Customer } from "@/features/customers/types";
 
-/** No customer-picker component pre-existed in this codebase (checked
- * `features/branches` and `features/locations` — neither has a select-by-id
- * pattern), so this is new: a plain shadcn `Select` populated by a single
+/** No customer-picker component pre-existed in this codebase (checked the
+ * other admin features — none has a select-by-id pattern), so this is new:
+ * a plain shadcn `Select` populated by a single
  * page of `getCustomers`. Kept intentionally simple — no search/typeahead —
  * since the admin customer roster is expected to be small enough for one
  * page; revisit with a combobox if that stops being true. */

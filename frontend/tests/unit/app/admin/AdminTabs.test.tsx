@@ -2,7 +2,7 @@ import * as React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const mountCounts = { accounts: 0, branches: 0, customers: 0, locations: 0 };
+const mountCounts = { accounts: 0, customers: 0 };
 
 vi.mock("@/features/accounts", () => ({
   AccountsPanel: () => {
@@ -12,14 +12,6 @@ vi.mock("@/features/accounts", () => ({
     return <div data-testid="accounts-panel">Accounts</div>;
   },
 }));
-vi.mock("@/features/branches", () => ({
-  BranchesPanel: () => {
-    React.useEffect(() => {
-      mountCounts.branches += 1;
-    }, []);
-    return <div data-testid="branches-panel">Branches</div>;
-  },
-}));
 vi.mock("@/features/customers", () => ({
   CustomersPanel: () => {
     React.useEffect(() => {
@@ -27,17 +19,6 @@ vi.mock("@/features/customers", () => ({
     }, []);
     return <div data-testid="customers-panel">Customers</div>;
   },
-}));
-vi.mock("@/features/locations", () => ({
-  LocationsPanel: () => {
-    React.useEffect(() => {
-      mountCounts.locations += 1;
-    }, []);
-    return <div data-testid="locations-panel">Locations</div>;
-  },
-}));
-vi.mock("@/features/card-account-admin", () => ({
-  CardAccountAdminPanel: () => <div data-testid="card-account-admin-panel">Credit Cards</div>,
 }));
 vi.mock("@/features/card-account-admin", () => ({
   CardAccountAdminPanel: () => <div data-testid="card-account-admin-panel">Credit Cards</div>,
@@ -56,9 +37,7 @@ describe("AdminTabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mountCounts.accounts = 0;
-    mountCounts.branches = 0;
     mountCounts.customers = 0;
-    mountCounts.locations = 0;
   });
 
   it("renders Alert and no tabs when read:admin missing", () => {
@@ -78,7 +57,7 @@ describe("AdminTabs", () => {
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
   });
 
-  it("renders tabs and table when read:admin present", () => {
+  it("renders exactly the remaining tab list when read:admin present", () => {
     mockedUsePermissions.mockReturnValue({
       hasReadAdmin: true,
       hasWriteAdmin: false,
@@ -93,6 +72,8 @@ describe("AdminTabs", () => {
 
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.getByTestId("accounts-panel")).toBeInTheDocument();
+    const tabNames = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabNames).toEqual(["Accounts", "Customers", "Credit Cards"]);
   });
 
   it("shows tabs when write:admin present", () => {
@@ -151,17 +132,14 @@ describe("AdminTabs", () => {
 
     render(<AdminTabs />);
 
-    // All four panels mount up front, not just the active "Accounts" tab.
+    // Both panels mount up front, not just the active "Accounts" tab.
     expect(screen.getByTestId("accounts-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("branches-panel")).toBeInTheDocument();
     expect(screen.getByTestId("customers-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("locations-panel")).toBeInTheDocument();
-    expect(mountCounts).toEqual({ accounts: 1, branches: 1, customers: 1, locations: 1 });
+    expect(mountCounts).toEqual({ accounts: 1, customers: 1 });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Locations" }));
     fireEvent.click(screen.getByRole("tab", { name: "Customers" }));
     fireEvent.click(screen.getByRole("tab", { name: "Accounts" }));
 
-    expect(mountCounts).toEqual({ accounts: 1, branches: 1, customers: 1, locations: 1 });
+    expect(mountCounts).toEqual({ accounts: 1, customers: 1 });
   });
 });

@@ -10,7 +10,6 @@ const ACCOUNTS: AccountSummary[] = [
     account_number: "1111222233334444",
     currency: "USD",
     customer_id: "c1",
-    branch_id: "b1",
     balance: 458213,
     status: "active",
     label: "USD account",

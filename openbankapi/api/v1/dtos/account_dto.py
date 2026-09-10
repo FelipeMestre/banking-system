@@ -34,14 +34,12 @@ class AccountCreateDTO(BaseModel):
 
     currency: Currency
     customer_id: UUID
-    branch_id: UUID
 
 
 class AccountUpdateDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     currency: Optional[Currency] = None
-    branch_id: Optional[UUID] = None
     status: Optional[str] = Field(default=None, pattern="^(active|blocked|closed)$")
 
 
@@ -52,7 +50,6 @@ class AccountResponseDTO(BaseModel):
     account_number: str
     currency: str
     customer_id: UUID
-    branch_id: UUID
     # Readable, never writable. Eventually consistent with the ledger (§3.6).
     balance: int
     status: str

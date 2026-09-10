@@ -23,7 +23,6 @@ from openbankapi.domain.model import (
     Account,
     AccountStatus,
     AppliedRate,
-    Branch,
     Card,
     CardAccount,
     CardAccountStatus,
@@ -32,7 +31,6 @@ from openbankapi.domain.model import (
     CardStatus,
     Customer,
     Installment,
-    Location,
     Statement,
     StatementStatus,
     Transaction,
@@ -86,116 +84,10 @@ class FakeCache:
         return None
 
 
-class FakeLocationRepository:
-    def __init__(self):
-        self.rows: dict[UUID, Location] = {}
-        self.loads = 0
-
-    async def create(self, *, name: str) -> Location:
-        entity = Location(
-            id=uuid.uuid4(),
-            name=name,
-            active=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-        self.rows[entity.id] = entity
-        return entity
-
-    async def get(self, location_id: UUID) -> Location | None:
-        self.loads += 1
-        return self.rows.get(location_id)
-
-    async def list(self, *, limit: int, offset: int) -> Page:
-        items = list(self.rows.values())[offset : offset + limit]
-        return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
-
-    async def update(
-        self, location_id: UUID, *, name: str | None = None, active: bool | None = None
-    ) -> Location | None:
-        current = self.rows.get(location_id)
-        if current is None:
-            return None
-        updated = Location(
-            id=current.id,
-            name=name if name is not None else current.name,
-            active=current.active if active is None else active,
-            created_at=current.created_at,
-            updated_at=_now(),
-        )
-        self.rows[location_id] = updated
-        return updated
-
-    async def deactivate(self, location_id: UUID) -> Location | None:
-        return await self.update(location_id, active=False)
-
-
-class FakeBranchRepository:
-    def __init__(self, *, known_locations: set | None = None):
-        self.rows: dict[UUID, Branch] = {}
-        self.known_locations = known_locations if known_locations is not None else set()
-        self.codes: set = set()
-
-    async def create(self, *, code: str, name: str, location_id: UUID) -> Branch:
-        # Stands in for the FK: the real repository lets Postgres decide and
-        # translates the violation, but the domain error is the same.
-        if location_id not in self.known_locations:
-            raise ReferencedEntityNotFoundError("location_id", location_id)
-        if code in self.codes:
-            raise DuplicateError("code", code)
-        self.codes.add(code)
-        entity = Branch(
-            id=uuid.uuid4(),
-            code=code,
-            name=name,
-            location_id=location_id,
-            active=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-        self.rows[entity.id] = entity
-        return entity
-
-    async def get(self, branch_id: UUID) -> Branch | None:
-        return self.rows.get(branch_id)
-
-    async def list(self, *, limit: int, offset: int) -> Page:
-        items = list(self.rows.values())[offset : offset + limit]
-        return Page(items=items, total=len(self.rows), limit=limit, offset=offset)
-
-    async def update(self, branch_id: UUID, **changes) -> Branch | None:
-        current = self.rows.get(branch_id)
-        if current is None:
-            return None
-        updated = Branch(
-            id=current.id,
-            code=changes.get("code") or current.code,
-            name=changes.get("name") or current.name,
-            location_id=changes.get("location_id") or current.location_id,
-            active=current.active
-            if changes.get("active") is None
-            else changes["active"],
-            created_at=current.created_at,
-            updated_at=_now(),
-        )
-        self.rows[branch_id] = updated
-        return updated
-
-    async def deactivate(self, branch_id: UUID) -> Branch | None:
-        return await self.update(branch_id, active=False)
-
-    async def get_oldest_active(self) -> Branch | None:
-        # `min` returns the first element on a tie, and `self.rows.values()`
-        # iterates in insertion order — that is the fake's tie-break.
-        active = [branch for branch in self.rows.values() if branch.active]
-        if not active:
-            return None
-        return min(active, key=lambda branch: branch.created_at)
-
-
 class FakeCustomerRepository:
     def __init__(self):
         self.rows: dict[UUID, Customer] = {}
+        self.loads = 0
 
     async def create(self, **kwargs) -> Customer:
         sub = kwargs.get("auth0_sub")
@@ -212,6 +104,7 @@ class FakeCustomerRepository:
         return entity
 
     async def get(self, customer_id: UUID) -> Customer | None:
+        self.loads += 1
         return self.rows.get(customer_id)
 
     async def get_by_auth0_sub(self, sub: str) -> Customer | None:
@@ -250,22 +143,15 @@ class FakeCustomerRepository:
 class FakeAccountRepository:
     """Also plays the balance projection, so a test can watch both sides."""
 
-    def __init__(
-        self, *, known_customers=None, known_branches=None, collide_times: int = 0
-    ):
+    def __init__(self, *, known_customers=None, collide_times: int = 0):
         self.rows: dict[str, Account] = {}
         self.known_customers = known_customers if known_customers is not None else set()
-        self.known_branches = known_branches if known_branches is not None else set()
         self.collide_times = collide_times
         self.attempts = 0
 
-    async def create(
-        self, *, currency: str, customer_id: UUID, branch_id: UUID
-    ) -> Account:
+    async def create(self, *, currency: str, customer_id: UUID) -> Account:
         if customer_id not in self.known_customers:
             raise ReferencedEntityNotFoundError("customer_id", customer_id)
-        if branch_id not in self.known_branches:
-            raise ReferencedEntityNotFoundError("branch_id", branch_id)
         from openbankapi.infra.database.repositories import generate_account_number
 
         for _ in range(5):
@@ -279,7 +165,6 @@ class FakeAccountRepository:
                 account_number=account_number,
                 currency=currency,
                 customer_id=customer_id,
-                branch_id=branch_id,
                 balance=0,
                 status=AccountStatus.ACTIVE,
                 created_at=_now(),
@@ -310,7 +195,6 @@ class FakeAccountRepository:
             account_number=current.account_number,
             currency=supplied.get("currency", current.currency),
             customer_id=current.customer_id,
-            branch_id=supplied.get("branch_id", current.branch_id),
             balance=current.balance,  # never from the caller
             status=AccountStatus(supplied.get("status", current.status.value)),
             created_at=current.created_at,
@@ -330,12 +214,6 @@ class FakeAccountRepository:
             for account in self.rows.values()
         )
 
-    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
-        return any(
-            account.branch_id == branch_id and account.status is AccountStatus.ACTIVE
-            for account in self.rows.values()
-        )
-
     async def apply_balance(self, account_number: str, balance: int) -> bool:
         current = self.rows.get(account_number)
         if current is None:
@@ -345,7 +223,6 @@ class FakeAccountRepository:
             account_number=current.account_number,
             currency=current.currency,
             customer_id=current.customer_id,
-            branch_id=current.branch_id,
             balance=balance,
             status=current.status,
             created_at=current.created_at,

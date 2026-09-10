@@ -46,12 +46,10 @@ from openbankapi.infra.database.repositories.postgres_transaction_repository imp
 )
 from openbankapi.infra.database.schemas.models import (
     AccountORM,
-    BranchORM,
     CardAccountORM,
     CardMovementORM,
     CardORM,
     CustomerORM,
-    LocationORM,
     TransactionORM,
 )
 from openbankapi.infra.kafka.consumers.card_movement_consumer import CardMovementConsumer
@@ -76,25 +74,19 @@ RATES = {"EUR": 0.8613, "GBP": 0.74}
 
 
 async def _seed_reference_data(session):
-    location = LocationORM(name="Test HQ", active=True)
-    session.add(location)
-    await session.flush()
-    branch = BranchORM(code=f"B{uuid.uuid4().hex[:6]}", name="Test Branch", location_id=location.id, active=True)
-    session.add(branch)
-    await session.flush()
     customer = CustomerORM(
         identification_number=str(uuid.uuid4().int)[:15],
         first_name="Test", last_name="Customer", date_of_birth=dt.date(1990, 1, 1),
     )
     session.add(customer)
     await session.flush()
-    return customer, branch
+    return customer
 
 
-async def _seed_paying_account(session, customer, branch, *, currency: str, balance: int) -> AccountORM:
+async def _seed_paying_account(session, customer, *, currency: str, balance: int) -> AccountORM:
     account = AccountORM(
         account_number=str(abs(hash(uuid.uuid4())) % (10**16)).rjust(16, "0"),
-        currency=currency, customer_id=customer.id, branch_id=branch.id,
+        currency=currency, customer_id=customer.id,
         balance=balance, status="active",
     )
     session.add(account)
@@ -125,9 +117,9 @@ async def _run_pipeline(
     """Router logic (manual, mirrors `card_account_router.request_payment`)
     -> account-service decide() -> card-service decide() -> real consumers.
     """
-    customer, branch = await _seed_reference_data(session)
+    customer = await _seed_reference_data(session)
     paying_account = await _seed_paying_account(
-        session, customer, branch, currency=paying_currency, balance=balance
+        session, customer, currency=paying_currency, balance=balance
     )
     card_account, card = await _seed_card_account_with_active_card(session, customer, paying_account)
 

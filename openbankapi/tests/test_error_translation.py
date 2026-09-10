@@ -55,16 +55,6 @@ def test_a_foreign_key_violation_becomes_a_referenced_entity_error():
     assert error.field == "customer_id"
 
 
-@pytest.mark.parametrize("constraint,field", [
-    ("branches_location_id_fkey", "location_id"),
-    ("accounts_branch_id_fkey", "branch_id"),
-])
-def test_every_foreign_key_is_mapped(constraint, field):
-    error = translate(_nested(constraint), values={field: "x"})
-    assert isinstance(error, ReferencedEntityNotFoundError)
-    assert error.field == field
-
-
 def test_a_duplicate_account_number_is_its_own_error():
     """The account repository retries on this one and on nothing else."""
     error = translate(_nested("accounts_account_number_key"), values={"account_number": "1"})
@@ -72,7 +62,9 @@ def test_a_duplicate_account_number_is_its_own_error():
 
 
 def test_a_duplicate_business_key_is_a_conflict():
-    error = translate(_nested("branches_code_key"), values={"code": "MVD01"})
+    error = translate(
+        _nested("customers_identification_number_key"), values={"identification_number": "ID-1"}
+    )
     assert isinstance(error, DuplicateError)
     assert not isinstance(error, DuplicateAccountNumberError)
 

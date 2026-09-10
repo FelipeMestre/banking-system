@@ -129,20 +129,26 @@ def _harness_with_claims(claims: dict | None, *, raise_401: bool = False):
     return h
 
 
+_NEW_CUSTOMER_BODY = {
+    "identification_number": "ID-RBAC-1",
+    "first_name": "X",
+    "last_name": "Y",
+    "date_of_birth": "1990-01-01",
+}
+
+
 def test_no_token_returns_401():
     h = _harness_with_claims(None, raise_401=True)
     with h.client:
-        resp = h.client.get("/branches")
+        resp = h.client.get("/customers")
         assert resp.status_code == 401
 
 
 def test_missing_permission_returns_403_with_required_and_had():
     h = _harness_with_claims({"permissions": ["read:admin"]})
     with h.client:
-        # POST /branches requires write:admin
-        location_id = uuid.uuid4()
-        h.branches.known_locations.add(location_id)
-        resp = h.client.post("/branches", json={"code": "BRX", "name": "X", "location_id": str(location_id)})
+        # POST /customers requires write:admin
+        resp = h.client.post("/customers", json=_NEW_CUSTOMER_BODY)
         assert resp.status_code == 403
         body = resp.json()
         # error_handlers should produce {"error": {"code":..., "message":..., "details": {"required":..., "had":...}}}
@@ -159,16 +165,14 @@ def test_missing_permission_returns_403_with_required_and_had():
 def test_has_write_permission_succeeds():
     h = _harness_with_claims({"permissions": ["write:admin"]})
     with h.client:
-        location_id = uuid.uuid4()
-        h.branches.known_locations.add(location_id)
-        resp = h.client.post("/branches", json={"code": "BRW", "name": "OK", "location_id": str(location_id)})
+        resp = h.client.post("/customers", json=_NEW_CUSTOMER_BODY)
         assert resp.status_code == 201
 
 
 def test_read_needs_read_admin():
     h = _harness_with_claims({"permissions": []})
     with h.client:
-        resp = h.client.get("/branches")
+        resp = h.client.get("/customers")
         assert resp.status_code == 403
         assert "read:admin" in str(resp.json())
 
@@ -176,19 +180,17 @@ def test_read_needs_read_admin():
 def test_read_succeeds_with_read_admin():
     h = _harness_with_claims({"permissions": ["read:admin"]})
     with h.client:
-        resp = h.client.get("/branches")
+        resp = h.client.get("/customers")
         assert resp.status_code == 200
 
 
 def test_scope_fallback_grants_access_when_no_permissions_array():
     h = _harness_with_claims({"scope": "read:admin write:admin"})
     with h.client:
-        resp = h.client.get("/branches")
+        resp = h.client.get("/customers")
         assert resp.status_code == 200
         # also write via scope fallback
-        location_id = uuid.uuid4()
-        h.branches.known_locations.add(location_id)
-        resp2 = h.client.post("/branches", json={"code": "BRF", "name": "Fallback", "location_id": str(location_id)})
+        resp2 = h.client.post("/customers", json=_NEW_CUSTOMER_BODY)
         assert resp2.status_code == 201
 
 
@@ -196,9 +198,7 @@ def test_permissions_primary_ignores_scope():
     """If permissions exists, scope must NOT grant extra rights."""
     h = _harness_with_claims({"permissions": ["read:admin"], "scope": "write:admin"})
     with h.client:
-        location_id = uuid.uuid4()
-        h.branches.known_locations.add(location_id)
-        resp = h.client.post("/branches", json={"code": "BRP", "name": "Primary", "location_id": str(location_id)})
+        resp = h.client.post("/customers", json=_NEW_CUSTOMER_BODY)
         assert resp.status_code == 403
         assert "write:admin" in str(resp.json())
 
@@ -248,24 +248,6 @@ def test_accounts_me_remains_open_without_admin():
         async def _claims():
             return {"sub": "auth0|acctme", "permissions": []}
         h.client.app.dependency_overrides[get_current_user] = _claims
-        # The branch needed for first account creation: need an active branch in repo
-        # FakeAccountRepository not used here; we use real flow via service that uses
-        # branch repository; harness has empty branches, so we need to create one.
-        # Simplest: ensure at least one active branch exists
-        # Use the account-service's branch requirement: if no active branch, returns 503
-        # So create a branch first without auth (but branches now require auth, so we need write:admin)
-        # Instead, directly seed the fake branch repo.
-        # harness's branch repo is FakeBranchRepository; add a branch manually
-        import datetime as dt, uuid as _uuid
-        from openbankapi.domain.model import Branch
-        bid = _uuid.uuid4()
-        loc = _uuid.uuid4()
-        h.branches.known_locations.add(loc)
-        # create branch row directly
-        # use harness internal: h.branches.rows[bid] = Branch(...)
-        h.branches.rows[bid] = Branch(id=bid, code="BRME", name="Branch ME", location_id=loc, active=True, created_at=dt.datetime.now(dt.timezone.utc), updated_at=dt.datetime.now(dt.timezone.utc))
-        h.branches.codes.add("BRME")
-        # Also need to ensure the account repo knows about branch/customer? For first account creation via open_first_account_for_identity, it checks
         # We'll attempt POST /accounts/me
         resp = h.client.post("/accounts/me", json={
             "identification_number": "ID-NEW-3",
@@ -321,7 +303,7 @@ def test_audience_missing_is_401_not_403():
     """Opaque token (no aud) must be 401; simulate by raising 401 from auth."""
     h = _harness_with_claims(None, raise_401=True)
     with h.client:
-        resp = h.client.get("/branches")
+        resp = h.client.get("/customers")
         assert resp.status_code == 401
         assert resp.status_code != 403
 

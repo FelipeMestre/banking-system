@@ -1,10 +1,11 @@
 """First-account self-service creation (`POST /accounts/me`).
 
-Covers the whole stack per the design's single-file convention: the two new
-repository-port methods (via fakes), the two new domain exceptions and their
-HTTP mapping, `AccountService.open_first_account` orchestration, and the
-`TestClient` scenarios for the new endpoint. Mirrors `test_customer_auth_link.py`'s
-style — real fakes and `dependency_overrides`, never a mocked repository.
+Covers the whole stack per the design's single-file convention: the
+repository-port guard methods (via fakes), the `CustomerAlreadyHasAccountError`
+exception and its HTTP mapping, `AccountService.open_first_account`
+orchestration, and the `TestClient` scenarios for the new endpoint. Mirrors
+`test_customer_auth_link.py`'s style — real fakes and `dependency_overrides`,
+never a mocked repository.
 """
 from __future__ import annotations
 
@@ -17,20 +18,10 @@ from fastapi import HTTPException
 from openbankapi.api.v1.services.error_handlers import status_for
 from openbankapi.config import Settings
 from openbankapi.config.dependencies import get_current_user
-from openbankapi.domain.exceptions import (
-    CustomerAlreadyHasAccountError,
-    DuplicateError,
-    NoActiveBranchAvailableError,
-)
-from openbankapi.domain.model import Branch
+from openbankapi.domain.exceptions import CustomerAlreadyHasAccountError, DuplicateError
 from openbankapi.domain.service.account_service import AccountService
 from openbankapi.tests.conftest import build
-from openbankapi.tests.fakes import (
-    FakeAccountRepository,
-    FakeBranchRepository,
-    FakeCustomerRepository,
-    FakePublisher,
-)
+from openbankapi.tests.fakes import FakeAccountRepository, FakeCustomerRepository, FakePublisher
 
 
 _ADMIN_OVERRIDE = lambda: {"sub": "setup-admin", "permissions": ["read:admin", "write:admin"], "scope": "read:admin write:admin"}
@@ -72,17 +63,6 @@ def _link_current_customer(h, sub: str = "auth0|first-account"):
     return customer_id
 
 
-def _create_active_branch(h) -> str:
-    def _do():
-        location_id = h.client.post("/locations", json={"name": "HQ"}).json()["id"]
-        h.branches.known_locations.add(uuid.UUID(location_id))
-        branch = h.client.post(
-            "/branches", json={"code": "B1", "name": "Main", "location_id": location_id}
-        ).json()
-        return branch["id"]
-    return _with_admin(h, _do)
-
-
 # --- Phase 1.1 / 2.1: repository port contract checks (via fakes) ----------
 
 
@@ -97,9 +77,9 @@ def test_fake_account_repository_exposes_the_new_guard_methods():
 
 
 def test_account_repository_exposes_lock_identity_for_account_creation():
-    """Amendment: a second lock, re-keyed on `auth0_sub`, for the
-    never-linked-identity path — alongside, not replacing, the
-    customer_id-keyed lock the already-shipped branch still uses."""
+    """A second lock, re-keyed on `auth0_sub`, for the never-linked-identity
+    path — alongside, not replacing, the customer_id-keyed lock the
+    already-shipped path still uses."""
 
     async def scenario():
         repo = FakeAccountRepository()
@@ -109,23 +89,15 @@ def test_account_repository_exposes_lock_identity_for_account_creation():
     assert asyncio.run(scenario()) is True
 
 
-def test_fake_branch_repository_exposes_get_oldest_active():
-    async def scenario():
-        repo = FakeBranchRepository()
-        return await repo.get_oldest_active()
-
-    assert asyncio.run(scenario()) is None
-
-
-# --- Phase 2.1: has_any_account_for_customer / get_oldest_active behavior --
+# --- Phase 2.1: has_any_account_for_customer behavior -----------------------
 
 
 def test_has_any_account_for_customer_true_after_any_account_exists():
     async def scenario():
-        customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-        repo = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+        customer_id = uuid.uuid4()
+        repo = FakeAccountRepository(known_customers={customer_id})
         before = await repo.has_any_account_for_customer(customer_id)
-        await repo.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
+        await repo.create(currency="USD", customer_id=customer_id)
         after = await repo.has_any_account_for_customer(customer_id)
         return before, after
 
@@ -136,49 +108,13 @@ def test_has_any_account_for_customer_true_after_any_account_exists():
 
 def test_has_any_account_for_customer_true_even_when_only_account_is_closed():
     async def scenario():
-        customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-        repo = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
-        account = await repo.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
+        customer_id = uuid.uuid4()
+        repo = FakeAccountRepository(known_customers={customer_id})
+        account = await repo.create(currency="USD", customer_id=customer_id)
         await repo.close(account.account_number)
         return await repo.has_any_account_for_customer(customer_id)
 
     assert asyncio.run(scenario()) is True
-
-
-def test_get_oldest_active_picks_earliest_created_at_and_ignores_inactive():
-    async def scenario():
-        repo = FakeBranchRepository()
-        oldest = Branch(
-            id=uuid.uuid4(), code="OLD", name="Oldest", location_id=uuid.uuid4(), active=True,
-            created_at=dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc),
-            updated_at=dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc),
-        )
-        newer_active = Branch(
-            id=uuid.uuid4(), code="NEW", name="Newer", location_id=uuid.uuid4(), active=True,
-            created_at=dt.datetime(2021, 1, 1, tzinfo=dt.timezone.utc),
-            updated_at=dt.datetime(2021, 1, 1, tzinfo=dt.timezone.utc),
-        )
-        older_inactive = Branch(
-            id=uuid.uuid4(), code="INA", name="Inactive", location_id=uuid.uuid4(), active=False,
-            created_at=dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc),
-            updated_at=dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc),
-        )
-        repo.rows[older_inactive.id] = older_inactive
-        repo.rows[newer_active.id] = newer_active
-        repo.rows[oldest.id] = oldest
-        return await repo.get_oldest_active()
-
-    found = asyncio.run(scenario())
-    assert found is not None
-    assert found.code == "OLD"
-
-
-def test_get_oldest_active_returns_none_when_no_branch_is_active():
-    async def scenario():
-        repo = FakeBranchRepository()
-        return await repo.get_oldest_active()
-
-    assert asyncio.run(scenario()) is None
 
 
 # --- Phase 1.5: exception -> HTTP status mapping ----------------------------
@@ -188,35 +124,24 @@ def test_customer_already_has_account_error_maps_to_409():
     assert status_for(CustomerAlreadyHasAccountError(uuid.uuid4())) == 409
 
 
-def test_no_active_branch_available_error_maps_to_503():
-    assert status_for(NoActiveBranchAvailableError()) == 503
-
-
 # --- Phase 2.4: AccountService.open_first_account ---------------------------
 
 
-def _build_service(*, accounts=None, branches=None):
+def _build_service(*, accounts=None):
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     return AccountService(
         settings,
         accounts if accounts is not None else FakeAccountRepository(),
         FakePublisher(),
-        branches if branches is not None else FakeBranchRepository(),
     )
 
 
 def test_open_first_account_raises_409_when_customer_already_has_an_account():
     async def scenario():
-        customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-        accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
-        await accounts.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
-        branches = FakeBranchRepository()
-        branches.rows[branch_id] = Branch(
-            id=branch_id, code="B1", name="Main", location_id=uuid.uuid4(), active=True,
-            created_at=dt.datetime.now(dt.timezone.utc),
-            updated_at=dt.datetime.now(dt.timezone.utc),
-        )
-        service = _build_service(accounts=accounts, branches=branches)
+        customer_id = uuid.uuid4()
+        accounts = FakeAccountRepository(known_customers={customer_id})
+        await accounts.create(currency="USD", customer_id=customer_id)
+        service = _build_service(accounts=accounts)
 
         class _Customer:
             id = customer_id
@@ -230,35 +155,11 @@ def test_open_first_account_raises_409_when_customer_already_has_an_account():
     assert asyncio.run(scenario()) is True
 
 
-def test_open_first_account_raises_503_when_no_active_branch_exists():
+def test_open_first_account_creates_a_usd_account():
     async def scenario():
         customer_id = uuid.uuid4()
         accounts = FakeAccountRepository(known_customers={customer_id})
-        service = _build_service(accounts=accounts, branches=FakeBranchRepository())
-
-        class _Customer:
-            id = customer_id
-
-        try:
-            await service.open_first_account(_Customer())
-            return False
-        except NoActiveBranchAvailableError:
-            return True
-
-    assert asyncio.run(scenario()) is True
-
-
-def test_open_first_account_creates_a_usd_account_at_the_resolved_branch():
-    async def scenario():
-        customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-        accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
-        branches = FakeBranchRepository()
-        branches.rows[branch_id] = Branch(
-            id=branch_id, code="B1", name="Main", location_id=uuid.uuid4(), active=True,
-            created_at=dt.datetime.now(dt.timezone.utc),
-            updated_at=dt.datetime.now(dt.timezone.utc),
-        )
-        service = _build_service(accounts=accounts, branches=branches)
+        service = _build_service(accounts=accounts)
 
         class _Customer:
             id = customer_id
@@ -273,25 +174,14 @@ def test_open_first_account_creates_a_usd_account_at_the_resolved_branch():
 # --- Phase 10: AccountService.open_first_account_for_identity (amendment) --
 
 
-def _build_service_for_identity(*, accounts=None, branches=None, customers=None):
+def _build_service_for_identity(*, accounts=None, customers=None):
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     return AccountService(
         settings,
         accounts if accounts is not None else FakeAccountRepository(),
         FakePublisher(),
-        branches if branches is not None else FakeBranchRepository(),
         customer_repository=customers if customers is not None else FakeCustomerRepository(),
     )
-
-
-def _active_branch() -> tuple:
-    branch_id = uuid.uuid4()
-    branches = FakeBranchRepository()
-    branches.rows[branch_id] = Branch(
-        id=branch_id, code="B1", name="Main", location_id=uuid.uuid4(), active=True,
-        created_at=dt.datetime.now(dt.timezone.utc), updated_at=dt.datetime.now(dt.timezone.utc),
-    )
-    return branches, branch_id
 
 
 _VALID_KYC = {
@@ -321,10 +211,9 @@ class _AnyCustomerIsKnown:
 
 def test_open_first_account_for_identity_creates_customer_and_account_atomically():
     async def scenario():
-        branches, branch_id = _active_branch()
-        accounts = FakeAccountRepository(known_customers=_AnyCustomerIsKnown(), known_branches={branch_id})
+        accounts = FakeAccountRepository(known_customers=_AnyCustomerIsKnown())
         customers = FakeCustomerRepository()
-        service = _build_service_for_identity(accounts=accounts, branches=branches, customers=customers)
+        service = _build_service_for_identity(accounts=accounts, customers=customers)
 
         account = await _open_for_identity(service, "auth0|new", _VALID_KYC)
         return account, customers, accounts
@@ -363,10 +252,9 @@ class _AlwaysMissingThenDuplicateCustomerRepository(FakeCustomerRepository):
 
 def test_open_first_account_for_identity_lost_race_becomes_a_clean_409_not_a_500():
     async def scenario():
-        branches, branch_id = _active_branch()
-        accounts = FakeAccountRepository(known_branches={branch_id})
+        accounts = FakeAccountRepository()
         customers = _AlwaysMissingThenDuplicateCustomerRepository()
-        service = _build_service_for_identity(accounts=accounts, branches=branches, customers=customers)
+        service = _build_service_for_identity(accounts=accounts, customers=customers)
 
         try:
             await _open_for_identity(service, "auth0|new", _VALID_KYC)
@@ -390,10 +278,10 @@ def test_post_accounts_me_503_without_a_token_override_present():
 
 
 def test_post_accounts_me_422_for_a_never_linked_identity_with_no_kyc_body():
-    """MODIFIED (amendment): a never-linked identity used to 404 immediately
-    via `CurrentCustomerDep`. Now the endpoint runs under `CurrentUserDep` and
-    tries to auto-link — an empty body is simply missing every required KYC
-    field, so it is a 422, not a 404."""
+    """A never-linked identity used to 404 immediately via `CurrentCustomerDep`.
+    Now the endpoint runs under `CurrentUserDep` and tries to auto-link — an
+    empty body is simply missing every required KYC field, so it is a 422,
+    not a 404."""
     h = build()
     h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|unknown"}
     with h.client:
@@ -406,9 +294,6 @@ def test_post_accounts_me_201_auto_links_a_never_before_seen_identity_with_full_
     h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|brand-new"}
     h.accounts.known_customers = _AnyCustomerIsKnown()
     with h.client:
-        branch_id = _create_active_branch(h)
-        h.accounts.known_branches.add(uuid.UUID(branch_id))
-
         response = h.client.post(
             "/accounts/me",
             json={
@@ -432,8 +317,6 @@ def test_post_accounts_me_422_for_a_never_linked_identity_missing_a_required_kyc
     h = build()
     h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|incomplete"}
     with h.client:
-        _create_active_branch(h)
-
         response = h.client.post(
             "/accounts/me",
             json={"identification_number": "ID-777", "first_name": "Jane", "last_name": "Doe"},
@@ -447,7 +330,6 @@ def test_post_accounts_me_422_for_a_never_linked_identity_that_is_underage():
     h = build()
     h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|underage"}
     with h.client:
-        _create_active_branch(h)
         underage_dob = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=365 * 10)).isoformat()
 
         response = h.client.post(
@@ -470,10 +352,8 @@ def test_post_accounts_me_201_ignores_kyc_body_for_an_already_linked_customer():
     ignored")."""
     h = build()
     with h.client:
-        branch_id = _create_active_branch(h)
         customer_id = _link_current_customer(h)
         h.accounts.known_customers.add(uuid.UUID(customer_id))
-        h.accounts.known_branches.add(uuid.UUID(branch_id))
         original = h.customers.rows[uuid.UUID(customer_id)]
 
         response = h.client.post(
@@ -510,14 +390,10 @@ def test_post_accounts_me_401_unauthenticated_creates_nothing():
 def test_post_accounts_me_201_creates_a_usd_account_ignoring_client_params():
     h = build()
     with h.client:
-        branch_id = _create_active_branch(h)
         customer_id = _link_current_customer(h)
         h.accounts.known_customers.add(uuid.UUID(customer_id))
-        h.accounts.known_branches.add(uuid.UUID(branch_id))
 
-        response = h.client.post(
-            "/accounts/me", json={"currency": "EUR", "branch_id": str(uuid.uuid4())}
-        )
+        response = h.client.post("/accounts/me", json={"currency": "EUR"})
 
         assert response.status_code == 201
         body = response.json()
@@ -529,10 +405,8 @@ def test_post_accounts_me_201_creates_a_usd_account_ignoring_client_params():
 def test_post_accounts_me_409_when_customer_already_has_an_account():
     h = build()
     with h.client:
-        branch_id = _create_active_branch(h)
         customer_id = _link_current_customer(h)
         h.accounts.known_customers.add(uuid.UUID(customer_id))
-        h.accounts.known_branches.add(uuid.UUID(branch_id))
 
         first = h.client.post("/accounts/me")
         second = h.client.post("/accounts/me")
@@ -544,10 +418,8 @@ def test_post_accounts_me_409_when_customer_already_has_an_account():
 def test_post_accounts_me_409_even_when_the_only_existing_account_is_closed():
     h = build()
     with h.client:
-        branch_id = _create_active_branch(h)
         customer_id = _link_current_customer(h)
         h.accounts.known_customers.add(uuid.UUID(customer_id))
-        h.accounts.known_branches.add(uuid.UUID(branch_id))
 
         created = h.client.post("/accounts/me").json()
         h.client.delete(f"/accounts/{created['account_number']}")
@@ -555,14 +427,3 @@ def test_post_accounts_me_409_even_when_the_only_existing_account_is_closed():
         response = h.client.post("/accounts/me")
 
         assert response.status_code == 409
-
-
-def test_post_accounts_me_503_when_no_active_branch_exists():
-    h = build()
-    with h.client:
-        customer_id = _link_current_customer(h)
-        h.accounts.known_customers.add(uuid.UUID(customer_id))
-
-        response = h.client.post("/accounts/me")
-
-        assert response.status_code == 503

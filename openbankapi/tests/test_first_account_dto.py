@@ -76,8 +76,8 @@ def test_create_dto_defaults_every_field_to_none():
 
 def test_create_dto_silently_ignores_extra_fields():
     """`extra="ignore"`, deliberately unlike every other request DTO here: the
-    spec requires a client-sent `currency`/`branch_id` to be ignored, not
-    rejected — the account is always USD at the server-resolved branch."""
-    dto = FirstAccountCreateDTO(currency="EUR", branch_id="whatever")
+    spec requires an arbitrary client-sent extra field (e.g. `currency`) to be
+    ignored, not rejected — the account is always opened in USD."""
+    dto = FirstAccountCreateDTO(currency="EUR", unexpected_field="whatever")
     assert not hasattr(dto, "currency")
     assert dto.identification_number is None

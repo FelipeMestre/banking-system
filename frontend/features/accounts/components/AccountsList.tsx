@@ -82,7 +82,6 @@ export function AccountsList({ scope = "mine", refreshToken }: Props = {}) {
               <TableHead>Account Number</TableHead>
               <TableHead>Currency</TableHead>
               <TableHead>Customer ID</TableHead>
-              <TableHead>Branch ID</TableHead>
               <TableHead>Balance</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -90,7 +89,7 @@ export function AccountsList({ scope = "mine", refreshToken }: Props = {}) {
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-neutral-600">
+                <TableCell colSpan={6} className="text-neutral-600">
                   No accounts to show.
                 </TableCell>
               </TableRow>
@@ -101,7 +100,6 @@ export function AccountsList({ scope = "mine", refreshToken }: Props = {}) {
                   <TableCell className="font-mono text-xs whitespace-normal break-all">{account.account_number}</TableCell>
                   <TableCell>{account.currency}</TableCell>
                   <TableCell className="font-mono text-xs whitespace-normal break-all">{account.customer_id}</TableCell>
-                  <TableCell className="font-mono text-xs whitespace-normal break-all">{account.branch_id}</TableCell>
                   <TableCell>{formatCents(account.balance, currencySymbol(account.currency))}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_BADGE[account.status].variant} className={STATUS_BADGE[account.status].className}>

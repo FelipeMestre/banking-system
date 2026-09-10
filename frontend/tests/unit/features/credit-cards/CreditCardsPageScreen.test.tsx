@@ -30,7 +30,7 @@ describe("CreditCardsPageScreen", () => {
   beforeEach(() => {
     vi.spyOn(accountsModule, "getAccounts").mockResolvedValue({
       items: [
-        { id: "a1", account_number: "1111222233334444", currency: "USD", customer_id: "cust-1", branch_id: "b1", balance: 500000, status: "active" },
+        { id: "a1", account_number: "1111222233334444", currency: "USD", customer_id: "cust-1", balance: 500000, status: "active" },
       ],
       total: 1, limit: 50, offset: 0,
     });

@@ -40,30 +40,6 @@ def _created() -> Mapped[dt.datetime]:
     return mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class LocationORM(Base):
-    __tablename__ = "locations"
-
-    id: Mapped[uuid.UUID] = _pk()
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
-    created_at: Mapped[dt.datetime] = _created()
-    updated_at: Mapped[dt.datetime] = _created()
-
-
-class BranchORM(Base):
-    __tablename__ = "branches"
-
-    id: Mapped[uuid.UUID] = _pk()
-    code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    location_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("locations.id"), nullable=False
-    )
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
-    created_at: Mapped[dt.datetime] = _created()
-    updated_at: Mapped[dt.datetime] = _created()
-
-
 class CustomerORM(Base):
     """No `age` column, by design (spec §3.4) — it is derived on read.
 
@@ -104,9 +80,6 @@ class AccountORM(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
-    )
-    branch_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("branches.id"), nullable=False
     )
     balance: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")

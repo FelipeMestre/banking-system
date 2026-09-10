@@ -1,7 +1,7 @@
 """Contract for `applied_rates` persistence (FX-14).
 
 `typing.Protocol`, not `abc.ABC` — matches this codebase's real convention
-(`IAccountRepository`, `IBranchRepository`), not the ABC wording in the
+(`IAccountRepository`, `ICustomerRepository`), not the ABC wording in the
 proposal's literal spec text.
 """
 from __future__ import annotations

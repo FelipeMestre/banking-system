@@ -27,7 +27,6 @@ from openbankapi.domain.service.card_account_service import CardAccountService
 from openbankapi.infra.database.config.session import create_engine, create_sessionmaker
 from openbankapi.infra.database.repositories import (
     PostgresAccountRepository,
-    PostgresBranchRepository,
     PostgresCardAccountRepository,
     PostgresCardRepository,
     PostgresCustomerRepository,
@@ -131,17 +130,7 @@ async def _ensure_customer(sessionmaker, sub: str):
         return customer
 
 
-async def _ensure_branch(sessionmaker):
-    async with sessionmaker() as session:
-        repo = PostgresBranchRepository(session)
-        branch = await repo.get_oldest_active()
-        if branch is None:
-            raise RuntimeError("No active branch found — run migrations and ensure SYSTEM location/branch exist")
-        print(f"[branch] {branch.id} ({branch.code})")
-        return branch
-
-
-async def _ensure_accounts(sessionmaker, customer_id: UUID, branch_id: UUID):
+async def _ensure_accounts(sessionmaker, customer_id: UUID):
     from openbankapi.domain.model import Account
 
     async with sessionmaker() as session:
@@ -156,7 +145,7 @@ async def _ensure_accounts(sessionmaker, customer_id: UUID, branch_id: UUID):
         needed = 3 - len(existing)
         created: list[Account] = []
         for _ in range(needed):
-            acct = await repo.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
+            acct = await repo.create(currency="USD", customer_id=customer_id)
             created.append(acct)
             print(f"[accounts] created {acct.account_number} ({acct.id})")
         await session.commit()
@@ -283,9 +272,8 @@ async def _seed_demo(auth0_sub: str, reset: bool, no_backdate: bool, skip_kafka:
                 if len(page.items) >= 2:
                     already_seeded = True
 
-        branch = await _ensure_branch(sessionmaker)
         customer = await _ensure_customer(sessionmaker, auth0_sub)
-        accounts = await _ensure_accounts(sessionmaker, customer.id, branch.id)
+        accounts = await _ensure_accounts(sessionmaker, customer.id)
 
         if already_seeded:
             print("[seed] already seeded (2 card_accounts exist) — skipping publishes (use --reset to force).")

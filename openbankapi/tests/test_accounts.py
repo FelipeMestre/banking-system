@@ -28,8 +28,7 @@ def _authenticated(wired):
 def _create(wired):
     return wired.client.post(
         "/accounts",
-        json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(wired.branch_id)},
+        json={"currency": "USD", "customer_id": str(wired.customer_id)},
     )
 
 
@@ -51,21 +50,19 @@ def test_the_client_cannot_choose_the_account_number(wired):
     response = wired.client.post(
         "/accounts",
         json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(wired.branch_id),
               "account_number": "9999999999999999"},
     )
     assert response.status_code == 422
 
 
 def test_a_generated_number_collision_never_surfaces_a_500():
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id},
-                                   collide_times=2)
+    customer_id = uuid.uuid4()
+    accounts = FakeAccountRepository(known_customers={customer_id}, collide_times=2)
     h = build(accounts=accounts)
     with h.client:
         response = h.client.post(
             "/accounts",
-            json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)},
+            json={"currency": "USD", "customer_id": str(customer_id)},
         )
     assert response.status_code == 201
     assert accounts.attempts == 3, "should have retried past both collisions"
@@ -105,20 +102,10 @@ def test_a_legitimate_update_still_leaves_the_balance_alone(wired):
 def test_a_nonexistent_customer_is_a_clean_4xx_not_a_db_error(wired):
     response = wired.client.post(
         "/accounts",
-        json={"currency": "USD", "customer_id": str(uuid.uuid4()),
-              "branch_id": str(wired.branch_id)},
+        json={"currency": "USD", "customer_id": str(uuid.uuid4())},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "ReferencedEntityNotFoundError"
-
-
-def test_a_nonexistent_branch_is_a_clean_4xx(wired):
-    response = wired.client.post(
-        "/accounts",
-        json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(uuid.uuid4())},
-    )
-    assert response.status_code == 422
 
 
 # --- soft delete ------------------------------------------------------------

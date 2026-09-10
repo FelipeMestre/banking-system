@@ -4,7 +4,7 @@ import { createAccount } from "@/features/accounts/api/create-account";
 
 const ACCOUNT_BODY = {
   id: "a1", account_number: "1111111111111111", currency: "USD",
-  customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+  customer_id: "c1", balance: 0, status: "active",
 };
 
 describe("createAccount", () => {

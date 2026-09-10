@@ -28,9 +28,7 @@ from ...domain.exceptions import (
 )
 
 _FOREIGN_KEYS = {
-    "branches_location_id_fkey": "location_id",
     "accounts_customer_id_fkey": "customer_id",
-    "accounts_branch_id_fkey": "branch_id",
     "card_accounts_customer_id_fkey": "customer_id",
     "card_accounts_paying_account_id_fkey": "paying_account_id",
     "cards_card_account_id_fkey": "card_account_id",
@@ -41,7 +39,6 @@ _FOREIGN_KEYS = {
 }
 
 _UNIQUE_KEYS = {
-    "branches_code_key": "code",
     "customers_identification_number_key": "identification_number",
     "customers_auth0_sub_key": "auth0_sub",
 }

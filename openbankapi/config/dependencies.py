@@ -38,7 +38,6 @@ from .config import Settings
 from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsError, InvalidAdminIdentityError
 from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
-from ..domain.service.branch_service import BranchService
 from ..domain.service.card_account_service import CardAccountService
 from ..domain.service.customer_service import CustomerService
 from ..domain.service.statement_service import StatementService
@@ -48,28 +47,24 @@ from ..infra.cache.interfaces.cache_service import ICacheService
 from ..infra.database.interfaces import (
     IAccountRepository,
     IAppliedRateRepository,
-    IBranchRepository,
     ICardAccountAdminActionRepository,
     ICardAccountRepository,
     ICardMovementRepository,
     ICardRepository,
     ICustomerRepository,
     IInstallmentRepository,
-    ILocationRepository,
     IStatementRepository,
     ITransactionRepository,
 )
 from ..infra.database.repositories import (
     PostgresAccountRepository,
     PostgresAppliedRateRepository,
-    PostgresBranchRepository,
     PostgresCardAccountAdminActionRepository,
     PostgresCardAccountRepository,
     PostgresCardMovementRepository,
     PostgresCardRepository,
     PostgresCustomerRepository,
     PostgresInstallmentRepository,
-    PostgresLocationRepository,
     PostgresStatementRepository,
     PostgresTransactionRepository,
 )
@@ -250,20 +245,6 @@ AdminIdentityDep = Annotated[str, Depends(_require_admin_identity)]
 # --- repositories: request-scoped, built fresh on the shared session --------
 
 
-def get_location_repository(session: DbSession) -> ILocationRepository:
-    return PostgresLocationRepository(session)
-
-
-LocationRepositoryDep = Annotated[ILocationRepository, Depends(get_location_repository)]
-
-
-def get_branch_repository(session: DbSession) -> IBranchRepository:
-    return PostgresBranchRepository(session)
-
-
-BranchRepositoryDep = Annotated[IBranchRepository, Depends(get_branch_repository)]
-
-
 def get_customer_repository(session: DbSession) -> ICustomerRepository:
     return PostgresCustomerRepository(session)
 
@@ -361,10 +342,9 @@ def get_account_service(
     settings: SettingsDep,
     repository: AccountRepositoryDep,
     publisher: PublisherDep,
-    branch_repository: BranchRepositoryDep,
     customer_repository: CustomerRepositoryDep,
 ) -> AccountService:
-    return AccountService(settings, repository, publisher, branch_repository, customer_repository)
+    return AccountService(settings, repository, publisher, customer_repository)
 
 
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
@@ -390,16 +370,6 @@ def get_customer_service(
 
 
 CustomerServiceDep = Annotated[CustomerService, Depends(get_customer_service)]
-
-
-def get_branch_service(
-    branch_repository: BranchRepositoryDep,
-    account_repository: AccountRepositoryDep,
-) -> BranchService:
-    return BranchService(branch_repository, account_repository)
-
-
-BranchServiceDep = Annotated[BranchService, Depends(get_branch_service)]
 
 
 def get_transaction_service(repository: TransactionRepositoryDep) -> TransactionService:

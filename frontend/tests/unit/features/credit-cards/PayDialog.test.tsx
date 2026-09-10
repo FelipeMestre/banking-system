@@ -9,7 +9,7 @@ import type { Account } from "@/features/accounts";
 
 const OWN_ACCOUNT: Account = {
   id: "a1", account_number: "1111222233334444", currency: "USD",
-  customer_id: "c1", branch_id: "b1", balance: 500000, status: "active",
+  customer_id: "c1", balance: 500000, status: "active",
 };
 
 /** Stands in for `CreditCardsPageScreen`: a parent that reacts to `onPaid`
@@ -97,7 +97,7 @@ describe("PayDialog", () => {
   it("lets the customer pick which of their own accounts pays the card", async () => {
     const secondAccount: Account = {
       id: "a2", account_number: "5555666677778888", currency: "EUR",
-      customer_id: "c1", branch_id: "b1", balance: 200000, status: "active",
+      customer_id: "c1", balance: 200000, status: "active",
     };
     vi.spyOn(accountsModule, "getAccounts").mockResolvedValue({
       items: [OWN_ACCOUNT, secondAccount], total: 2, limit: 50, offset: 0,

@@ -8,7 +8,6 @@ const ACCOUNT_A = {
   account_number: "1111111111111111",
   currency: "USD",
   customer_id: "customer-a",
-  branch_id: "b-1",
   balance: 0,
   status: "active" as const,
 };
@@ -18,7 +17,6 @@ const ACCOUNT_B = {
   account_number: "2222222222222222",
   currency: "EUR",
   customer_id: "customer-b",
-  branch_id: "b-1",
   balance: 0,
   status: "active" as const,
 };

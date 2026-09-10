@@ -6,11 +6,11 @@ const ACCOUNTS_PAGE = {
   items: [
     {
       id: "a1", account_number: "1111111111111111", currency: "USD",
-      customer_id: "c1", branch_id: "b1", balance: 250000, status: "active",
+      customer_id: "c1", balance: 250000, status: "active",
     },
     {
       id: "a2", account_number: "2222222222222222", currency: "EUR",
-      customer_id: "c1", branch_id: "b1", balance: 100000, status: "active",
+      customer_id: "c1", balance: 100000, status: "active",
     },
   ],
   total: 2, limit: 50, offset: 0,
@@ -175,7 +175,7 @@ describe("HomeDashboard", () => {
         return new Response(
           JSON.stringify({
             id: "a1", account_number: "1111111111111111", currency: "USD",
-            customer_id: "c1", branch_id: "b1", balance: 0, status: "active",
+            customer_id: "c1", balance: 0, status: "active",
           }),
           { status: 201 },
         );

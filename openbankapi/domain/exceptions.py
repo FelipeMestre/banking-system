@@ -20,16 +20,6 @@ class NotFoundError(DomainError):
         super().__init__(f"{entity} not found: {identifier}")
 
 
-class LocationNotFoundError(NotFoundError):
-    def __init__(self, identifier: object):
-        super().__init__("location", identifier)
-
-
-class BranchNotFoundError(NotFoundError):
-    def __init__(self, identifier: object):
-        super().__init__("branch", identifier)
-
-
 class CustomerNotFoundError(NotFoundError):
     def __init__(self, identifier: object):
         super().__init__("customer", identifier)
@@ -102,19 +92,6 @@ class CustomerAccountsNotEmptyError(DomainError):
         )
 
 
-class BranchHasActiveAccountsError(DomainError):
-    """A branch cannot be soft-deleted while it still has an active account. -> 409
-
-    Unlike a customer, a branch is reference data an account merely points at
-    — there is no per-account balance rule here, only status: any account
-    still `active` at this branch must be moved or closed first.
-    """
-
-    def __init__(self, branch_id: object):
-        self.branch_id = branch_id
-        super().__init__(f"The branch {branch_id} still has an active account and cannot be deleted")
-
-
 class CustomerNotLinkedError(DomainError):
     """A valid Auth0 identity has no linked Customer. -> 404
 
@@ -150,17 +127,6 @@ class CustomerAlreadyHasAccountError(DomainError):
     def __init__(self, customer_id: object):
         self.customer_id = customer_id
         super().__init__(f"customer {customer_id} already owns an account")
-
-
-class NoActiveBranchAvailableError(DomainError):
-    """No ACTIVE branch exists to resolve as the default for a new account. -> 503
-
-    Distinct from an unmapped bug: this is an operational/configuration state
-    (no active branch has been set up yet), not a defect in the request.
-    """
-
-    def __init__(self):
-        super().__init__("no active branch is available to open an account")
 
 
 class InsufficientFundsError(DomainError):

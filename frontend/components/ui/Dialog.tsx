@@ -27,10 +27,9 @@ interface Props {
  * Generic popup chrome on top of Radix's Dialog primitive — overlay,
  * header (title + close cross), body, and a Cancel/Accept footer — with
  * none of its own opinions about what it contains. Deliberately
- * entity-agnostic: a caller composes it with whatever form belongs inside
- * (see features/locations/components/AddLocationDialog.tsx for the
- * pattern), which is what makes the form part swappable without touching
- * this component at all.
+ * entity-agnostic: a caller composes it with whatever form belongs inside,
+ * which is what makes the form part swappable without touching this
+ * component at all.
  *
  * Radix's Dialog already provides the focus trap and Escape-to-close (and
  * closing on an outside click, which covers the overlay); the two pieces
@@ -91,8 +90,8 @@ export function Dialog({
           className="fixed top-1/2 left-1/2 z-50 flex w-[min(440px,100%)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-ds-3 rounded-lg bg-surface p-ds-4 shadow-lg"
           aria-labelledby={titleId}
           onOpenAutoFocus={(event) => {
-            // A form field's own autoFocus (see LocationForm etc.) already
-            // won by the time this fires — only step in when nothing
+            // A form field's own autoFocus already won by the time this
+            // fires — only step in when nothing
             // claimed focus, so Enter has an Accept button to reach.
             const content = event.currentTarget as HTMLElement;
             if (!content.querySelector("[autofocus]")) {

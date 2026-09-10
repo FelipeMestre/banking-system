@@ -18,7 +18,7 @@ def _make_app_with_fakes(account_repo=None, registry=None, publisher=None, fx_ca
     publisher = publisher or FakePublisher()
     cache = FakeCache()
     registry = registry or StatusRegistry()
-    account_repo = account_repo or FakeAccountRepository(known_customers={uuid.uuid4()}, known_branches={uuid.uuid4()})
+    account_repo = account_repo or FakeAccountRepository(known_customers={uuid.uuid4()})
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
     from openbankapi.tests.fakes import FakeForeignExchangeRepository
 
@@ -62,7 +62,6 @@ def _make_active_account(balance=100000, currency="EUR"):
         account_number="1234567890123456",
         currency=currency,
         customer_id=uuid.uuid4(),
-        branch_id=uuid.uuid4(),
         balance=balance,
         status=AccountStatus.ACTIVE,
         created_at=dt.datetime.now(dt.timezone.utc),

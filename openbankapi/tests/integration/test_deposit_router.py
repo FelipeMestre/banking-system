@@ -18,8 +18,8 @@ def _make_app_with_fakes(account_repo=None, registry=None, publisher=None, fx_ca
     publisher = publisher or FakePublisher()
     cache = FakeCache()
     registry = registry or StatusRegistry()
-    account_repo = account_repo or FakeAccountRepository(known_customers={uuid.uuid4()}, known_branches={uuid.uuid4()})
-    # need a customer/branch for account creation? but we will directly insert account via Fake
+    account_repo = account_repo or FakeAccountRepository(known_customers={uuid.uuid4()})
+    # need a customer for account creation? but we will directly insert account via Fake
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
     from openbankapi.tests.fakes import FakeForeignExchangeRepository
 
@@ -94,7 +94,6 @@ def test_happy_same_currency_returns_200():
         account_number="1234567890123456",
         currency="EUR",
         customer_id=uuid.uuid4(),
-        branch_id=uuid.uuid4(),
         balance=100000,
         status=AccountStatus.ACTIVE,
         created_at=dt.datetime.now(dt.timezone.utc),
@@ -156,7 +155,6 @@ def test_timeout_returns_504_zero_rows():
         account_number="1234567890123456",
         currency="EUR",
         customer_id=uuid.uuid4(),
-        branch_id=uuid.uuid4(),
         balance=100000,
         status=AccountStatus.ACTIVE,
         created_at=dt.datetime.now(dt.timezone.utc),
@@ -206,7 +204,6 @@ def test_cross_currency_converts():
         account_number="1234567890123456",
         currency="EUR",
         customer_id=uuid.uuid4(),
-        branch_id=uuid.uuid4(),
         balance=100000,
         status=AccountStatus.ACTIVE,
         created_at=dt.datetime.now(dt.timezone.utc),

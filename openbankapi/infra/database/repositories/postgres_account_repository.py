@@ -47,7 +47,6 @@ def _to_domain(row: AccountORM) -> Account:
         account_number=row.account_number,
         currency=row.currency,
         customer_id=row.customer_id,
-        branch_id=row.branch_id,
         balance=row.balance,
         status=AccountStatus(row.status),
         created_at=row.created_at,
@@ -58,16 +57,16 @@ def _to_domain(row: AccountORM) -> Account:
 class PostgresAccountRepository(PostgresRepository):
     # Belt and braces alongside the DTO: even an internal caller cannot name
     # balance here, because _update is only ever fed these keys.
-    _UPDATABLE = frozenset({"currency", "branch_id", "status"})
+    _UPDATABLE = frozenset({"currency", "status"})
 
-    async def create(self, *, currency: str, customer_id: UUID, branch_id: UUID) -> Account:
+    async def create(self, *, currency: str, customer_id: UUID) -> Account:
         """Insert with a server-generated number, retrying on collision.
 
         The retry is what keeps spec §11.1 true: a UNIQUE violation on the
         generated number is an internal detail and must never reach the client
-        as a 500. A violation on customer_id/branch_id is a different thing
-        entirely — that is the caller's bad input, so it is translated and
-        raised immediately rather than retried.
+        as a 500. A violation on customer_id is a different thing entirely —
+        that is the caller's bad input, so it is translated and raised
+        immediately rather than retried.
 
         Each attempt runs inside its own SAVEPOINT (`begin_nested`), not a new
         transaction: this session is shared for the whole request (see
@@ -83,7 +82,6 @@ class PostgresAccountRepository(PostgresRepository):
                 "account_number": account_number,
                 "currency": currency,
                 "customer_id": customer_id,
-                "branch_id": branch_id,
             }
             try:
                 async with self._session.begin_nested():
@@ -123,10 +121,9 @@ class PostgresAccountRepository(PostgresRepository):
         account_number: str,
         *,
         currency: Optional[str] = None,
-        branch_id: Optional[UUID] = None,
         status: Optional[str] = None,
     ) -> Optional[Account]:
-        candidate = {"currency": currency, "branch_id": branch_id, "status": status}
+        candidate = {"currency": currency, "status": status}
         assert set(candidate) <= self._UPDATABLE, "balance is not updatable here"
         row = await self._update(
             AccountORM, AccountORM.account_number == account_number, candidate
@@ -149,18 +146,6 @@ class PostgresAccountRepository(PostgresRepository):
                         AccountORM.customer_id == customer_id,
                         AccountORM.status == AccountStatus.ACTIVE.value,
                         AccountORM.balance != 0,
-                    )
-                )
-            )
-        )
-
-    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
-        return bool(
-            await self._session.scalar(
-                select(
-                    exists().where(
-                        AccountORM.branch_id == branch_id,
-                        AccountORM.status == AccountStatus.ACTIVE.value,
                     )
                 )
             )

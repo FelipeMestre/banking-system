@@ -19,7 +19,6 @@ from openbankapi.tests.fakes import FakeAccountRepository, FakeCardAccountReposi
 def usage_harness():
     import asyncio
 
-    branch_id = uuid.uuid4()
     customers_repo = None
 
     async def _resolve_customer(repo):
@@ -34,12 +33,12 @@ def usage_harness():
     owner = asyncio.run(_resolve_customer(customers_repo))
     customer_id = owner.id
 
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
+    accounts = FakeAccountRepository(known_customers={customer_id})
     h = build(accounts=accounts)
     h.customers.rows[owner.id] = owner
     with h.client:
         account_response = h.client.post(
-            "/accounts", json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)}
+            "/accounts", json={"currency": "USD", "customer_id": str(customer_id)}
         )
     paying_account = accounts.rows[account_response.json()["account_number"]]
 

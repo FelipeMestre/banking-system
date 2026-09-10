@@ -21,9 +21,7 @@ from .common import Page
 
 
 class IAccountRepository(Protocol):
-    async def create(
-        self, *, currency: str, customer_id: UUID, branch_id: UUID
-    ) -> Account:
+    async def create(self, *, currency: str, customer_id: UUID) -> Account:
         """Create an account with a server-generated `account_number`.
 
         The number is generated here rather than accepted from the client
@@ -52,7 +50,6 @@ class IAccountRepository(Protocol):
         account_number: str,
         *,
         currency: Optional[str] = None,
-        branch_id: Optional[UUID] = None,
         status: Optional[str] = None,
     ) -> Optional[Account]:
         """Update mutable reference data. `balance` is not a parameter and never
@@ -70,15 +67,6 @@ class IAccountRepository(Protocol):
         closed account, or an active one sitting at 0, does not block
         anything — only an active account that still carries funds does.
         Used to refuse a customer soft-delete until every account is empty.
-        """
-        ...
-
-    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
-        """Whether this branch has any account with status `active`.
-
-        No balance check here, unlike the customer rule: a branch is
-        reference data, not the funds' owner. Used to refuse a branch
-        soft-delete until every account there is moved or closed.
         """
         ...
 

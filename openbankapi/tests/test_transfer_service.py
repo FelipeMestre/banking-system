@@ -36,7 +36,7 @@ def _account(number: str, currency: str) -> Account:
     now = datetime.now(timezone.utc)
     return Account(
         id=uuid.uuid4(), account_number=number, currency=currency,
-        customer_id=uuid.uuid4(), branch_id=uuid.uuid4(), balance=0,
+        customer_id=uuid.uuid4(), balance=0,
         status=AccountStatus.ACTIVE, created_at=now, updated_at=now,
     )
 

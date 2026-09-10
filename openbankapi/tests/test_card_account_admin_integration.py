@@ -23,22 +23,11 @@ from openbankapi.infra.database.repositories.postgres_card_movement_repository i
 from openbankapi.infra.database.repositories.postgres_card_repository import (
     PostgresCardRepository,
 )
-from openbankapi.infra.database.schemas.models import (
-    AccountORM,
-    BranchORM,
-    CustomerORM,
-    LocationORM,
-)
+from openbankapi.infra.database.schemas.models import AccountORM, CustomerORM
 from openbankapi.tests.db_fixtures import rollback_session
 
 
 async def _seed_card_account(session, *, credit_limit=1000):
-    location = LocationORM(name=f"loc-{uuid.uuid4()}")
-    session.add(location)
-    await session.flush()
-    branch = BranchORM(code=f"B{uuid.uuid4().hex[:8]}", name="Branch", location_id=location.id)
-    session.add(branch)
-    await session.flush()
     customer = CustomerORM(
         identification_number=f"id-{uuid.uuid4().hex[:16]}",
         first_name="Ada", last_name="Lovelace", date_of_birth=datetime(1990, 1, 1).date(),
@@ -47,7 +36,7 @@ async def _seed_card_account(session, *, credit_limit=1000):
     await session.flush()
     account = AccountORM(
         account_number=str(abs(hash(uuid.uuid4())) % (10**16)).rjust(16, "0"),
-        currency="USD", customer_id=customer.id, branch_id=branch.id,
+        currency="USD", customer_id=customer.id,
     )
     session.add(account)
     await session.flush()
@@ -127,15 +116,9 @@ async def _status_filtered_listing(dsn: str):
         # Second card account for the SAME customer — reuse the same
         # customer/account row is not possible (one card account per row
         # here is fine, `customer_id` is the only shared FK needed).
-        location = LocationORM(name=f"loc-{uuid.uuid4()}")
-        session.add(location)
-        await session.flush()
-        branch = BranchORM(code=f"B{uuid.uuid4().hex[:8]}", name="Branch", location_id=location.id)
-        session.add(branch)
-        await session.flush()
         account_2 = AccountORM(
             account_number=str(abs(hash(uuid.uuid4())) % (10**16)).rjust(16, "0"),
-            currency="USD", customer_id=customer.id, branch_id=branch.id,
+            currency="USD", customer_id=customer.id,
         )
         session.add(account_2)
         await session.flush()

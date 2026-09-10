@@ -8,7 +8,6 @@ const ACCOUNT = {
   account_number: "1111111111111111",
   currency: "USD",
   customer_id: "c1",
-  branch_id: "b1",
   balance: 0,
   status: "active",
 };
