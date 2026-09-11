@@ -15,18 +15,19 @@ Mutating routes live in `card_account_write_router` (see 6.0 Housekeeping).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from openbankapi.api.v1.dtos.card_account_dto import CardAccountResponseDTO
 from openbankapi.api.v1.dtos.card_dto import CardMaskedDTO
 from openbankapi.api.v1.dtos.card_usage_dto import CardMovementDTO, UsedCreditEstimateDTO
 from openbankapi.api.v1.dtos.common import DEFAULT_LIMIT, MAX_LIMIT, PageParams, PageResponse
+from openbankapi.api.v1.dtos.current_cycle_dto import CurrentCycleResponseDTO
 from openbankapi.api.v1.dtos.statement_dto import InstallmentPayoffDTO, StatementDTO
 from openbankapi.config.dependencies import (
     AppliedRateRepositoryDep,
@@ -34,6 +35,7 @@ from openbankapi.config.dependencies import (
     CardMovementRepositoryDep,
     CardRepositoryDep,
     CurrentCustomerDep,
+    CurrentCycleProjectionServiceDep,
     InstallmentRepositoryDep,
     StatementRepositoryDep,
 )
@@ -247,7 +249,22 @@ async def list_movements(
             "billed onto, regardless of its parent purchase's date."
         ),
     ),
+    since: Optional[date] = Query(
+        default=None,
+        description=(
+            "Scope the list to the still-open cycle: movements with "
+            "occurred_at/created_at date >= since, open-ended through today. "
+            "Mutually exclusive with statement_id — no Statement row exists "
+            "yet for the open cycle, so statement_id structurally cannot "
+            "express this filter."
+        ),
+    ),
 ):
+    if statement_id is not None and since is not None:
+        raise HTTPException(
+            status_code=422, detail="statement_id and since are mutually exclusive"
+        )
+
     await _owned_card_account(card_account_id, repository, customer)
 
     all_rows = await movements.get_by_card_account_id(card_account_id)
@@ -263,6 +280,18 @@ async def list_movements(
         page_items = items[page.offset : page.offset + page.limit]
         return PageResponse(items=page_items, total=total, limit=page.limit, offset=page.offset)
 
+    if since is not None:
+        plan_ids = await _installment_plan_movement_ids(all_rows, installments)
+        since_rows = [
+            row for row in all_rows
+            if row.id not in plan_ids and (row.occurred_at or row.created_at).date() >= since
+        ]
+        since_rows.sort(key=lambda row: row.occurred_at or row.created_at, reverse=True)
+        total = len(since_rows)
+        page_rows = since_rows[page.offset : page.offset + page.limit]
+        items = [await _movement_dto(row, applied_rates, installments) for row in page_rows]
+        return PageResponse(items=items, total=total, limit=page.limit, offset=page.offset)
+
     total = len(all_rows)
     page_rows = all_rows[page.offset : page.offset + page.limit]
     items = [await _movement_dto(row, applied_rates, installments) for row in page_rows]
@@ -277,9 +306,47 @@ async def list_statements(
     customer: CurrentCustomerDep,
     limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
 ):
+    """`payable` is `True` for exactly one row — the single most-recently-
+    closed statement (`get_latest`), and only while `today <= due_date` —
+    never reimplemented on the frontend (design D7). An explicit
+    `get_latest()` call identifies that row rather than trusting
+    `list_by_card_account_id`'s ordering, so this stays correct even if that
+    ordering guarantee ever changes."""
     await _owned_card_account(card_account_id, repository, customer)
     rows = await statements.list_by_card_account_id(card_account_id, limit)
-    return [StatementDTO.model_validate(row) for row in rows]
+    latest = await statements.get_latest(card_account_id)
+    today = date.today()
+    return [
+        StatementDTO(
+            **{**row.__dict__, "status": row.status.value},
+            payable=(latest is not None and row.id == latest.id and today <= row.due_date),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/{card_account_id}/current-cycle", response_model=CurrentCycleResponseDTO)
+async def current_cycle(
+    card_account_id: UUID,
+    repository: CardAccountRepositoryDep,
+    projection_service: CurrentCycleProjectionServiceDep,
+    customer: CurrentCustomerDep,
+):
+    """Live, never-persisted projection of the still-open billing cycle —
+    computed fresh on every call (spec: "Projection is read-only and never
+    stale"). Always payable: this is the one target that is never gated by a
+    due date, unlike the most-recently-closed statement above."""
+    await _owned_card_account(card_account_id, repository, customer)
+    projection = await projection_service.project(card_account_id, today=date.today())
+    return CurrentCycleResponseDTO(
+        period_start=projection.period_start,
+        projected_period_end=projection.projected_period_end,
+        overdue_from_previous_cycle=projection.overdue_from_previous_cycle,
+        interest_on_overdue=projection.interest_on_overdue,
+        new_purchases_this_cycle=projection.new_purchases_this_cycle,
+        total_to_pay=projection.total_to_pay,
+        payable=projection.is_payable,
+    )
 
 
 @router.get("/{card_account_id}/installment-payoff", response_model=InstallmentPayoffDTO)

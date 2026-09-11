@@ -293,3 +293,191 @@ def test_movements_filtered_by_unknown_statement_id_is_not_found(statement_harne
     )
 
     assert response.status_code == 404
+
+
+# --- movements scoped to the open cycle via `since` ------------------------------
+
+
+def test_movements_since_returns_movement_after_latest_statement_period_end(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+    card_id = uuid.UUID(issued["card"]["id"])
+
+    _seed_statement(
+        h, card_account_id, period_start=date(2026, 7, 21), period_end=date(2026, 8, 20),
+        due_date=date(2026, 9, 9),
+    )
+    open_cycle_purchase = _seed_movement(
+        h, card_id, CardMovementType.PURCHASE, "42.00",
+        occurred_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
+    )
+    before_since = _seed_movement(
+        h, card_id, CardMovementType.PURCHASE, "999.00",
+        occurred_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+    )
+
+    response = h.client.get(
+        f"/card-accounts/{card_account_id}/movements", params={"since": "2026-08-21"}
+    )
+
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()["items"]}
+    assert str(open_cycle_purchase.id) in ids
+    assert str(before_since.id) not in ids
+
+
+def test_movements_since_excludes_installment_plan_parent(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+    card_id = uuid.UUID(issued["card"]["id"])
+
+    plan_purchase = _seed_movement(
+        h, card_id, CardMovementType.PURCHASE, "900.00",
+        occurred_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
+    )
+    now = datetime.now(timezone.utc)
+    asyncio.run(h.installments.bulk_insert([
+        Installment(
+            id=uuid.uuid4(), card_movement_id=plan_purchase.id, installment_number=i + 1,
+            amount=Decimal("100.00"), due_date=date.today(), status=InstallmentStatus.PENDING,
+            created_at=now,
+        )
+        for i in range(9)
+    ]))
+
+    response = h.client.get(
+        f"/card-accounts/{card_account_id}/movements", params={"since": "2026-08-01"}
+    )
+
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()["items"]}
+    assert str(plan_purchase.id) not in ids
+
+
+def test_movements_statement_id_and_since_together_is_422(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+
+    response = h.client.get(
+        f"/card-accounts/{card_account_id}/movements",
+        params={"statement_id": str(uuid.uuid4()), "since": "2026-08-01"},
+    )
+
+    assert response.status_code == 422
+
+
+# --- current-cycle projection -----------------------------------------------------
+
+
+def test_current_cycle_happy_path_shape(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+    card_id = uuid.UUID(issued["card"]["id"])
+    # Seed a closed, not-yet-due, fully-paid previous statement so
+    # `period_start` is a deterministic date rather than depending on the
+    # card account's real issuance timestamp (avoids UTC/local midnight
+    # boundary flakiness in `date.today()` comparisons).
+    previous = _seed_statement(
+        h, card_account_id,
+        period_start=date.today() - timedelta(days=30), period_end=date.today() - timedelta(days=1),
+        due_date=date.today() + timedelta(days=20), total_due=Decimal("100.00"),
+    )
+    asyncio.run(h.statements.finalize_due_date_outcome(
+        previous.id, paid_amount=Decimal("100.00"), paid_in_full=True, paid_by_due_date=True
+    ))
+    _seed_movement(
+        h, card_id, CardMovementType.PURCHASE, "60.00",
+        occurred_at=datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc).replace(hour=12),
+    )
+
+    response = h.client.get(f"/card-accounts/{card_account_id}/current-cycle")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {
+        "period_start", "projected_period_end", "overdue_from_previous_cycle",
+        "interest_on_overdue", "new_purchases_this_cycle", "total_to_pay", "payable",
+    }
+    assert body["overdue_from_previous_cycle"] is None
+    assert body["interest_on_overdue"] is None
+    assert body["new_purchases_this_cycle"] == "60.00"
+    assert body["total_to_pay"] == "60.00"
+    assert body["payable"] is True
+
+
+def test_current_cycle_overdue_absent_when_due_date_not_yet_passed(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+
+    future_due_date = date.today() + timedelta(days=5)
+    _seed_statement(
+        h, card_account_id,
+        period_start=date.today() - timedelta(days=30), period_end=date.today() - timedelta(days=1),
+        due_date=future_due_date, total_due=Decimal("500.00"),
+    )
+
+    response = h.client.get(f"/card-accounts/{card_account_id}/current-cycle")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overdue_from_previous_cycle"] is None
+    assert body["interest_on_overdue"] is None
+
+
+def test_current_cycle_non_owner_is_denied(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = issued["card_account"]["id"]
+
+    h.client.app.dependency_overrides[get_current_user] = lambda: {"sub": "auth0|intruder"}
+    response = h.client.get(f"/card-accounts/{card_account_id}/current-cycle")
+
+    assert response.status_code in (403, 404)
+
+
+# --- statement payable field --------------------------------------------------------
+
+
+def test_only_latest_closed_statement_is_payable_while_due_date_not_passed(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+
+    older = _seed_statement(
+        h, card_account_id, period_start=date(2026, 6, 20), period_end=date(2026, 7, 20),
+        due_date=date.today() + timedelta(days=30),
+    )
+    newer = _seed_statement(
+        h, card_account_id, period_start=date(2026, 7, 20), period_end=date(2026, 8, 20),
+        due_date=date.today() + timedelta(days=10),
+    )
+
+    response = h.client.get(f"/card-accounts/{card_account_id}/statements")
+
+    assert response.status_code == 200
+    by_id = {row["id"]: row for row in response.json()}
+    assert by_id[str(newer.id)]["payable"] is True
+    assert by_id[str(older.id)]["payable"] is False
+
+
+def test_latest_closed_statement_not_payable_once_due_date_passed(statement_harness):
+    h = statement_harness
+    issued = _issue(h).json()
+    card_account_id = uuid.UUID(issued["card_account"]["id"])
+
+    latest = _seed_statement(
+        h, card_account_id, period_start=date(2026, 6, 20), period_end=date(2026, 7, 20),
+        due_date=date.today() - timedelta(days=1),
+    )
+
+    response = h.client.get(f"/card-accounts/{card_account_id}/statements")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["id"] == str(latest.id)
+    assert body[0]["payable"] is False

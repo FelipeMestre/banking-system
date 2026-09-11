@@ -35,6 +35,7 @@ class StatementDTO(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    payable: bool
 
     model_config = {"from_attributes": True}
 

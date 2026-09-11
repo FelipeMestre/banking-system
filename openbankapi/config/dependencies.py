@@ -39,6 +39,7 @@ from ..domain.exceptions import CustomerNotLinkedError, InsufficientPermissionsE
 from ..domain.model import Customer
 from ..domain.service.account_service import AccountService
 from ..domain.service.card_account_service import CardAccountService
+from ..domain.service.current_cycle_projection_service import CurrentCycleProjectionService
 from ..domain.service.customer_service import CustomerService
 from ..domain.service.statement_service import StatementService
 from ..domain.service.transaction_service import TransactionService
@@ -406,3 +407,22 @@ def get_statement_service(
 
 
 StatementServiceDep = Annotated[StatementService, Depends(get_statement_service)]
+
+
+def get_current_cycle_projection_service(
+    settings: SettingsDep,
+    statement_repository: StatementRepositoryDep,
+    card_movement_repository: CardMovementRepositoryDep,
+    installment_repository: InstallmentRepositoryDep,
+    card_account_repository: CardAccountRepositoryDep,
+) -> CurrentCycleProjectionService:
+    return CurrentCycleProjectionService(
+        statement_repository, card_movement_repository, installment_repository, card_account_repository,
+        credit_card_apr=settings.credit_card_apr,
+        close_day=settings.close_day,
+    )
+
+
+CurrentCycleProjectionServiceDep = Annotated[
+    CurrentCycleProjectionService, Depends(get_current_cycle_projection_service)
+]

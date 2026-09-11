@@ -23,15 +23,29 @@ from openbankapi.seed.backdate import backdate_to_window
 from openbankapi.seed.catalog import purchases_for_cycle
 
 # A "cycle" is one billing statement period (domain/service/statement_service.py).
-# 3 cycles of 30 days, ending 65/35/5 days ago, so cycles 1-2 already have a
+# 3 cycles of 30 days, ending 85/55/25 days ago, so cycles 1-2 already have a
 # past due_date (statement_service only finalizes payment outcome for an
-# exact due_date match) while cycle 3 stays open, like a real in-progress bill.
+# exact due_date match) while the (unclosed) 4th cycle after cycle 3's
+# period_end is the genuinely live, still-open current cycle.
+#
+# Cycle 3 (the last CLOSED one) is deliberately left unpaid AND with a
+# due_date already in the past (period_end 25 days ago + the default 20-day
+# due-date offset = 5 days overdue) — this exercises
+# `current_cycle_current-cycle`'s single most safety-critical branch: while
+# this statement's own `run_due_date_check` has not yet finalized it (still
+# `status=closed`), the live projection MUST derive its outstanding balance
+# via a live `sum_payments` call, never the statement's frozen `paid_amount`
+# field. The seed script intentionally never calls `run_due_date_check` for
+# this cycle (see the `pay_ratio <= 0: continue` guard below) so this state
+# survives until the batch worker's own next scheduled tick finalizes it —
+# reseed and verify promptly after running this script.
 CYCLE_COUNT = 3
 CYCLE_LENGTH_DAYS = 30
-FIRST_CYCLE_LAG_DAYS = 65
+FIRST_CYCLE_LAG_DAYS = 85
 # cycle 1: 40% paid -> carries unpaid balance + interest into cycle 2.
 # cycle 2: paid in full -> clean before cycle 3.
-# cycle 3: unpaid -> represents the current, still-open statement.
+# cycle 3: unpaid, due_date already past, NOT finalized -> exercises the
+#   overdue-previous-cycle live-computation branch for the current cycle.
 CYCLE_PAY_RATIOS: tuple[Decimal, ...] = (Decimal("0.4"), Decimal("1.0"), Decimal("0"))
 
 
