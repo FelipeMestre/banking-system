@@ -28,7 +28,7 @@ const LATEST_STATEMENT: Statement = {
   due_date: "2026-09-21", purchases_total: "150.00", interest_total: "0.00", total_due: "150.00",
   paid_amount: "0.00", credit_balance: "0.00", late_fees_total: "0.00", minimum_payment: "35.00",
   paid_in_full: false, paid_by_due_date: false, status: "closed",
-  created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z",
+  created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z", payable: true,
 };
 
 function mockCommonApis() {

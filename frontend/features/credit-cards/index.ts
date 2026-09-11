@@ -13,9 +13,11 @@ export { MovementsList } from "./components/MovementsList";
 export { PayDialog } from "./components/PayDialog";
 export { PayBillDialog } from "./components/PayBillDialog";
 export { StatementCycleTabs } from "./components/StatementCycleTabs";
-export { CurrentCycleSummary } from "./components/CurrentCycleSummary";
+export { SelectedStatementSummary } from "./components/SelectedStatementSummary";
+export { CurrentCycleProjection } from "./components/CurrentCycleProjection";
 export { StatementTotalsSidebar } from "./components/StatementTotalsSidebar";
 export { CreditCardsPageScreen } from "./components/CreditCardsPageScreen";
+export { getCurrentCycle } from "./api/get-current-cycle";
 export { deriveStatementStatusLabel, statementStatusBadgeVariant } from "./statement-status";
 export { availableCents, creditLimitDecimalToCents } from "./format-decimal";
 export type { StatementStatusLabel } from "./statement-status";
@@ -30,5 +32,6 @@ export type {
   CardPaymentAccepted,
   CardPaymentStatus,
   Statement,
+  CurrentCycleProjection as CurrentCycleProjectionData,
   InstallmentPayoff,
 } from "./types";

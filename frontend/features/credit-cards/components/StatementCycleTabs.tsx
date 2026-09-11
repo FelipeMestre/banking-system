@@ -7,8 +7,10 @@ import type { Statement } from "../types";
 
 interface Props {
   statements: Statement[];
+  /** `null` selects the implicit leading "Current cycle" tab — the live,
+   * uncommitted cycle — rather than any closed statement. */
   selectedStatementId: string | null;
-  onSelect: (statementId: string) => void;
+  onSelect: (statementId: string | null) => void;
   onDownload: (statement: Statement) => void;
   downloading: boolean;
 }
@@ -38,12 +40,29 @@ export function StatementCycleTabs({
   onDownload,
   downloading,
 }: Props) {
-  if (statements.length === 0) {
-    return <p className="m-0 text-sm text-neutral-600">No closed billing cycles yet.</p>;
-  }
+  const isCurrentCycleSelected = selectedStatementId === null;
 
   return (
     <div className="flex flex-wrap items-start gap-x-ds-6 gap-y-ds-2 border-b-2 border-divider">
+      <div className="flex items-start gap-ds-2">
+        <button
+          type="button"
+          role="tab"
+          onClick={() => onSelect(null)}
+          aria-current={isCurrentCycleSelected ? "true" : undefined}
+          className={
+            "relative flex flex-col gap-ds-1 px-ds-3 py-ds-2 text-left hover:cursor-pointer " +
+            (isCurrentCycleSelected ? "bg-neutral-200" : "")
+          }
+        >
+          <span className="font-heading text-sm font-extrabold">Current cycle</span>
+          <span className="text-xs whitespace-nowrap text-neutral-600">In progress, may still change</span>
+          {isCurrentCycleSelected ? (
+            <span aria-hidden="true" className="absolute inset-x-0 -bottom-[2px] h-[3px] bg-accent" />
+          ) : null}
+        </button>
+      </div>
+
       {statements.map((statement) => {
         const isSelected = selectedStatementId === statement.id;
         const label = deriveStatementStatusLabel(statement);
@@ -53,6 +72,7 @@ export function StatementCycleTabs({
           <div key={statement.id} className="flex items-start gap-ds-2">
             <button
               type="button"
+              role="tab"
               onClick={() => onSelect(statement.id)}
               aria-current={isSelected ? "true" : undefined}
               className={
@@ -83,6 +103,10 @@ export function StatementCycleTabs({
           </div>
         );
       })}
+
+      {statements.length === 0 ? (
+        <p className="m-0 self-center text-sm text-neutral-600">No closed billing cycles yet.</p>
+      ) : null}
     </div>
   );
 }

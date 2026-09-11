@@ -94,4 +94,18 @@ describe("MovementsList", () => {
 
     expect(screen.getByText("Sep 2")).toBeInTheDocument();
   });
+
+  it("renders a synthetic carried_balance row the same way as a real increase-tone movement", () => {
+    const carried: CardMovement = {
+      id: "carried-balance", movement_type: "carried_balance", amount: "48.21", currency: "USD",
+      occurred_at: "2026-08-18T00:00:00Z",
+    };
+
+    render(<MovementsList items={[carried]} />);
+
+    expect(screen.getByText("Overdue from previous cycle")).toBeInTheDocument();
+    expect(screen.getByText("Carried over")).toBeInTheDocument();
+    const amount = screen.getByText("$48.21");
+    expect(amount.className).toContain("text-destructive");
+  });
 });

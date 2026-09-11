@@ -52,10 +52,15 @@ export interface UsedCreditEstimate {
   movement_count: number;
 }
 
-/** Mirrors `CardMovementDTO` (openbankapi/api/v1/dtos/card_usage_dto.py). */
+/** Mirrors `CardMovementDTO` (openbankapi/api/v1/dtos/card_usage_dto.py), plus
+ * one frontend-only value: `carried_balance` is never sent by the backend —
+ * it's synthesized client-side from the current-cycle projection's own
+ * `overdue_from_previous_cycle` figure, so it can render in the movements
+ * list with the same visual language as a real movement (spec: "Overdue
+ * from previous cycle" shown as a movement-styled row, not a bare number). */
 export interface CardMovement {
   id: string;
-  movement_type: "purchase" | "payment" | "fee" | "interest" | "refund" | "declined" | "late_fee";
+  movement_type: "purchase" | "payment" | "fee" | "interest" | "refund" | "declined" | "late_fee" | "carried_balance";
   amount: string;
   currency: string;
   occurred_at: string;
@@ -115,6 +120,28 @@ export interface Statement {
   status: "open" | "closed" | "paid" | "overdue";
   created_at: string;
   updated_at: string;
+  /** Server-computed (design D7 — never reimplemented client-side): `true`
+   * for exactly the single most-recently-closed statement, and only while
+   * `today <= due_date`. Every other statement is history-only. */
+  payable: boolean;
+}
+
+/**
+ * Mirrors `CurrentCycleResponseDTO` (openbankapi/api/v1/dtos/current_cycle_dto.py)
+ * — the live, never-persisted projection of the still-open billing cycle.
+ * `overdue_from_previous_cycle`/`interest_on_overdue` are `null`/absent
+ * (never `0`) whenever there is no previous statement, its due date has not
+ * yet passed, or it is already fully paid — that distinction must be
+ * rendered as "no overdue line", never as a zero amount.
+ */
+export interface CurrentCycleProjection {
+  period_start: string;
+  projected_period_end: string;
+  overdue_from_previous_cycle: string | null;
+  interest_on_overdue: string | null;
+  new_purchases_this_cycle: string;
+  total_to_pay: string;
+  payable: boolean;
 }
 
 /** Mirrors `InstallmentPayoffDTO` — the "settle all installment balances

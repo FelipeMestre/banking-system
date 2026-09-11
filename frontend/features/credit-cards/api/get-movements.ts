@@ -6,12 +6,16 @@ import type { CardMovement } from "../types";
  * `statementId` scopes the list to one billing cycle: a single-charge
  * purchase matches by date falling inside that statement's period, while a
  * billed installment matches by the statement it was actually billed onto
- * (`credit-card-monthly-batch-statements`). */
+ * (`credit-card-monthly-batch-statements`). Passing `since` instead scopes
+ * the list to the still-open cycle (movements on/after `since`, through
+ * today) — mutually exclusive with `statementId`; the backend rejects both
+ * together with a 422. */
 export async function getMovements(params: {
   cardAccountId: string;
   limit: number;
   offset: number;
   statementId?: string;
+  since?: string;
 }): Promise<Page<CardMovement>> {
   const query = new URLSearchParams({
     limit: String(params.limit),
@@ -19,6 +23,9 @@ export async function getMovements(params: {
   });
   if (params.statementId) {
     query.set("statement_id", params.statementId);
+  }
+  if (params.since) {
+    query.set("since", params.since);
   }
   const response = await authorizedFetch(
     `${gatewayOrigin()}/card-accounts/${encodeURIComponent(params.cardAccountId)}/movements?${query}`,

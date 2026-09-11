@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<CardMovement["movement_type"], string> = {
   refund: "Refund",
   declined: "Declined",
   late_fee: "Late fee",
+  carried_balance: "Carried over",
 };
 
 // A movement without its own description still needs a title — this is what
@@ -33,6 +34,7 @@ const DEFAULT_TITLE: Record<CardMovement["movement_type"], string> = {
   refund: "Refund received",
   declined: "Attempted purchase",
   late_fee: "Late fee",
+  carried_balance: "Overdue from previous cycle",
 };
 
 type Tone = "increase" | "decrease" | "declined";
@@ -50,6 +52,7 @@ const TONE: Record<CardMovement["movement_type"], Tone> = {
   refund: "decrease",
   declined: "declined",
   late_fee: "increase",
+  carried_balance: "increase",
 };
 
 const ICON: Record<CardMovement["movement_type"], LucideIcon> = {
@@ -60,6 +63,7 @@ const ICON: Record<CardMovement["movement_type"], LucideIcon> = {
   refund: CheckCircle2,
   declined: XCircle,
   late_fee: Lock,
+  carried_balance: Lock,
 };
 
 const TONE_CLASSES: Record<Tone, { icon: string; box: string; amount: string }> = {

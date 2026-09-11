@@ -8,7 +8,7 @@ const STATEMENT: Statement = {
   due_date: "2026-09-10", purchases_total: "850.00", interest_total: "12.50", total_due: "887.50",
   paid_amount: "0.00", credit_balance: "0.00", late_fees_total: "25.00", minimum_payment: "40.00",
   paid_in_full: false, paid_by_due_date: false, status: "closed",
-  created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z",
+  created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z", payable: true,
 };
 
 function movement(overrides: Partial<CardMovement>): CardMovement {

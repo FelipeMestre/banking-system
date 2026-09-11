@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreditCardsPageScreen } from "@/features/credit-cards/components/CreditCardsPageScreen";
 import * as customerModule from "@/features/credit-cards/api/get-current-customer";
 import * as cardAccountsModule from "@/features/credit-cards/api/get-card-accounts";
+import * as currentCycleModule from "@/features/credit-cards/api/get-current-cycle";
 import * as movementsModule from "@/features/credit-cards/api/get-movements";
 import * as statementsModule from "@/features/credit-cards/api/get-statements";
 import * as payoffModule from "@/features/credit-cards/api/get-installment-payoff";
@@ -34,6 +35,15 @@ describe("CreditCardsPageScreen", () => {
       ],
       total: 1, limit: 50, offset: 0,
     });
+    vi.spyOn(currentCycleModule, "getCurrentCycle").mockResolvedValue({
+      period_start: "2026-08-21",
+      projected_period_end: "2026-09-20",
+      overdue_from_previous_cycle: null,
+      interest_on_overdue: null,
+      new_purchases_this_cycle: "0.00",
+      total_to_pay: "0.00",
+      payable: true,
+    });
   });
 
   afterEach(() => {
@@ -54,6 +64,46 @@ describe("CreditCardsPageScreen", () => {
     expect(await screen.findByText("•••• •••• •••• 1234")).toBeInTheDocument();
     expect(screen.getByText("•••• •••• •••• 5678")).toBeInTheDocument();
     expect(await screen.findByText("$150.00")).toBeInTheDocument();
+  });
+
+  it("shows the overdue-from-previous-cycle balance and its interest as their own rows in the current cycle's movements list", async () => {
+    vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+    vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+    vi.spyOn(currentCycleModule, "getCurrentCycle").mockResolvedValue({
+      period_start: "2026-08-18",
+      projected_period_end: "2026-09-17",
+      overdue_from_previous_cycle: "48.21",
+      interest_on_overdue: "0.96",
+      new_purchases_this_cycle: "12.00",
+      total_to_pay: "61.17",
+      payable: true,
+    });
+    vi.spyOn(movementsModule, "getMovements").mockResolvedValue({
+      items: [
+        { id: "m1", movement_type: "purchase", amount: "12.00", currency: "USD", occurred_at: "2026-08-20T00:00:00Z", description: "Coffee" },
+      ],
+      total: 1, limit: 100, offset: 0,
+    });
+    vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+    vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+      card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+    });
+
+    render(<CreditCardsPageScreen />);
+
+    // "Overdue from previous cycle" legitimately appears twice: once as the
+    // summary card's field label, once as the movements row's own title —
+    // scope to the movements container to assert the row specifically.
+    const movementsContainer = await screen.findByTestId("movements-scroll-container");
+    // The synthetic carried-forward rows come from the projection (resolves
+    // first); the real "Coffee" purchase comes from a separate `getMovements`
+    // fetch that only fires once the projection has loaded — so both need an
+    // async query, not a synchronous one, or this flakes on timing.
+    expect(await within(movementsContainer).findByText("Overdue from previous cycle")).toBeInTheDocument();
+    expect(within(movementsContainer).getByText("Interest on overdue balance")).toBeInTheDocument();
+    expect(within(movementsContainer).getByText("$48.21")).toBeInTheDocument();
+    expect(within(movementsContainer).getByText("$0.96")).toBeInTheDocument();
+    expect(await within(movementsContainer).findByText("Coffee")).toBeInTheDocument();
   });
 
   /**

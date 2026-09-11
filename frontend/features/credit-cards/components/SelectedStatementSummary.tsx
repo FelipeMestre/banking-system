@@ -11,7 +11,11 @@ interface Props {
   statement: Statement;
   onDownload: () => void;
   downloading: boolean;
-  onPay: () => void;
+  /** Omitted entirely when `statement.payable` is `false` — only the single
+   * most-recently-closed statement is ever payable, and only while
+   * `today <= due_date` (spec: "Payability is restricted to exactly two
+   * targets"). A history-only statement gets no Pay affordance at all. */
+  onPay?: () => void;
 }
 
 interface FieldProps {
@@ -36,15 +40,20 @@ function Field({ label, value, valueClassName }: FieldProps) {
 }
 
 /**
- * The selected billing cycle's headline numbers — `total_due`,
+ * A selected, already-closed billing cycle's headline numbers — `total_due`,
  * `minimum_payment`, `period_end` ("closing date"), and `due_date` — read
  * verbatim off the statement the customer picked from `StatementCycleTabs`,
  * plus Pay and a real PDF download, all inside one bordered card matching
  * the design mock (header row, four-value row with dividers, actions row).
  * `credit_balance > 0` (a prior cycle overpaid) is a separate positive-
  * balance banner, not folded into `total_due`.
+ *
+ * Renamed from `CurrentCycleSummary` (spec: "no naming collision between
+ * live and closed-statement views") — the genuinely live, uncommitted-cycle
+ * projection now lives in the separate `CurrentCycleProjection` component.
+ * This one only ever renders a selected CLOSED statement.
  */
-export function CurrentCycleSummary({ statement, onDownload, downloading, onPay }: Props) {
+export function SelectedStatementSummary({ statement, onDownload, downloading, onPay }: Props) {
   const hasCreditBalance = Number(statement.credit_balance) > 0;
 
   return (
@@ -63,7 +72,7 @@ export function CurrentCycleSummary({ statement, onDownload, downloading, onPay 
 
       <div className="flex items-baseline justify-between border-b-2 border-divider p-ds-4">
         <span className="font-body text-xs font-bold uppercase tracking-[0.05em]">
-          Current cycle — {formatCycleLabel(statement.period_end)}
+          {formatCycleLabel(statement.period_end)}
         </span>
         {deriveStatementStatusLabel(statement) === "Still open" ? (
           <span className="font-body text-xs text-neutral-600">In progress, may still change</span>
@@ -88,9 +97,11 @@ export function CurrentCycleSummary({ statement, onDownload, downloading, onPay 
       </div>
 
       <div className="flex gap-ds-2 p-ds-4">
-        <Button type="button" onClick={onPay}>
-          Pay
-        </Button>
+        {onPay ? (
+          <Button type="button" onClick={onPay}>
+            Pay
+          </Button>
+        ) : null}
         <Button type="button" variant="outline" onClick={onDownload} disabled={downloading}>
           {downloading ? "Preparing…" : "Download current statement"}
         </Button>
