@@ -16,18 +16,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
+from . import money as money_service
 from ..model import CardMovementType, Installment, Statement
 from ...infra.database.interfaces.card_movement_repository import ICardMovementRepository
 from ...infra.database.interfaces.card_repository import ICardRepository
 from ...infra.database.interfaces.installment_repository import IInstallmentRepository
 from ...infra.database.interfaces.statement_repository import IStatementRepository
 from ...infra.pdf.statement_pdf_generator import render as render_statement_pdf
-
-_CENTS = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -40,18 +39,6 @@ class DueDateCheckSummary:
 
     finalized_count: int
     late_fees_applied_count: int
-
-
-def _quantize(value: Decimal) -> Decimal:
-    return value.quantize(_CENTS, rounding=ROUND_HALF_UP)
-
-
-def _clamp(value: Decimal, *, low: Decimal, high: Decimal) -> Decimal:
-    if value < low:
-        return low
-    if value > high:
-        return high
-    return value
 
 
 class StatementService:
@@ -109,15 +96,15 @@ class StatementService:
 
         interest_total = Decimal("0")
         if unpaid_previous_balance > 0:
-            interest_total = _quantize(unpaid_previous_balance * self._apr / 12)
+            interest_total = money_service.quantize(unpaid_previous_balance * self._apr / 12)
 
         late_fees_total = Decimal("0")
         total_due = purchases_total + interest_total + late_fees_total + unpaid_previous_balance - credit_balance_carried
         if total_due < 0:
             total_due = Decimal("0")
 
-        minimum_payment = _clamp(
-            _quantize(total_due * self._minimum_payment_rate), low=Decimal("0"), high=total_due
+        minimum_payment = money_service.clamp(
+            money_service.quantize(total_due * self._minimum_payment_rate), low=Decimal("0"), high=total_due
         )
 
         due_date = period_end + timedelta(days=self._due_date_offset_days)

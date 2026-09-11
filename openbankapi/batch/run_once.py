@@ -17,7 +17,6 @@ happened to run.
 from __future__ import annotations
 
 import asyncio
-import calendar
 from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
@@ -26,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config.config import Settings
 from ..domain.model import Statement
+from ..domain.service.cycle_dates import next_close_date_after
 from ..domain.service.statement_service import StatementService
 from ..infra.database.config.session import create_engine, create_sessionmaker
 from ..infra.database.interfaces.card_account_repository import ICardAccountRepository
@@ -35,30 +35,6 @@ from ..infra.database.repositories.postgres_card_movement_repository import Post
 from ..infra.database.repositories.postgres_card_repository import PostgresCardRepository
 from ..infra.database.repositories.postgres_installment_repository import PostgresInstallmentRepository
 from ..infra.database.repositories.postgres_statement_repository import PostgresStatementRepository
-
-
-def next_close_date_after(after: date, close_day: int) -> date:
-    """The next close date on/after `after`, using `close_day` as the target
-    day-of-month (clamped to the last day of a short month, e.g. Feb).
-
-    `after` is a reference point — the previous statement's `period_end`, or
-    the account's issuance date when no statement exists yet. This is what
-    lets `check_and_close_if_due` compute an intended close date instead of
-    ever passing "today" straight into `close_statement`.
-    """
-    candidate = _close_day_in_month(after.year, after.month, close_day)
-    if candidate >= after:
-        return candidate
-    year, month = after.year, after.month + 1
-    if month > 12:
-        month = 1
-        year += 1
-    return _close_day_in_month(year, month, close_day)
-
-
-def _close_day_in_month(year: int, month: int, close_day: int) -> date:
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, min(close_day, last_day))
 
 
 async def check_and_close_if_due(
