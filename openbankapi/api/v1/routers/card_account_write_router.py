@@ -221,6 +221,7 @@ async def request_payment(
     wire = {
         "type": "payment_requested",
         "request_id": request_id,
+        "account_id": paying_account.account_number,
         "destination_account": active_card.card_number,
         "card_account_id": str(card_account_id),
         "card_id": str(active_card.id),

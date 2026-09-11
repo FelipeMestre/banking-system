@@ -104,6 +104,12 @@ def test_happy_path_publishes_payment_requested_keyed_by_paying_account_number(p
     assert topic == payments_harness.settings.account_events_topic
     assert key == payments_harness.paying_account.account_number
     assert value["type"] == "payment_requested"
+    # account-service's Flink job routes purely off the JSON body via
+    # shard_key_of() (account_id, falling back to source_account) — the
+    # Kafka message *key* above is irrelevant to that routing. Omitting this
+    # field makes the event unroutable and silently dropped, with no
+    # approval or decline ever surfacing back to the customer.
+    assert value["account_id"] == payments_harness.paying_account.account_number
     assert value["amount"] == 20000
     assert value["destination_account"] == issued["card"]["card_number"]
     assert value["card_account_id"] == card_account_id
