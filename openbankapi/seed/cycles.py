@@ -11,6 +11,7 @@ from typing import Optional
 
 from openbankapi.config import Settings
 from openbankapi.domain.model import Statement
+from openbankapi.domain.service.cycle_dates import previous_close_date_before
 from openbankapi.domain.service.statement_service import StatementService
 from openbankapi.infra.database.repositories import (
     PostgresCardMovementRepository,
@@ -23,25 +24,31 @@ from openbankapi.seed.backdate import backdate_to_window
 from openbankapi.seed.catalog import purchases_for_cycle
 
 # A "cycle" is one billing statement period (domain/service/statement_service.py).
-# 3 cycles of 30 days, ending 85/55/25 days ago, so cycles 1-2 already have a
-# past due_date (statement_service only finalizes payment outcome for an
-# exact due_date match) while the (unclosed) 4th cycle after cycle 3's
-# period_end is the genuinely live, still-open current cycle.
+# Period ends are aligned to `settings.close_day` — the same fixed
+# calendar day-of-month the batch worker's `check_and_close_if_due` targets
+# (openbankapi/batch/run_once.py). Seeding cycles on a plain N-day cadence
+# instead of that same calendar day previously caused the batch worker's
+# catch-up loop to synthesize an extra, short realignment cycle the first
+# time it ran against seeded data — aligning here removes that drift.
+#
+# 3 sequential close_day-aligned cycles, so cycles 1-2 already have a past
+# due_date (statement_service only finalizes payment outcome for an exact
+# due_date match) while the (unclosed) period after cycle 3's period_end is
+# the genuinely live, still-open current cycle.
 #
 # Cycle 3 (the last CLOSED one) is deliberately left unpaid AND with a
-# due_date already in the past (period_end 25 days ago + the default 20-day
-# due-date offset = 5 days overdue) — this exercises
-# `current_cycle_current-cycle`'s single most safety-critical branch: while
-# this statement's own `run_due_date_check` has not yet finalized it (still
-# `status=closed`), the live projection MUST derive its outstanding balance
-# via a live `sum_payments` call, never the statement's frozen `paid_amount`
-# field. The seed script intentionally never calls `run_due_date_check` for
-# this cycle (see the `pay_ratio <= 0: continue` guard below) so this state
-# survives until the batch worker's own next scheduled tick finalizes it —
-# reseed and verify promptly after running this script.
+# due_date already in the past (at least OVERDUE_BUFFER_DAYS overdue) — this
+# exercises `current_cycle_current-cycle`'s single most safety-critical
+# branch: while this statement's own `run_due_date_check` has not yet
+# finalized it (still `status=closed`), the live projection MUST derive its
+# outstanding balance via a live `sum_payments` call, never the statement's
+# frozen `paid_amount` field. The seed script intentionally never calls
+# `run_due_date_check` for this cycle (see the `pay_ratio <= 0: continue`
+# guard below) so this state survives until the batch worker's own next
+# scheduled tick finalizes it — reseed and verify promptly after running
+# this script.
 CYCLE_COUNT = 3
-CYCLE_LENGTH_DAYS = 30
-FIRST_CYCLE_LAG_DAYS = 85
+OVERDUE_BUFFER_DAYS = 5
 # cycle 1: 40% paid -> carries unpaid balance + interest into cycle 2.
 # cycle 2: paid in full -> clean before cycle 3.
 # cycle 3: unpaid, due_date already past, NOT finalized -> exercises the
@@ -53,17 +60,29 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def _cycle_bounds(cycle_index: int, today: date) -> tuple[date, date]:
-    """Mirrors `StatementService.close_statement`'s own period_start
-    derivation so the movements we backdate land inside the exact window
-    that statement will sum — this only holds because we always close cycle
-    0 first, sequentially, as the very first statement for the account."""
-    period_end = today - timedelta(days=FIRST_CYCLE_LAG_DAYS - cycle_index * CYCLE_LENGTH_DAYS)
+def _cycle_bounds(
+    cycle_index: int, today: date, close_day: int, due_date_offset_days: int
+) -> tuple[date, date]:
+    """Period ends walk backward from today, each one the previous
+    close_day-aligned date before the next — the same schedule
+    `check_and_close_if_due` enforces going forward, so a fresh reseed never
+    drifts out of alignment with it. Period starts mirror
+    `StatementService.close_statement`'s own derivation (previous period_end
+    + 1 day, or period_end - 30 days for the very first cycle) so the
+    movements we backdate land inside the exact window that statement will
+    sum — this only holds because we always close cycle 0 first,
+    sequentially, as the very first statement for the account."""
+    period_ends = [
+        previous_close_date_before(today - timedelta(days=due_date_offset_days + OVERDUE_BUFFER_DAYS), close_day)
+    ]
+    for _ in range(CYCLE_COUNT - 1):
+        period_ends.insert(0, previous_close_date_before(period_ends[0], close_day))
+    period_end = period_ends[cycle_index]
+
     if cycle_index == 0:
-        period_start = period_end - timedelta(days=CYCLE_LENGTH_DAYS)
+        period_start = period_end - timedelta(days=30)
     else:
-        previous_period_end = period_end - timedelta(days=CYCLE_LENGTH_DAYS)
-        period_start = previous_period_end + timedelta(days=1)
+        period_start = period_ends[cycle_index - 1] + timedelta(days=1)
     return period_start, period_end
 
 
@@ -153,7 +172,9 @@ async def run_billing_cycles(
     the exact same purchase history — see `catalog.purchases_for_cycle`."""
     today = date.today()
     for cycle_index in range(CYCLE_COUNT):
-        period_start, period_end = _cycle_bounds(cycle_index, today)
+        period_start, period_end = _cycle_bounds(
+            cycle_index, today, settings.close_day, settings.due_date_offset_days
+        )
         request_ids = _publish_cycle_purchases(
             settings, card_account, card, cycle_index, skip_kafka, card_index
         )

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from openbankapi.seed.catalog import CYCLE_PURCHASE_COUNT, purchases_for_cycle
-from openbankapi.seed.cycles import CYCLE_LENGTH_DAYS, FIRST_CYCLE_LAG_DAYS, _cycle_bounds
+from openbankapi.seed.cycles import _cycle_bounds
 from openbankapi.seed.run import _parse_args, _seed_identification_number
 
 
@@ -51,18 +51,24 @@ def test_catalog_varies_deterministically_by_card_index():
 
 
 def test_cycle_bounds_are_sequential_and_non_overlapping():
-    """3 cycles, 30 days each, ending 65/35/5 days before today (statement_service's
-    own period_start derivation — cycle 0 spans 31 days [period_end-30, period_end],
-    every later cycle starts the day after the previous one's period_end)."""
+    """3 cycles, each period_end aligned to `close_day` (the same calendar
+    schedule `check_and_close_if_due` enforces going forward — see
+    cycle_dates.previous_close_date_before), sequential and non-overlapping
+    (statement_service's own period_start derivation: cycle 0 spans 30 days
+    [period_end-30, period_end], every later cycle starts the day after the
+    previous one's period_end). The last cycle's due_date must already be
+    overdue as of today."""
     today = date.today()
-    bounds = [_cycle_bounds(i, today) for i in range(3)]
+    close_day = 20
+    due_date_offset_days = 20
+    bounds = [_cycle_bounds(i, today, close_day, due_date_offset_days) for i in range(3)]
 
-    assert bounds[0][1] == today - timedelta(days=FIRST_CYCLE_LAG_DAYS)
-    for i in range(1, 3):
-        assert bounds[i][1] == bounds[i - 1][1] + timedelta(days=CYCLE_LENGTH_DAYS)
-        assert bounds[i][0] == bounds[i - 1][1] + timedelta(days=1)
     for period_start, period_end in bounds:
+        assert period_end.day == close_day
         assert period_start < period_end
+    for i in range(1, 3):
+        assert bounds[i][0] == bounds[i - 1][1] + timedelta(days=1)
+    assert bounds[-1][1] < today - timedelta(days=due_date_offset_days)
 
 
 def test_purchase_wire_shape():

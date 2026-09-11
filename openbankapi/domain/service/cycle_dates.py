@@ -26,6 +26,22 @@ def next_close_date_after(after: date, close_day: int) -> date:
     return _close_day_in_month(year, month, close_day)
 
 
+def previous_close_date_before(before: date, close_day: int) -> date:
+    """The latest close date strictly before `before`, using `close_day` as
+    the target day-of-month. Mirror image of `next_close_date_after`, used
+    to derive historical (already-closed) periods aligned to the same
+    calendar schedule the batch worker enforces going forward.
+    """
+    candidate = _close_day_in_month(before.year, before.month, close_day)
+    if candidate < before:
+        return candidate
+    year, month = before.year, before.month - 1
+    if month < 1:
+        month = 12
+        year -= 1
+    return _close_day_in_month(year, month, close_day)
+
+
 def _close_day_in_month(year: int, month: int, close_day: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, min(close_day, last_day))
