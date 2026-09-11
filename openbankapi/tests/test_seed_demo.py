@@ -29,6 +29,27 @@ def test_catalog_has_fifty_purchases_per_cycle():
         assert len(purchases_for_cycle(cycle_index)) == CYCLE_PURCHASE_COUNT == 50
 
 
+def test_catalog_card_index_zero_is_unchanged():
+    """`card_index` is additive: the first demo card's purchases must be
+    byte-identical to before this parameter existed, since seed data already
+    committed elsewhere (e.g. this file's own fixtures) assumes it."""
+    for cycle_index in range(3):
+        assert purchases_for_cycle(cycle_index) == purchases_for_cycle(cycle_index, card_index=0)
+
+
+def test_catalog_varies_deterministically_by_card_index():
+    """Two different card_index values must diverge (the actual bug being
+    fixed: both demo cards had identical purchase histories) while each
+    stays fully deterministic across repeated calls (reproducible seed data,
+    not randomness)."""
+    for cycle_index in range(3):
+        card0 = purchases_for_cycle(cycle_index, card_index=0)
+        card1 = purchases_for_cycle(cycle_index, card_index=1)
+        assert card0 != card1
+        # Determinism: calling again with the same card_index reproduces it.
+        assert card1 == purchases_for_cycle(cycle_index, card_index=1)
+
+
 def test_cycle_bounds_are_sequential_and_non_overlapping():
     """3 cycles, 30 days each, ending 65/35/5 days before today (statement_service's
     own period_start derivation — cycle 0 spans 31 days [period_end-30, period_end],

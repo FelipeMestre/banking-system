@@ -24,7 +24,7 @@ _MERCHANTS: tuple[str, ...] = (
 )
 
 
-def purchases_for_cycle(cycle_index: int) -> list[PurchaseSpec]:
+def purchases_for_cycle(cycle_index: int, card_index: int = 0) -> list[PurchaseSpec]:
     """50 single-charge purchases for one billing cycle.
 
     Amounts cycle $5.00-$60.00 (deterministic, no randomness — reproducible
@@ -32,11 +32,17 @@ def purchases_for_cycle(cycle_index: int) -> list[PurchaseSpec]:
     limit. `installments` is always 1: cycle math here is about testing
     period rollover and interest carry, not the separate installment-billing
     path already covered elsewhere.
+
+    `card_index` shifts the merchant/amount pattern per card (still fully
+    deterministic, no randomness) so two demo card accounts don't end up with
+    byte-identical purchase histories — `card_index=0` reproduces the
+    original single-card sequence exactly, so this is additive, not a
+    behavior change for the first card.
     """
     purchases = []
     for i in range(CYCLE_PURCHASE_COUNT):
-        merchant = _MERCHANTS[i % len(_MERCHANTS)]
-        amount = Decimal("5.00") + Decimal(i % 12) * Decimal("5.00")
+        merchant = _MERCHANTS[(i + card_index * 7) % len(_MERCHANTS)]
+        amount = Decimal("5.00") + Decimal((i + card_index * 3) % 12) * Decimal("5.00")
         purchases.append(
             PurchaseSpec(float(amount), int(amount * 100), 1, f"{merchant} (cycle {cycle_index + 1}, #{i + 1})")
         )

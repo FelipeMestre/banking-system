@@ -288,8 +288,11 @@ async def _seed_demo(auth0_sub: str, reset: bool, no_backdate: bool, skip_kafka:
         if not skip_kafka and card_pairs:
             print("[cycles] waiting 5s for card accounts to settle before publishing cycle purchases...")
             await asyncio.sleep(5)
-        for card_account, card in card_pairs:
-            await run_billing_cycles(settings, sessionmaker, card_account, card, accounts[0], skip_kafka, no_backdate)
+        for card_index, (card_account, card) in enumerate(card_pairs):
+            await run_billing_cycles(
+                settings, sessionmaker, card_account, card, accounts[0], skip_kafka, no_backdate,
+                card_index=card_index,
+            )
 
         _publish_transfers(settings, accounts, skip_kafka)
         _publish_deposit(settings, accounts, skip_kafka)

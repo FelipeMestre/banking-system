@@ -68,14 +68,14 @@ def _cycle_bounds(cycle_index: int, today: date) -> tuple[date, date]:
 
 
 def _publish_cycle_purchases(
-    settings: Settings, card_account, card, cycle_index: int, skip_kafka: bool
+    settings: Settings, card_account, card, cycle_index: int, skip_kafka: bool, card_index: int = 0
 ) -> list[str]:
     if skip_kafka:
         print(f"[cycle {cycle_index + 1}] skip-kafka: not publishing purchases")
         return []
     publisher = KafkaEventPublisherRepository(settings)
     request_ids: list[str] = []
-    for spec in purchases_for_cycle(cycle_index):
+    for spec in purchases_for_cycle(cycle_index, card_index):
         rid = str(uuid.uuid4())
         request_ids.append(rid)
         wire = {
@@ -141,15 +141,22 @@ async def run_billing_cycles(
     paying_account,
     skip_kafka: bool,
     no_backdate: bool,
+    card_index: int = 0,
 ) -> None:
     """Closes `CYCLE_COUNT` sequential billing cycles for one card, paying
     each down per `CYCLE_PAY_RATIOS` so cycle 2 provably carries cycle 1's
     unpaid balance forward as interest (statement_service's `total_due`
-    computation is otherwise never exercised past a single, isolated cycle)."""
+    computation is otherwise never exercised past a single, isolated cycle).
+
+    `card_index` (0 for the first demo card, 1 for the second, etc.) is
+    forwarded to the purchase catalog so multiple demo cards don't all get
+    the exact same purchase history — see `catalog.purchases_for_cycle`."""
     today = date.today()
     for cycle_index in range(CYCLE_COUNT):
         period_start, period_end = _cycle_bounds(cycle_index, today)
-        request_ids = _publish_cycle_purchases(settings, card_account, card, cycle_index, skip_kafka)
+        request_ids = _publish_cycle_purchases(
+            settings, card_account, card, cycle_index, skip_kafka, card_index
+        )
         if not skip_kafka and request_ids and not no_backdate:
             await backdate_to_window(sessionmaker, request_ids, period_start, period_end)
 
