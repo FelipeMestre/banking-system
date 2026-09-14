@@ -104,8 +104,13 @@ def _publish_cycle_purchases(
             "card_account_id": str(card_account.id),
             "amount": str(Decimal(spec.amount_usd).quantize(Decimal("0.01"))),
             "currency": "USD",
-            "amount_usd": float(spec.amount_usd),
-            "credit_limit": float(card_account.credit_limit),
+            # card-service's own convention ("All amounts are integer
+            # cents") — amount_usd/credit_limit on the wire must be cents,
+            # matching the real purchase router (card_router.py). Sending
+            # dollar floats here made every seeded purchase land in
+            # card_movements at 1/100th its intended amount.
+            "amount_usd": spec.amount_cents,
+            "credit_limit": int((Decimal(card_account.credit_limit) * 100).to_integral_value()),
             "installments": spec.installments,
             "description": spec.description,
             "ts": _now_iso(),
