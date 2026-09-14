@@ -255,8 +255,6 @@ export function CreditCardsPageScreen() {
 
   return (
     <div className="flex flex-col gap-[48px]">
-      <h1 className="m-0 font-heading text-[20px] font-extrabold tracking-[-0.01em]">Your cards</h1>
-
       <section className="flex flex-col gap-ds-2">
         <h6 className="m-0">Select a card</h6>
         <CardList
@@ -302,7 +300,7 @@ export function CreditCardsPageScreen() {
 
           <section className="flex flex-col gap-ds-2">
             <h6 className="m-0">
-              Billing cycles{selectedCard?.card ? ` — ${selectedCard.card.card_number}` : ""}
+              Billing cycles
             </h6>
             <StatementCycleTabs
               statements={statements}

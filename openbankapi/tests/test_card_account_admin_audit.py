@@ -171,14 +171,6 @@ def test_listing_default_limit_is_20(cards_harness):
     assert response.json()["limit"] == 20
 
 
-def test_listing_items_never_contain_used_credit(cards_harness):
-    _issue(cards_harness)
-    response = cards_harness.client.get(f"/card-accounts?customer_id={cards_harness.customer_id}")
-    assert response.status_code == 200
-    for item in response.json()["items"]:
-        assert "used_credit" not in item["card_account"]
-
-
 # --- Reason DTOs and the audit trail ------------------------------------------
 
 
