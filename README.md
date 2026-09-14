@@ -1,7 +1,7 @@
 # OpenBankAPI — Backend
 
-Implementation of [`openbankapi-spec-v2.md`](openbankapi-spec-v2.md) (which
-supersedes [`system_spec.md`](system_spec.md)): a multishard payment flow built
+Implementation of `[openbankapi-spec-v2.md](openbankapi-spec-v2.md)` (which
+supersedes `[system_spec.md](system_spec.md)`): a multishard payment flow built
 on event logs and stream processing, with no distributed transaction, plus the
 relational reference data and read model that v2 adds.
 
@@ -37,6 +37,8 @@ frontend/                   Next.js App Router + TypeScript (§7)
   lib/money.ts              Integer-cent formatting and parsing
 ```
 
+
+
 ## Running
 
 ```bash
@@ -71,12 +73,16 @@ It talks to `http://localhost:8000` by default; override with
 gateway directly, with no Route Handler or Server Action in between, because
 the gateway already is the HTTP boundary (§7).
 
-| Surface | URL |
-|---|---|
-| Gateway | http://localhost:8000 (docs at `/docs`) |
-| Flink dashboard | http://localhost:8081 |
-| AKHQ (Kafka UI) | http://localhost:8080 |
-| Kafka (from host) | `localhost:9092` |
+
+| Surface           | URL                                                              |
+| ----------------- | ---------------------------------------------------------------- |
+| Gateway           | [http://localhost:8000](http://localhost:8000) (docs at `/docs`) |
+| Flink dashboard   | [http://localhost:8081](http://localhost:8081)                   |
+| AKHQ (Kafka UI)   | [http://localhost:8080](http://localhost:8080)                   |
+| Kafka (from host) | `localhost:9092`                                                 |
+
+
+
 
 ## Tests
 
@@ -89,179 +95,208 @@ No broker or cluster required for either — the ledger rules are pure functions
 Kafka sits behind a port the tests fake, and the frontend's money and wire
 parsing are pure too.
 
-## Where this departs from the spec
+## Architecture
 
-§10 says the §5.7 sketch is a design guide, not compilable code. It isn't. These
-are the corrections, and why each one was forced.
+This system simulates a bank's backend using an **event-sourced,
+stream-processing architecture**, inspired by the approach to data-intensive
+systems described in *Designing Data-Intensive Applications* (Kleppmann).
+Rather than coordinating changes across multiple accounts with distributed
+transactions, the system funnels all state-changing operations through a
+single, ordered, partitioned log (Kafka), and derives every other
+representation of the data — balances, statements, caches — from that log.
 
-**1. Per-record Kafka keys need ~30 lines of Java.**
-The §5.7 sketch passes a lambda to `set_key_serialization_schema`. PyFlink does
-`key_serialization_schema._j_serialization_schema` on that argument — it needs a
-JVM-backed object, and a lambda has none. That is not the whole problem: a Kafka
-sink hands the *same* element to both the key and the value serializer, PyFlink
-ships four serialization schemas and none of them can pick one field out of an
-element, and `KafkaSinkBuilder` exposes no partitioner. From Python alone, a
-DataStream Kafka sink can only write key-less records.
+```mermaid
+flowchart TB
+    subgraph Host["Host machine"]
+        FE["Frontend<br/>Next.js"]
+    end
 
-This matters more than it looks. The Kafka key is not only the sharding demo of
-§3.1 — it is what makes the ordering guarantee real. If one account's events
-were spread across partitions, several source subtasks would read them in
-parallel and their arrival order at the keyed operator would be
-nondeterministic, which is exactly the lost update §9.5 tests for.
+    API["OpenBankAPI<br/>FastAPI"]
 
-`java/` closes the gap with a single class, `RowFieldSerializationSchema`, that
-serializes one field of a `Row` to UTF-8 bytes: field 0 becomes the key, field 1
-the value. `job.py` constructs it through py4j and hands it to the normal
-`KafkaSink`. It has to be Java rather than a Python callback because a
-serialization schema is shipped to every TaskManager through Java
-serialization.
+    subgraph Streaming["Event streaming"]
+        KAFKA[("Kafka<br/>KRaft mode")]
+        ACC["Account Service<br/>PyFlink"]
+        CARD["Card Service<br/>PyFlink"]
+    end
 
-The cost is honest: this is the one place the "no JVM code" goal of §0 does not
-hold. It is bounded — nobody needs a JDK or Maven installed, because the JAR is
-built in the image's first stage — but it is Java in the repository. The
-alternative is a Table API sink (`key.format='raw'` + `key.fields`), which needs
-no Java at all and was what this project used first; it works, at the cost of
-bridging the DataStream through a `StreamTableEnvironment` and a
-`StatementSet`. Either is defensible. This one keeps the job a plain DataStream
-pipeline that reads the way §5 describes.
+    PG[("PostgreSQL<br/>reference data + projections")]
+    REDIS[("Redis<br/>cache-aside")]
+    BATCH["Batch Worker<br/>cron"]
+    AKHQ["AKHQ<br/>monitoring"]
 
-**2. Side outputs are `yield tag, value`, not `ctx.output(...)`.**
-PyFlink's `KeyedProcessFunction.Context` has no `output()` method;
-`process_element` is a generator.
+    FX["Frankfurter API<br/>(external)"]
 
-**3. `from_source` needs a real `WatermarkStrategy`.** `None` raises.
+    FE -- "HTTP / WebSocket" --> API
 
-**4. `StateTtlConfig.Time` does not exist.** It is
-`pyflink.common.time.Time`.
+    API -- "produces events" --> KAFKA
+    KAFKA -- "consumes" --> ACC
+    KAFKA -- "consumes" --> CARD
+    ACC -- "confirmations, balances,<br/>card-events" --> KAFKA
+    CARD -- "confirmations,<br/>balances" --> KAFKA
+    KAFKA -- "background consumers" --> API
 
-**5. `key_by(lambda v: json.loads(v)["account_id"])` crashes on every
-`transfer_requested`.** That event has no `account_id` field (§4) — it carries
-`source_account`. `shard_key_of` handles both, leaving the wire format exactly as
-§4 specifies.
+    API -- "CRUD + read projections" --> PG
+    API -- "cache-aside" --> REDIS
+    REDIS -. "on cache miss" .-> FX
 
-**6. Deduplication is keyed by `(request_id, leg)`, not `request_id`.**
-A request_id is not a unit of work — one transfer touches three accounts. With a
-bare request_id:
+    BATCH -- "reads movements,<br/>writes statements" --> PG
 
-- if `destination_account == fees_account`, the second credit is swallowed as a
-  duplicate and the fee silently vanishes;
-- if `source_account == destination_account`, the debit marks the id as
-  processed and the matching credit is then discarded — money disappears.
+    AKHQ -. "read-only" .-> KAFKA
 
-Each emitted event now carries a `leg` (`debit`, `credit:destination`,
-`credit:fees`), which is additive to the §4 schemas. Both cases are tested.
+    classDef api fill:#ede9fe,stroke:#8b5cf6,stroke-width:1px
+    classDef stream fill:#dbeafe,stroke:#3b82f6,stroke-width:1px
+    classDef processor fill:#ccfbf1,stroke:#14b8a6,stroke-width:1px
+    classDef storage fill:#dbeafe,stroke:#3b82f6,stroke-width:1px
+    classDef neutral fill:#f3f4f6,stroke:#9ca3af,stroke-width:1px
 
-**7. A declined request is marked processed.** §5.3 marks only approved
-requests. That leaves a real at-least-once hazard: a request declined for
-insufficient funds, redelivered after the account is topped up, would be
-approved the second time — the same request settling twice, differently. A
-verdict is now final.
+    class FE,AKHQ,FX neutral
+    class API api
+    class KAFKA stream
+    class ACC,CARD,BATCH processor
+    class PG,REDIS storage
+```
 
-**8. The decline path emits its status through the loopback only.** §5.3 emits
-`declined_payment` *and* a status event, so every decline produces two identical
-verdicts on `transfer-status`. Dropping the direct emission makes decline
-symmetric with approval: both statuses are published only once the outcome is
-durably in the account's own log. Costs one extra Kafka hop of latency on the
-decline path; flip it in `domain.py` if you would rather have the latency back.
 
-**9. `GET /transfer/{id}/status` returns 200 `pending`, not 404.** §6 allows
-either. The request exists and is in flight; 404 reads as "never heard of it".
 
-**10. The WebSocket has a timeout** (30s, configurable). §6 holds the connection
-open indefinitely, which leaks a connection per request that never resolves.
-On timeout it answers `pending` and closes.
 
-**11. The status consumer uses a unique group id per process.** Every gateway
-instance has to see every partition of `transfer-status`; a shared group would
-split partitions across instances, and a socket waiting on one instance would
-never learn about a verdict delivered to another. Set `STATUS_CONSUMER_GROUP` to
-pin it.
 
-**12. `outgoing_payment.amount` is the full debit, not the transfer amount.**
-The §4 example shows `1100` for a transfer of 1100 with a fee of 25, but the
-source account was actually debited 1125. Recording 1100 leaves the fee
-unaccounted for on the source's own log, and the ledger stops reconciling:
-`sum(outgoing) == sum(incoming)` is what makes conservation checkable, and with
-1100 it fails by exactly the fee.
+### Components
 
-**13. The gateway's producer is pinned to `murmur2_random`.**
-Found by running it, not by reading it. librdkafka (the gateway) defaults to
-`consistent_random`, which hashes keys with CRC32; the Java client (the Flink
-sink) hashes with murmur2. On the default, `acc-123` went to partition 1 when
-the gateway wrote it and partition 5 when Flink wrote it — one account's log
-split across two shards. That is not cosmetic: two source subtasks then read
-that account concurrently, arrival order at the keyed operator becomes
-nondeterministic, and the sequential-per-account property the whole design rests
-on is gone. `gateway/kafka_config.py` pins the Java-compatible partitioner, and
-a test asserts it.
+**Frontend — Next.js (TypeScript)**
+The only client-facing surface. Talks to OpenBankAPI exclusively over
+HTTP/WebSocket; holds no business logic of its own.
 
-## Verified
+**OpenBankAPI — FastAPI (Python)**
+The single HTTP entry point. Its job is translation, not decision-making: it
+turns synchronous HTTP requests into events on the write path (producing to
+Kafka), and turns asynchronous confirmations back into synchronous-feeling
+responses on the read path (via WebSocket push or a request that waits on a
+matched confirmation). It also owns plain CRUD ("ABM") for low-contention
+reference data — customers, branches, cards' metadata — that doesn't need
+event sourcing at all.
 
-All six §9 scenarios were run against the live stack:
+**Apache Kafka (KRaft mode)**
+The shared, ordered, partitioned log at the center of the system. Two
+properties make it the backbone rather than just a message queue: partitions
+give deterministic sharding (all events for one account/card always land on
+the same partition, in order), and durability makes the log replayable,
+which is what makes crash recovery and multiple independent consumers
+possible without coordination between them.
 
-| # | Scenario | Result |
-|---|---|---|
-| 1 | Happy path — 3 fan-out events, correct balances | pass |
-| 2 | Insufficient funds — declined, no balance change | pass |
-| 3 | Duplicate `transfer_requested` — one debit only | pass |
-| 4 | Crash recovery — TaskManager killed mid-flight | pass |
-| 5 | Two requests on one account — applied in order | pass |
-| 6 | Sharding — one `account_id`, one partition | pass |
+**Apache Flink (PyFlink) — Account Service & Card Service**
+Two independent stream-processing jobs, each the sole authority over one
+kind of contended state: the Account Service decides whether a transfer or
+deposit is valid against a bank account's balance; the Card Service decides
+whether a purchase is valid against a card's available credit. Each shards
+by the relevant entity id, so state for a given account/card is always
+processed sequentially by exactly one task — this sequential-per-shard
+guarantee is what replaces the need for distributed transactions or locks
+when checking "is there enough balance/credit" under concurrent requests.
 
-Scenario 4 killed `flink-taskmanager` with five transfers in flight. The job
-restarted from its checkpoint and the crash produced a genuine at-least-once
-redelivery — one leg appears twice on `account-events` — which the
-`(request_id, leg)` guard absorbed: 52 legs were applied to a balance, each
-exactly once. In every run the ledger was reconciled from the event log alone:
-the total across all accounts equalled the seeded total, to the cent.
+**PostgreSQL**
+Two distinct roles, intentionally separated: (1) reference/master data
+(customers, branches, accounts, card accounts) managed as plain CRUD, and
+(2) **read-model projections** — account balances, card balances, movement
+history, exchange-rate audit records — populated asynchronously by
+dedicated Kafka consumers that translate the event log into queryable
+tables. Postgres is never the source of truth for a balance; it's always a
+derived, eventually-consistent view of what Flink already decided.
 
-## Naming
+**Redis**
+Cache-aside for data that's read far more often than it changes: foreign
+exchange rates (refreshed from an external API on a 24h TTL) and reference
+data lookups. Deliberately *not* used for anything Flink owns — a cache in
+front of already-fast Postgres reads was judged unnecessary complexity for
+values that already have a dedicated projection.
 
-Everything — schema, ORM, DTOs, routes, and the spec itself — uses English.
-Earlier drafts of the spec named the domain in Spanish (`cuentas`, `saldo`,
-`sucursales`); both were brought in line so there is one vocabulary, not a
-mapping to hold in your head.
+**Frankfurter API (external)**
+Source of foreign exchange mid-market rates (USD/EUR/GBP). Fetched
+on-demand and cached, not polled on a schedule — the rate data itself only
+changes about once a day, so a scheduled publisher was replaced with
+simple fetch-on-cache-miss once that was recognized.
 
-Two tests keep that honest rather than trusting a rename pass:
+**Batch worker (cron, separate container)**
+Runs the one genuinely batch (non-streaming) process in the system: monthly
+credit card statement closing, interest calculation, and late-fee
+application. Deliberately isolated from OpenBankAPI's process (so it scales
+and fails independently of the API) and deliberately *not* built on a full
+workflow orchestrator like Airflow — the job is a single task type with no
+inter-task dependencies, so a lightweight cron trigger plus idempotent,
+data-driven processing logic provides the same reliability properties
+without the operational weight.
 
-- `test_schema_alignment.py` parses `init.sql` and asserts the ORM maps exactly
-  the columns the schema declares.
-- `test_controller_dto_alignment.py` asserts every `body.<field>` a controller
-  reads is declared by its DTO.
+**AKHQ**
+Read-only Kafka inspection — topics, partitions, consumer group lag. Not
+part of any data path; exists purely to make the system's internal state
+observable during development.
 
-Both were written after a global rename passed all 77 tests while the live API
-returned 500 twice. Fakes mirror whatever the code says, so only the real schema
-can catch a mapping that drifted. The same rename also turned `deactivate` into
-`deactivete` in eight places — `activa` is a substring of de-activa-te — and
-every test still passed, because it was corrupted consistently.
+### How a write flows through the system
+
+1. A client calls OpenBankAPI over HTTP.
+2. OpenBankAPI resolves anything it can answer authoritatively itself
+  (does the account exist, what currency is it, does a purchase need FX
+   conversion) and produces **one** event to Kafka, keyed by the entity
+   whose state is being changed.
+3. That single, atomic write is the only thing that has to succeed
+  synchronously. Everything after it — the actual balance check and
+   decision, derived events, projections, audit records — happens
+   asynchronously, consumed from the log.
+4. Flink makes the one decision that actually requires sequencing
+  (sufficient balance/credit), deterministically and idempotently, and
+   emits the outcome back onto the log.
+5. Independent consumers project that outcome into whatever Postgres
+  tables the read side needs, and push a confirmation back to the client.
+
+
+
+## Non-Functional Requirements Addressed
+
+
+| Requirement                                                  | How it's addressed                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Consistency without distributed transactions**             | Multi-entity operations (a transfer touching three accounts, a purchase reserving credit) achieve atomicity through a single durable log write plus deterministic, idempotent downstream processing — not two-phase commit.                                                                                                                                                                             |
+| **Horizontal scalability**                                   | Kafka partitioning and Flink's parallel task model mean throughput scales by adding partitions and worker capacity, not by making a single process faster. Sharding key choice (account number, card account id) directly determines what can be parallelized safely.                                                                                                                                   |
+| **Fault tolerance / crash recovery**                         | Flink checkpoints state and consumed offsets together, atomically, so a crash-and-restart resumes exactly where it left off without data loss or double-processing. Combined with idempotent handlers and end-to-end request ids, at-least-once delivery never becomes at-least-once *effect*.                                                                                                          |
+| **Low-latency reads under a write-heavy, asynchronous core** | Because the authoritative decision-making (Flink) can't be queried directly, dedicated consumers continuously project results into read-optimized Postgres tables (balances, movement history). Reads never wait on or block the write path.                                                                                                                                                            |
+| **Auditability**                                             | The event log is the immutable system of record; every account/card movement, currency conversion, and privileged admin action (deposits, limit changes, status changes) is written to an append-only table with enough context to reconstruct exactly what happened and why — not just that a number changed.                                                                                          |
+| **Idempotency under retries**                                | A client-generated request id is threaded through every layer — HTTP request, Kafka event, Flink state, Postgres inserts — so a redelivered or retried operation is a safe no-op instead of a duplicate effect (double-charging, double-crediting).                                                                                                                                                     |
+| **Fault isolation**                                          | Asynchronous, log-based integration means a slow or failing consumer (e.g. a projection job) degrades gracefully instead of cascading failure back to the producer or to unrelated consumers of the same event.                                                                                                                                                                                         |
+| **Separation of concerns / maintainability**                 | A layered (domain / controllers / infrastructure) structure keeps business rules, HTTP concerns, and external integrations independently testable and replaceable. High-contention flows (transfers, purchases) are architecturally distinguished from low-contention reference data (customers, branches), which is deliberately kept as plain CRUD rather than forced through the event-sourced path. |
+| **Operational proportionality**                              | Infrastructure choices are matched to actual load characteristics rather than defaulted to the heaviest available tool — e.g., FX rate fetching uses on-demand caching instead of a streaming pipeline once its true update frequency was known, and the batch job uses cron instead of a full workflow orchestrator, since it has no multi-task dependency graph to manage.                            |
+
+
+
 
 ## Frontend notes
 
 - **Amounts are entered in cents**, matching the API, with a live formatted
-  preview under the field. Converting in the UI would mean parsing a decimal
-  into cents, which is the one place a float rounding error can quietly change
-  the amount the ledger sees.
+preview under the field. Converting in the UI would mean parsing a decimal
+into cents, which is the one place a float rounding error can quietly change
+the amount the ledger sees.
 - **The verdict arrives over the WebSocket**; if the socket closes without
-  delivering one, the page falls back to `GET /transfer/{id}/status`, the pull
-  endpoint the gateway offers for exactly that case (§6).
+delivering one, the page falls back to `GET /transfer/{id}/status`, the pull
+endpoint the gateway offers for exactly that case (§6).
 - **A gateway timeout is not a decline.** When the socket answers `pending`, the
-  page says "Still pending" and offers a re-check rather than claiming a
-  verdict it did not receive.
+page says "Still pending" and offers a re-check rather than claiming a
+verdict it did not receive.
 - **A verdict for an abandoned transfer is dropped**, so a late message cannot
-  overwrite the result of a newer request.
+overwrite the result of a newer request.
+
+
 
 ## Notes and known limits
 
 - **The fee is flat** (`FEE_FLAT_CENTS`, default 25 — matching the §4 example),
-  capped at the transfer amount. §6 left the model open; flat keeps every amount
-  exact with no rounding rule to argue about.
+capped at the transfer amount. §6 left the model open; flat keeps every amount
+exact with no rounding rule to argue about.
 - **Sinks are at-least-once**, per §5.6. Checkpointing is `EXACTLY_ONCE` for
-  Flink's internal state, which is what protects `balance` and `processed_ids`.
-- **`POST /transfer` does not wait for the broker ack**, per §6. A broker
-  outage surfaces in the producer's delivery callback (logged), not in the HTTP
-  response.
+Flink's internal state, which is what protects `balance` and `processed_ids`.
+- `POST /transfer` **does not wait for the broker ack**, per §6. A broker
+outage surfaces in the producer's delivery callback (logged), not in the HTTP
+response.
 - **Balances are Flink state, not a queryable store.** There is no
-  `GET /accounts/{id}/balance`; the spec does not define one. Inspect state
-  through the emitted events in AKHQ.
-- **`flink-job-submitter` skips submission if any job is already RUNNING**, so a
-  compose restart cannot start a second ledger over the same topic.
+`GET /accounts/{id}/balance`; the spec does not define one. Inspect state
+through the emitted events in AKHQ.
+- `flink-job-submitter` **skips submission if any job is already RUNNING**, so a
+compose restart cannot start a second ledger over the same topic.
+
