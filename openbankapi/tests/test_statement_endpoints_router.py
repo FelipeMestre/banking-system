@@ -327,7 +327,7 @@ def test_movements_since_returns_movement_after_latest_statement_period_end(stat
     assert str(before_since.id) not in ids
 
 
-def test_movements_since_excludes_installment_plan_parent(statement_harness):
+def test_movements_since_replaces_installment_plan_parent_with_due_installment(statement_harness):
     h = statement_harness
     issued = _issue(h).json()
     card_account_id = uuid.UUID(issued["card_account"]["id"])
@@ -338,22 +338,31 @@ def test_movements_since_excludes_installment_plan_parent(statement_harness):
         occurred_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
     )
     now = datetime.now(timezone.utc)
-    asyncio.run(h.installments.bulk_insert([
+    pending = [
         Installment(
             id=uuid.uuid4(), card_movement_id=plan_purchase.id, installment_number=i + 1,
             amount=Decimal("100.00"), due_date=date.today(), status=InstallmentStatus.PENDING,
             created_at=now,
         )
         for i in range(9)
-    ]))
+    ]
+    asyncio.run(h.installments.bulk_insert(pending))
 
     response = h.client.get(
         f"/card-accounts/{card_account_id}/movements", params={"since": "2026-08-01"}
     )
 
     assert response.status_code == 200
-    ids = {item["id"] for item in response.json()["items"]}
+    items = response.json()["items"]
+    ids = {item["id"] for item in items}
+    # The lump-sum purchase row must not appear (it spans every future
+    # cycle, not just this one) — but it must be replaced by the plan's
+    # next-due installment, not simply vanish from the list.
     assert str(plan_purchase.id) not in ids
+    assert str(pending[0].id) in ids
+    due_item = next(item for item in items if item["id"] == str(pending[0].id))
+    assert due_item["amount"] == "100.00"
+    assert due_item["installment_count"] == 9
 
 
 def test_movements_statement_id_and_since_together_is_422(statement_harness):
