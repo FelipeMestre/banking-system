@@ -5,7 +5,7 @@ Thinking about this kind of systems, I decided to implement a simulation of how 
 
 The implemented features are accounts, and money movement, with internal transfers among accounts, and multi-currency support. And a credit-card feature that allows the bank to issue cards, generate purchases and allow the user to pay againts the card balance. The system handles monthly billing statements: automatic close/due-date batch job, late fees, minimum payment, interest on unpaid balances carried into the next cycle.
 
-With these features, there is enough challanges with data to use stream and processing tools, in order to really feel the features that each used tool provides.
+With these features, there is enough challenges to use stream and batch processing tools, to really feel the features that each used tool provides.
 
 ## Running
 
