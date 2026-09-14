@@ -1,16 +1,11 @@
 "use client";
 
-import { CreditCard, Headphones, Home, Settings, ArrowLeftRight, ShieldCheck } from "lucide-react";
+import { CreditCard, Home, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
 import { DS_ICON_PROPS } from "@/lib/icon-props";
 import { usePermissions } from "@/lib/auth/usePermissions";
-
-const INERT_ITEMS: { title: string; Icon: ComponentType<{ size?: number }> }[] = [
-  { title: "Support", Icon: Headphones },
-  { title: "Settings", Icon: Settings },
-];
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -83,26 +78,10 @@ export function Sidebar() {
             <ShieldCheck size={21} {...DS_ICON_PROPS} />
           </Link>
         ) : null}
-
-        {INERT_ITEMS.map(({ title, Icon }) => (
-          <button
-            key={title}
-            type="button"
-            title={title}
-            aria-label={title}
-            disabled
-            className="flex h-[52px] w-[52px] cursor-not-allowed items-center justify-center text-neutral-700 opacity-45"
-          >
-            <Icon size={21} {...DS_ICON_PROPS} />
-          </button>
-        ))}
       </div>
 
-      <div
-        className="mt-auto py-ds-4 font-body text-[9px] font-semibold tracking-[0.12em] text-neutral-500"
-        style={{ writingMode: "vertical-rl" }}
-      >
-        v2.1
+      <div className="mt-auto flex w-full flex-col items-center gap-[2px] border-t-2 border-divider py-[14px]">
+        <ThemeToggle />
       </div>
     </nav>
   );
