@@ -20,7 +20,7 @@ class CardAccountStatus(str, Enum):
 CARD_ACCOUNT_TRANSITIONS: Dict[CardAccountStatus, FrozenSet[CardAccountStatus]] = {
     CardAccountStatus.ACTIVE: frozenset({CardAccountStatus.BLOCKED, CardAccountStatus.CLOSED}),
     CardAccountStatus.BLOCKED: frozenset({CardAccountStatus.ACTIVE, CardAccountStatus.CLOSED}),
-    CardAccountStatus.CLOSED: frozenset(),
+    CardAccountStatus.CLOSED: frozenset({CardAccountStatus.ACTIVE}),
 }
 
 

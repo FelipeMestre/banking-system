@@ -74,8 +74,12 @@ def test_card_account_transitions_allow_active_to_blocked():
     assert CardAccountStatus.BLOCKED in CARD_ACCOUNT_TRANSITIONS[CardAccountStatus.ACTIVE]
 
 
-def test_card_account_transitions_reject_closed_to_active():
-    assert CardAccountStatus.ACTIVE not in CARD_ACCOUNT_TRANSITIONS[CardAccountStatus.CLOSED]
+def test_card_account_transitions_allow_closed_to_active():
+    assert CardAccountStatus.ACTIVE in CARD_ACCOUNT_TRANSITIONS[CardAccountStatus.CLOSED]
+
+
+def test_card_account_transitions_reject_closed_to_blocked():
+    assert CardAccountStatus.BLOCKED not in CARD_ACCOUNT_TRANSITIONS[CardAccountStatus.CLOSED]
 
 
 def test_card_transitions_allow_active_to_blocked():

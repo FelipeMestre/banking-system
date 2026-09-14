@@ -125,8 +125,8 @@ describe("CardAccountsList", () => {
     await screen.findByText("ca-1");
 
     expect(screen.queryByRole("button", { name: "Block account" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Unblock account" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reactivate account" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Renew card" })).toBeDisabled();
   });
 });

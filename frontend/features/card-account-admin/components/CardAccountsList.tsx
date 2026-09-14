@@ -235,12 +235,12 @@ export function CardAccountsList({
 }
 
 /** Valid account-status transitions mirrored from `CARD_ACCOUNT_TRANSITIONS`
- * (openbankapi/domain/model.py) — active<->blocked, active/blocked->closed;
- * closed is terminal. */
+ * (openbankapi/domain/model.py) — active<->blocked, active/blocked->closed,
+ * closed->active (reactivation). */
 const ACCOUNT_STATUS_TRANSITIONS: Record<CardAccount["status"], CardAccount["status"][]> = {
   active: ["blocked", "closed"],
   blocked: ["active", "closed"],
-  closed: [],
+  closed: ["active"],
 };
 
 function RowActions({
@@ -285,7 +285,7 @@ function RowActions({
           disabled={!hasWriteAdmin}
           onClick={() => onOpenDialog({ kind: "account-status", cardAccount, targetStatus: "active" })}
         >
-          Unblock account
+          {cardAccount.status === "closed" ? "Reactivate account" : "Unblock account"}
         </Button>
       ) : null}
       {nextAccountStatuses.includes("closed") ? (

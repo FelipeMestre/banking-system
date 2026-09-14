@@ -150,10 +150,21 @@ def test_invalid_account_transition_returns_409_with_domain_message(cards_harnes
     card_account_id = issued["card_account"]["id"]
     cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "closed"})
 
-    response = cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "active"})
+    response = cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "blocked"})
 
     assert response.status_code == 409
     assert "error" in response.json()
+
+
+def test_closed_account_can_be_reactivated_to_active(cards_harness):
+    issued = _issue(cards_harness).json()
+    card_account_id = issued["card_account"]["id"]
+    cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "closed"})
+
+    response = cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "active"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "active"
 
 
 # --- List/read responses mask the card number --------------------------------
