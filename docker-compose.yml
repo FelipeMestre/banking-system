@@ -64,7 +64,7 @@ services:
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
-      - flink-checkpoints:/tmp/flink-checkpoints
+      - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints
 
   flink-taskmanager:
     build:
@@ -90,7 +90,7 @@ services:
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
-      - flink-checkpoints:/tmp/flink-checkpoints
+      - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints
 
   # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
   flink-job-submitter:
@@ -113,6 +113,8 @@ services:
       DEPOSIT_STATUS_TOPIC: deposit-status
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints:ro
     command: ["/opt/account_service/submit.sh"]
 
   flink-card-jobmanager:
@@ -139,7 +141,7 @@ services:
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
-      - flink-card-checkpoints:/tmp/flink-checkpoints
+      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints
 
   flink-card-taskmanager:
     build:
@@ -163,7 +165,7 @@ services:
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
-      - flink-card-checkpoints:/tmp/flink-checkpoints
+      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints
 
   # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
   flink-card-job-submitter:
@@ -184,6 +186,8 @@ services:
       CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
+    volumes:
+      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints:ro
     command: ["/opt/card_service/submit.sh"]
 
   postgres:
@@ -359,5 +363,3 @@ volumes:
   kafka-data:
   postgres-data:
   redis-data:
-  flink-checkpoints:
-  flink-card-checkpoints:

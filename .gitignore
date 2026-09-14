@@ -26,6 +26,12 @@ node_modules/
 # gentle-ai regenerates this skill registry cache; it is machine state, not source.
 .atl/
 
+# --- Docker bind-mounted runtime state ---
+# account-service/card-service Flink checkpoints, bind-mounted onto the host
+# (docker-compose.yml) so they survive a container/volume wipe — binary RocksDB
+# state, never source.
+.data/
+
 # --- Claude Code ---
 # launch.json describes how to run the app and is worth committing; the local
 # settings file is personal.
