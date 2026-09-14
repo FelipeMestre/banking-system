@@ -1,43 +1,11 @@
 # OpenBankAPI — Backend
+Financial systems are a great example of a piece of software in which non-functional requirements are critically important. A concurrency issue can lead huge losses, a wrong fault recovery policy can affect the data of thousands of transactions, and, missing idempotency in requests can lead to duplicated charges for users. 
 
-Implementation of `[openbankapi-spec-v2.md](openbankapi-spec-v2.md)` (which
-supersedes `[system_spec.md](system_spec.md)`): a multishard payment flow built
-on event logs and stream processing, with no distributed transaction, plus the
-relational reference data and read model that v2 adds.
+Thinking about this kind of systems, I decided to implement a simulation of how banking software could avoid those issues, and, take the most out of architectural design so every component either of processing or storing data, brings the right functionality so the system can be reliable, fault-tolerant and scalable.
 
-Backend and frontend. The Next.js app runs on the host, outside Compose, and
-talks to the gateway directly (§7, §8).
+The implemented features are accounts, and money movement, with internal transfers among accounts, and multi-currency support. And a credit-card feature that allows the bank to issue cards, generate purchases and allow the user to pay againts the card balance. The system handles monthly billing statements: automatic close/due-date batch job, late fees, minimum payment, interest on unpaid balances carried into the next cycle.
 
-## Layout
-
-```
-docker-compose.yml          Kafka (KRaft) + topic init + Flink + gateway + AKHQ
-account-service/
-  domain.py                 Pure ledger rules (§5.3) — no Flink imports
-  job.py                    PyFlink wiring: source, keyed state, sinks (§5)
-  java/                     One class: the field-extracting serialization schema
-  submit.sh                 Waits for a task slot, then submits the job
-  tests/test_domain.py      Ledger rules, incl. the §9 scenarios
-openbankapi/                Domain-Driven Design layout (v2 §7.1)
-  domain/model/             Entities: account, customer, branch, location
-  domain/events/            Domain events, independent of any wire format
-  domain/service/           Use cases: transfer, account
-  domain/exceptions.py      Errors that carry meaning, not status codes
-  controllers/              Routers + DTOs (the API contract)
-  infra/database/           ORM, repository ports, Postgres implementations
-  infra/cache/              ICacheService port + Redis adapter
-  infra/kafka/              Publisher port, producer, both consumers
-  main.py                   Composition root
-  tests/                    Every layer, with fakes for every port
-infra/postgres/init.sql     The four tables from v2 §3, in English
-frontend/                   Next.js App Router + TypeScript (§7)
-  app/page.tsx              The single page
-  components/               Form, outcome view, and the state machine
-  lib/gateway.ts            POST, WebSocket watch, status fallback
-  lib/money.ts              Integer-cent formatting and parsing
-```
-
-
+With these features, there is enough challanges with data to use stream and processing tools, in order to really feel the features that each used tool provides.
 
 ## Running
 
@@ -94,6 +62,44 @@ cd frontend && npm test        # frontend: 10 tests
 No broker or cluster required for either — the ledger rules are pure functions,
 Kafka sits behind a port the tests fake, and the frontend's money and wire
 parsing are pure too.
+
+## Layout
+
+```
+docker-compose.yml          Kafka (KRaft) + topic init + Flink jobs + Postgres + gateway + AKHQ
+account-service/
+  domain.py                 Pure ledger rules — no Flink imports
+  job.py                    PyFlink wiring: source, keyed state, sinks
+  java/                     One class: the field-extracting serialization schema
+  submit.sh                 Waits for a task slot, then submits the job
+  tests/                    Ledger rules and routing edge cases
+card-service/
+  domain.py                 Pure credit-card balance and authorization rules
+  job.py                    PyFlink wiring, mirroring account-service
+  tests/                    Card balance and authorization rules
+openbankapi/                FastAPI gateway, Domain-Driven Design layout
+  domain/model/             Entities: account, customer, card, card_account, card_movement, statement, installment
+  domain/events/            Domain events, independent of any wire format
+  domain/service/           Use cases: transfers, accounts, statements, current-cycle projection
+  domain/exceptions.py      Errors that carry meaning, not status codes
+  api/routers/              Routers — the API contract
+  api/dtos/                 Request/response DTOs
+  infra/database/           ORM, repository ports, Postgres implementations, Alembic migrations
+  infra/cache/              ICacheService port + Redis adapter
+  infra/kafka/              Publisher port, producer, both consumers
+  infra/foreign_exchange_service/  Currency conversion for non-USD transfers and purchases
+  batch/                    Scheduled statement close and due-date checks
+  seed/                     Deterministic demo data (customer, accounts, cards, billing cycles)
+  main.py                   Composition root
+  tests/                    Every layer, with fakes for every port
+frontend/                   Next.js App Router + TypeScript, feature-oriented
+  app/                      Route groups only — thin, composes screens from features/
+  features/                 One folder per business capability: accounts, transfers, deposits,
+                             withdrawals, customers, credit-cards, card-account-admin
+  components/ui/            Shared UI primitives
+  lib/api/                  Gateway HTTP client
+  lib/money.ts              Integer-cent formatting and parsing
+```
 
 ## Architecture
 
@@ -262,41 +268,18 @@ observable during development.
 | **Idempotency under retries**                                | A client-generated request id is threaded through every layer — HTTP request, Kafka event, Flink state, Postgres inserts — so a redelivered or retried operation is a safe no-op instead of a duplicate effect (double-charging, double-crediting).                                                                                                                                                     |
 | **Fault isolation**                                          | Asynchronous, log-based integration means a slow or failing consumer (e.g. a projection job) degrades gracefully instead of cascading failure back to the producer or to unrelated consumers of the same event.                                                                                                                                                                                         |
 | **Separation of concerns / maintainability**                 | A layered (domain / controllers / infrastructure) structure keeps business rules, HTTP concerns, and external integrations independently testable and replaceable. High-contention flows (transfers, purchases) are architecturally distinguished from low-contention reference data (customers, branches), which is deliberately kept as plain CRUD rather than forced through the event-sourced path. |
-| **Operational proportionality**                              | Infrastructure choices are matched to actual load characteristics rather than defaulted to the heaviest available tool — e.g., FX rate fetching uses on-demand caching instead of a streaming pipeline once its true update frequency was known, and the batch job uses cron instead of a full workflow orchestrator, since it has no multi-task dependency graph to manage.                            |
-
-
-
-
-## Frontend notes
-
-- **Amounts are entered in cents**, matching the API, with a live formatted
-preview under the field. Converting in the UI would mean parsing a decimal
-into cents, which is the one place a float rounding error can quietly change
-the amount the ledger sees.
-- **The verdict arrives over the WebSocket**; if the socket closes without
-delivering one, the page falls back to `GET /transfer/{id}/status`, the pull
-endpoint the gateway offers for exactly that case (§6).
-- **A gateway timeout is not a decline.** When the socket answers `pending`, the
-page says "Still pending" and offers a re-check rather than claiming a
-verdict it did not receive.
-- **A verdict for an abandoned transfer is dropped**, so a late message cannot
-overwrite the result of a newer request.
-
-
+| **Operational proportionality**                              | Infrastructure choices are matched to actual load characteristics rather than defaulted to the heaviest available tool — e.g., FX rate fetching uses on-demand caching instead of a streaming pipeline once its true update frequency was known, and the batch job uses cron instead of a full workflow orchestrator, since it has no multi-task dependency graph to manage.                           
 
 ## Notes and known limits
 
-- **The fee is flat** (`FEE_FLAT_CENTS`, default 25 — matching the §4 example),
-capped at the transfer amount. §6 left the model open; flat keeps every amount
-exact with no rounding rule to argue about.
-- **Sinks are at-least-once**, per §5.6. Checkpointing is `EXACTLY_ONCE` for
+- **The fee for transactions is flat** (`FEE_FLAT_CENTS`, default 25,
+capped at the transfer amount.
+- **Sinks are at-least-once**. Checkpointing is `EXACTLY_ONCE` for
 Flink's internal state, which is what protects `balance` and `processed_ids`.
-- `POST /transfer` **does not wait for the broker ack**, per §6. A broker
+- `POST /transfer` **does not wait for the broker ack**. A broker
 outage surfaces in the producer's delivery callback (logged), not in the HTTP
 response.
 - **Balances are Flink state, not a queryable store.** There is no
 `GET /accounts/{id}/balance`; the spec does not define one. Inspect state
 through the emitted events in AKHQ.
-- `flink-job-submitter` **skips submission if any job is already RUNNING**, so a
-compose restart cannot start a second ledger over the same topic.
 
