@@ -57,6 +57,7 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(replace).not.toHaveBeenCalled();
-    expect(screen.getByText("Auth0 test")).toBeInTheDocument();
+    expect(screen.getByText("Welcome to OpenBank")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument();
   });
 });

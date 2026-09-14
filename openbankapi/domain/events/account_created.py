@@ -16,6 +16,5 @@ class AccountCreated:
 
     account_number: str
     customer_id: str
-    branch_id: str
     currency: str
     ts: str

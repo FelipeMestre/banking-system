@@ -71,11 +71,10 @@ def test_patch_auth0_link_sets_the_sub_and_current_customer_resolves():
 
 
 def test_current_customer_dep_401_when_no_token_override_present():
-    h = build()
+    h = build(with_admin=False)
     with h.client:
         response = h.client.get("/customers/me")
-        # No override for get_current_user -> Auth0FastAPI is unconfigured -> 503,
-        # which is the documented degrade path (config/dependencies._require_auth0).
+        # No override + with_admin=False -> Auth0FastAPI is unconfigured -> 503
         assert response.status_code == 503
 
 

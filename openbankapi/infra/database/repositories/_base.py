@@ -38,13 +38,16 @@ class PostgresRepository:
         return result.scalar_one_or_none()
 
     async def _fetch_page(
-        self, model: Type[Any], *, limit: int, offset: int
+        self, model: Type[Any], *where: Any, limit: int, offset: int
     ) -> Tuple[Sequence[Any], int]:
-        total = await self._session.scalar(select(func.count()).select_from(model))
+        total = await self._session.scalar(
+            select(func.count()).select_from(model).where(*where)
+        )
         # The tie-break on id is what makes an offset page stable when two
         # rows share a created_at.
         rows = await self._session.execute(
             select(model)
+            .where(*where)
             .order_by(model.created_at.desc(), model.id.desc())
             .limit(limit)
             .offset(offset)

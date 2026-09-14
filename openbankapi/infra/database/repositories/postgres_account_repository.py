@@ -13,7 +13,7 @@ import secrets
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import exists, select, update as sql_update
+from sqlalchemy import exists, select, text, update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -47,7 +47,6 @@ def _to_domain(row: AccountORM) -> Account:
         account_number=row.account_number,
         currency=row.currency,
         customer_id=row.customer_id,
-        branch_id=row.branch_id,
         balance=row.balance,
         status=AccountStatus(row.status),
         created_at=row.created_at,
@@ -58,16 +57,16 @@ def _to_domain(row: AccountORM) -> Account:
 class PostgresAccountRepository(PostgresRepository):
     # Belt and braces alongside the DTO: even an internal caller cannot name
     # balance here, because _update is only ever fed these keys.
-    _UPDATABLE = frozenset({"currency", "branch_id", "status"})
+    _UPDATABLE = frozenset({"currency", "status"})
 
-    async def create(self, *, currency: str, customer_id: UUID, branch_id: UUID) -> Account:
+    async def create(self, *, currency: str, customer_id: UUID) -> Account:
         """Insert with a server-generated number, retrying on collision.
 
         The retry is what keeps spec §11.1 true: a UNIQUE violation on the
         generated number is an internal detail and must never reach the client
-        as a 500. A violation on customer_id/branch_id is a different thing
-        entirely — that is the caller's bad input, so it is translated and
-        raised immediately rather than retried.
+        as a 500. A violation on customer_id is a different thing entirely —
+        that is the caller's bad input, so it is translated and raised
+        immediately rather than retried.
 
         Each attempt runs inside its own SAVEPOINT (`begin_nested`), not a new
         transaction: this session is shared for the whole request (see
@@ -83,7 +82,6 @@ class PostgresAccountRepository(PostgresRepository):
                 "account_number": account_number,
                 "currency": currency,
                 "customer_id": customer_id,
-                "branch_id": branch_id,
             }
             try:
                 async with self._session.begin_nested():
@@ -104,8 +102,18 @@ class PostgresAccountRepository(PostgresRepository):
         row = await self._fetch_one(AccountORM, AccountORM.account_number == account_number)
         return _to_domain(row) if row else None
 
+    async def get_by_id(self, account_id: UUID) -> Optional[Account]:
+        row = await self._fetch_one(AccountORM, AccountORM.id == account_id)
+        return _to_domain(row) if row else None
+
     async def list(self, *, limit: int, offset: int) -> Page:
         rows, total = await self._fetch_page(AccountORM, limit=limit, offset=offset)
+        return page_of([_to_domain(r) for r in rows], total, limit, offset)
+
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page:
+        rows, total = await self._fetch_page(
+            AccountORM, AccountORM.customer_id == customer_id, limit=limit, offset=offset
+        )
         return page_of([_to_domain(r) for r in rows], total, limit, offset)
 
     async def update(
@@ -113,10 +121,9 @@ class PostgresAccountRepository(PostgresRepository):
         account_number: str,
         *,
         currency: Optional[str] = None,
-        branch_id: Optional[UUID] = None,
         status: Optional[str] = None,
     ) -> Optional[Account]:
-        candidate = {"currency": currency, "branch_id": branch_id, "status": status}
+        candidate = {"currency": currency, "status": status}
         assert set(candidate) <= self._UPDATABLE, "balance is not updatable here"
         row = await self._update(
             AccountORM, AccountORM.account_number == account_number, candidate
@@ -144,16 +151,32 @@ class PostgresAccountRepository(PostgresRepository):
             )
         )
 
-    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
+    async def has_any_account_for_customer(self, customer_id: UUID) -> bool:
+        # Status-agnostic on purpose (spec: "any account, any status") — see
+        # the port docstring for why this differs from the nonempty check.
         return bool(
             await self._session.scalar(
-                select(
-                    exists().where(
-                        AccountORM.branch_id == branch_id,
-                        AccountORM.status == AccountStatus.ACTIVE.value,
-                    )
-                )
+                select(exists().where(AccountORM.customer_id == customer_id))
             )
+        )
+
+    async def lock_customer_for_account_creation(self, customer_id: UUID) -> None:
+        # Transaction-scoped advisory lock: released automatically at commit
+        # or rollback, never held past this request's single shared session
+        # (see _base.py's Unit-of-Work docstring). `hashtext` folds the UUID
+        # into the bigint key `pg_advisory_xact_lock` expects.
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:customer_id))"),
+            {"customer_id": str(customer_id)},
+        )
+
+    async def lock_identity_for_account_creation(self, auth0_sub: str) -> None:
+        # Mirrors lock_customer_for_account_creation above, re-keyed on the
+        # Auth0 `sub` string for the never-linked-identity path (amendment),
+        # where no customer_id exists yet.
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:sub))"),
+            {"sub": auth0_sub},
         )
 
 

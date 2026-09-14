@@ -26,9 +26,9 @@ def _consumer(repo, cache):
 
 
 async def _seeded_repo():
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    repo = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id})
-    account = await repo.create(currency="USD", customer_id=customer_id, branch_id=branch_id)
+    customer_id = uuid.uuid4()
+    repo = FakeAccountRepository(known_customers={customer_id})
+    account = await repo.create(currency="USD", customer_id=customer_id)
     return repo, account.account_number
 
 

@@ -40,7 +40,6 @@ class Account:
     account_number: str
     currency: str
     customer_id: UUID
-    branch_id: UUID
     balance: int
     status: AccountStatus
     created_at: datetime

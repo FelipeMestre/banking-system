@@ -6,15 +6,29 @@ import uuid
 import pytest
 
 from openbankapi.api.v1.dtos.account_dto import AccountUpdateDTO
+from openbankapi.config.dependencies import get_current_user
 from openbankapi.tests.conftest import build
 from openbankapi.tests.fakes import FakeAccountRepository
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(wired):
+    """GET /accounts/{account_number} now requires read:admin on top of auth;
+    any valid admin claims satisfy it since this route never checks ownership
+    (transfer recipient-preview must resolve someone else's account)."""
+    wired.client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "auth0|test",
+        "permissions": ["read:admin", "write:admin"],
+        "scope": "read:admin write:admin",
+    }
+    yield
+    wired.client.app.dependency_overrides.pop(get_current_user, None)
 
 
 def _create(wired):
     return wired.client.post(
         "/accounts",
-        json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(wired.branch_id)},
+        json={"currency": "USD", "customer_id": str(wired.customer_id)},
     )
 
 
@@ -36,21 +50,19 @@ def test_the_client_cannot_choose_the_account_number(wired):
     response = wired.client.post(
         "/accounts",
         json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(wired.branch_id),
               "account_number": "9999999999999999"},
     )
     assert response.status_code == 422
 
 
 def test_a_generated_number_collision_never_surfaces_a_500():
-    customer_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    accounts = FakeAccountRepository(known_customers={customer_id}, known_branches={branch_id},
-                                   collide_times=2)
+    customer_id = uuid.uuid4()
+    accounts = FakeAccountRepository(known_customers={customer_id}, collide_times=2)
     h = build(accounts=accounts)
     with h.client:
         response = h.client.post(
             "/accounts",
-            json={"currency": "USD", "customer_id": str(customer_id), "branch_id": str(branch_id)},
+            json={"currency": "USD", "customer_id": str(customer_id)},
         )
     assert response.status_code == 201
     assert accounts.attempts == 3, "should have retried past both collisions"
@@ -90,20 +102,10 @@ def test_a_legitimate_update_still_leaves_the_balance_alone(wired):
 def test_a_nonexistent_customer_is_a_clean_4xx_not_a_db_error(wired):
     response = wired.client.post(
         "/accounts",
-        json={"currency": "USD", "customer_id": str(uuid.uuid4()),
-              "branch_id": str(wired.branch_id)},
+        json={"currency": "USD", "customer_id": str(uuid.uuid4())},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "ReferencedEntityNotFoundError"
-
-
-def test_a_nonexistent_branch_is_a_clean_4xx(wired):
-    response = wired.client.post(
-        "/accounts",
-        json={"currency": "USD", "customer_id": str(wired.customer_id),
-              "branch_id": str(uuid.uuid4())},
-    )
-    assert response.status_code == 422
 
 
 # --- soft delete ------------------------------------------------------------
@@ -118,3 +120,16 @@ def test_deleting_an_account_closes_it_rather_than_removing_it(wired):
 
 def test_an_unknown_account_is_404(wired):
     assert wired.client.get("/accounts/1111111111111111").status_code == 404
+
+
+# --- CurrentUserDep guard ----------------------------------------------------
+
+
+def test_get_by_account_number_requires_auth(wired):
+    # Undo the module's autouse override for this one test — no override for
+    # get_current_user -> Auth0FastAPI is unconfigured -> 503, the documented
+    # degrade path (config/dependencies._require_auth0), same convention as
+    # test_customer_auth_link.py's CurrentCustomerDep coverage.
+    wired.client.app.dependency_overrides.pop(get_current_user, None)
+    response = wired.client.get("/accounts/1111111111111111")
+    assert response.status_code == 503

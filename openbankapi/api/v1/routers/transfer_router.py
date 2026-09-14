@@ -18,8 +18,20 @@ from contextlib import suppress
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from typing import Annotated
+
+from fastapi import Depends
+
 from openbankapi.api.v1.dtos.transfer_dto import TransferAcceptedDTO, TransferRequestDTO, TransferStatusDTO
-from openbankapi.config.dependencies import SettingsDep, StatusRegistryDep, TransferServiceDep
+from openbankapi.config.dependencies import (
+    SettingsDep,
+    StatusRegistryDep,
+    TransferServiceDep,
+    require_permissions,
+)
+
+ReadAdminDep = Annotated[dict, Depends(require_permissions("read:admin"))]
+WriteAdminDep = Annotated[dict, Depends(require_permissions("write:admin"))]
 
 
 
@@ -28,11 +40,12 @@ router = APIRouter(tags=["transfer"])
 
 
 @router.post("/transfer", status_code=202, response_model=TransferAcceptedDTO)
-def request_transfer(body: TransferRequestDTO, service: TransferServiceDep):
-    event = service.request_transfer(
+async def request_transfer(body: TransferRequestDTO, service: TransferServiceDep, _claims: WriteAdminDep):
+    event = await service.request_transfer(
         source_account=body.source_account,
         destination_account=body.destination_account,
         amount=body.amount,
+        description=body.description,
     )
     return TransferAcceptedDTO(
         request_id=event.request_id, status="pending", fee_amount=event.fee_amount
@@ -44,7 +57,8 @@ def request_transfer(body: TransferRequestDTO, service: TransferServiceDep):
     response_model=TransferStatusDTO,
     response_model_exclude_none=True,
 )
-def transfer_status(request_id: str, registry: StatusRegistryDep):
+def transfer_status(request_id: str, registry: StatusRegistryDep, _claims: ReadAdminDep):
+    """REST-only read; WS /ws/transfer/{id} intentionally left out of RBAC (deferred)."""
     resolved = registry.get(request_id)
     if resolved is None:
         return TransferStatusDTO(request_id=request_id, status="pending")

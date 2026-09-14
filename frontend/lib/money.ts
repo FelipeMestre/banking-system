@@ -42,6 +42,22 @@ export function maskAccountNumber(accountNumber: string): string {
   return `•••• ${lastFour}`;
 }
 
+/**
+ * Groups a revealed account number into 4-digit chunks separated by a dash
+ * (e.g. "1111222233334444" -> "1111-2222-3333-4444"), for readability.
+ *
+ * Purely a display grouping — this only runs on the already-revealed number,
+ * never the masked placeholder, and the raw ungrouped value is what actually
+ * gets copied to the clipboard, not this formatted string.
+ *
+ * Total like `maskAccountNumber`: a trailing partial group (anything not a
+ * multiple of 4 characters) is kept as-is rather than dropped, so this never
+ * throws or silently truncates a malformed value.
+ */
+export function formatAccountNumber(accountNumber: string): string {
+  return accountNumber.replace(/(.{4})(?=.)/g, "$1-");
+}
+
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 
 /**
@@ -61,6 +77,25 @@ export function parseCentsInput(raw: string): number | null {
   const trimmed = raw.trim();
   if (!/^\d+$/.test(trimmed)) return null;
   const cents = Number(trimmed);
+  if (!Number.isSafeInteger(cents) || cents <= 0) return null;
+  return cents;
+}
+
+/**
+ * Parses a human decimal amount (e.g. "1,250.00") into integer cents without
+ * using floats. Returns null for anything not a positive amount with at most
+ * two decimal places.
+ */
+export function parseAmountToCents(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const stripped = trimmed.replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(stripped)) return null;
+  const [wholePart, fracPart = ""] = stripped.split(".");
+  const whole = Number(wholePart);
+  const frac = fracPart ? Number(fracPart.padEnd(2, "0")) : 0;
+  if (!Number.isSafeInteger(whole) || !Number.isSafeInteger(frac)) return null;
+  const cents = whole * 100 + frac;
   if (!Number.isSafeInteger(cents) || cents <= 0) return null;
   return cents;
 }

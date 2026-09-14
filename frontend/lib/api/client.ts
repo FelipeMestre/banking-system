@@ -12,24 +12,72 @@ export function gatewayOrigin(): string {
   return (process.env.NEXT_PUBLIC_GATEWAY_URL ?? DEFAULT_GATEWAY).replace(/\/+$/, "");
 }
 
+/**
+ * A gateway failure that carries the HTTP status alongside the human-readable
+ * message `describeFailure` already produces. A caller that only has a bare
+ * `Error` cannot distinguish a 404 (e.g. "no customer linked to this
+ * identity") from a 401 or a network failure without parsing the message
+ * text — this makes the status a first-class, typed field instead.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function describeFailure(response: Response): Promise<string> {
   if (response.status === 422) {
     return "The gateway rejected those values. Check the accounts and amount.";
   }
-  // A domain error (see openbankapi's error_handlers.py) carries a message
-  // written for a human — a business rule ("customer still has accounts"),
-  // not a status code. Prefer that over the generic fallback whenever it's
-  // actually there.
+  // Prefer domain error message when present — keeps 401/403 body messages
+  // (e.g. "unauthorized", "not allowed") intact for callers that assert on them.
   try {
-    const body = await response.json();
+    const body = await response.clone().json();
     const message = body?.error?.message;
     if (typeof message === "string" && message.length > 0) {
       return message;
+    }
+    // Include structured required/had for 403 to aid debugging
+    if (response.status === 403 && body?.error?.details) {
+      const d = body.error.details as { required?: unknown; had?: unknown };
+      if (Array.isArray(d.required) || Array.isArray(d.had)) {
+        return `Missing required permissions: ${JSON.stringify(d.required)} (had ${JSON.stringify(d.had)})`;
+      }
+    }
+  } catch {
+    // Not JSON, or no body at all — fall through to distinct generic messages.
+  }
+  if (response.status === 401) {
+    return "Not authenticated. Please log in again.";
+  }
+  if (response.status === 403) {
+    return "You do not have permission to perform this action.";
+  }
+  // Plain FastAPI `HTTPException(detail="...")` responses (e.g. the deposits
+  // router's 404/504) don't use the app's `{"error":{"message":...}}`
+  // envelope — surface that detail before falling back to a generic message.
+  try {
+    const body = await response.clone().json();
+    const detail = body?.detail;
+    if (typeof detail === "string" && detail.length > 0) {
+      return detail;
     }
   } catch {
     // Not JSON, or no body at all — fall through to the generic message.
   }
   return `The gateway answered ${response.status}. Is it running on ${gatewayOrigin()}?`;
+}
+
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+export function isForbiddenError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
 }
 
 /** Turns the gateway's http(s) origin into the matching ws(s) origin. */

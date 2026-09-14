@@ -11,7 +11,7 @@ from typing import Generic, List, TypeVar
 
 T = TypeVar("T")
 
-DEFAULT_LIMIT = 50
+DEFAULT_LIMIT = 20
 MAX_LIMIT = 200
 
 

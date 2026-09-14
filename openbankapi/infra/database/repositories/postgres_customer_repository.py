@@ -39,6 +39,7 @@ class PostgresCustomerRepository(PostgresRepository):
         last_name: str,
         date_of_birth: date,
         gender: Optional[str],
+        auth0_sub: Optional[str] = None,
     ) -> Customer:
         row = await self._insert(
             CustomerORM,
@@ -48,6 +49,7 @@ class PostgresCustomerRepository(PostgresRepository):
                 "last_name": last_name,
                 "date_of_birth": date_of_birth,
                 "gender": gender,
+                "auth0_sub": auth0_sub,
             },
         )
         return _to_domain(row)

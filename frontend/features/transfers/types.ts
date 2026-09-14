@@ -4,6 +4,7 @@ export interface TransferRequestBody {
   source_account: string;
   destination_account: string;
   amount: number;
+  description?: string;
 }
 
 /** 202 Accepted from POST /transfer. */
@@ -20,6 +21,14 @@ export interface TransferStatus {
   account_id?: string;
   reason?: string;
   ts?: string;
+}
+
+/** A recipient looked up by account number via GET /accounts/{n} + GET /customers/{id}. */
+export interface RecipientPreview {
+  account_number: string;
+  currency: string;
+  name: string;
+  initials: string;
 }
 
 /** What the UI is currently showing for a single transfer attempt. */

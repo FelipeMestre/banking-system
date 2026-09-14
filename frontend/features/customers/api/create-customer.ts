@@ -1,4 +1,4 @@
-import { describeFailure, gatewayOrigin } from "@/lib/api/client";
+import { ApiError, authorizedFetch, describeFailure, gatewayOrigin } from "@/lib/api/client";
 import type { Customer } from "../types";
 
 export interface CreateCustomerBody {
@@ -10,13 +10,13 @@ export interface CreateCustomerBody {
 }
 
 export async function createCustomer(body: CreateCustomerBody): Promise<Customer> {
-  const response = await fetch(`${gatewayOrigin()}/customers`, {
+  const response = await authorizedFetch(`${gatewayOrigin()}/customers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(await describeFailure(response));
+    throw new ApiError(await describeFailure(response), response.status);
   }
   return (await response.json()) as Customer;
 }

@@ -21,9 +21,7 @@ from .common import Page
 
 
 class IAccountRepository(Protocol):
-    async def create(
-        self, *, currency: str, customer_id: UUID, branch_id: UUID
-    ) -> Account:
+    async def create(self, *, currency: str, customer_id: UUID) -> Account:
         """Create an account with a server-generated `account_number`.
 
         The number is generated here rather than accepted from the client
@@ -35,14 +33,23 @@ class IAccountRepository(Protocol):
 
     async def get_by_account_number(self, account_number: str) -> Optional[Account]: ...
 
+    async def get_by_id(self, account_id: UUID) -> Optional[Account]:
+        """Credit Cards Phase 3: `card_accounts.paying_account_id` names an
+        account by its UUID `id`, not its `account_number` — the payments
+        endpoint needs this to resolve the paying account's number/currency."""
+        ...
+
     async def list(self, *, limit: int, offset: int) -> Page[Account]: ...
+
+    async def list_by_customer(self, customer_id: UUID, *, limit: int, offset: int) -> Page[Account]:
+        """Accounts owned by one customer only (spec §2.1 — homepage scoping)."""
+        ...
 
     async def update(
         self,
         account_number: str,
         *,
         currency: Optional[str] = None,
-        branch_id: Optional[UUID] = None,
         status: Optional[str] = None,
     ) -> Optional[Account]:
         """Update mutable reference data. `balance` is not a parameter and never
@@ -63,12 +70,35 @@ class IAccountRepository(Protocol):
         """
         ...
 
-    async def has_active_account_for_branch(self, branch_id: UUID) -> bool:
-        """Whether this branch has any account with status `active`.
+    async def has_any_account_for_customer(self, customer_id: UUID) -> bool:
+        """Whether this customer owns any account row, in any status.
 
-        No balance check here, unlike the customer rule: a branch is
-        reference data, not the funds' owner. Used to refuse a branch
-        soft-delete until every account there is moved or closed.
+        Backs the `POST /accounts/me` self-service guard: unlike
+        `has_nonempty_account_for_customer`, status and balance are
+        irrelevant here — owning even one closed, zero-balance account is
+        enough to block a second self-service account.
+        """
+        ...
+
+    async def lock_customer_for_account_creation(self, customer_id: UUID) -> None:
+        """Acquire a transaction-scoped advisory lock keyed on this customer.
+
+        Must be called, and awaited, before `has_any_account_for_customer`
+        inside the same transaction, so the check-then-insert sequence for
+        one customer can never race with itself. Released automatically at
+        commit or rollback — never held past the request.
+        """
+        ...
+
+    async def lock_identity_for_account_creation(self, auth0_sub: str) -> None:
+        """Acquire a transaction-scoped advisory lock keyed on this Auth0 `sub`.
+
+        Alongside, not replacing, `lock_customer_for_account_creation`: this
+        one guards the never-linked-identity path of `POST /accounts/me`
+        (amendment), where no `Customer` row — and therefore no `customer_id`
+        — exists yet to key a lock on. Must be called, and awaited, before the
+        post-lock re-check of `get_by_auth0_sub`, so two concurrent requests
+        for the same never-before-seen `sub` cannot both create a `Customer`.
         """
         ...
 

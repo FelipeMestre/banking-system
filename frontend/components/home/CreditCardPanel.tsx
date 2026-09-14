@@ -1,19 +1,77 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
 import { formatCents } from "@/lib/money";
-import type { CREDIT_CARD } from "@/lib/placeholder-home";
 import { DS_ICON_PROPS } from "@/lib/icon-props";
+import {
+  availableCents,
+  creditLimitDecimalToCents,
+  getCardAccounts,
+  getCurrentCustomer,
+  type CardAccountListItem,
+} from "@/features/credit-cards";
+
+const CARD_ACCOUNTS_PAGE_SIZE = 50;
+
+type State =
+  | { kind: "loading" }
+  | { kind: "empty" }
+  | { kind: "ready"; item: CardAccountListItem };
 
 interface Props {
-  card: typeof CREDIT_CARD;
+  /** Mirrors the "Balances as of just now" eye toggle on the accounts strip
+   * — one device-level preference masks both sections at once. */
+  showDetails: boolean;
+}
+
+/** The card with the highest credit limit wins the default spot on the
+ * homepage — the customer's single most significant line of credit. */
+function pickBiggestLimit(items: CardAccountListItem[]): CardAccountListItem | null {
+  return items.reduce<CardAccountListItem | null>((best, item) => {
+    if (best === null) return item;
+    const bestCents = creditLimitDecimalToCents(best.card_account.credit_limit) ?? -Infinity;
+    const itemCents = creditLimitDecimalToCents(item.card_account.credit_limit) ?? -Infinity;
+    return itemCents > bestCents ? item : best;
+  }, null);
 }
 
 /**
- * Invented — there is no credit-card entity or endpoint (see the design
- * handoff's "Fidelity" note). `SHOW_CREDIT_CARD` gates whether this renders
- * at all; treat it as the real feature flag once a card API exists.
+ * The customer's highest-limit credit card, with real data off
+ * `GET /card-accounts` (`features/credit-cards`) — no invented card entity
+ * or fixture. Renders nothing while loading, on error, or when the customer
+ * has no cards: this is a secondary homepage widget, not content the rest
+ * of the page depends on.
  */
-export function CreditCardPanel({ card }: Props) {
-  const utilisationPercent = Math.round((card.usedCents / card.totalLimitCents) * 100);
+export function CreditCardPanel({ showDetails }: Props) {
+  const [state, setState] = useState<State>({ kind: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentCustomer()
+      .then((customer) =>
+        getCardAccounts({ customerId: customer.id, limit: CARD_ACCOUNTS_PAGE_SIZE, offset: 0 }),
+      )
+      .then((page) => {
+        if (cancelled) return;
+        const biggest = pickBiggestLimit(page.items);
+        setState(biggest ? { kind: "ready", item: biggest } : { kind: "empty" });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ kind: "empty" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state.kind !== "ready") return null;
+
+  const { card_account: cardAccount, card } = state.item;
+  const totalCents = creditLimitDecimalToCents(cardAccount.credit_limit) ?? 0;
+  const availableCentsValue = availableCents(cardAccount.credit_limit, cardAccount.used_credit) ?? totalCents;
+  const usedCents = totalCents - availableCentsValue;
+  const utilisationPercent = totalCents > 0 ? Math.round((usedCents / totalCents) * 100) : 0;
 
   return (
     <section>
@@ -24,11 +82,8 @@ export function CreditCardPanel({ card }: Props) {
             <CreditCard size={26} {...DS_ICON_PROPS} />
           </div>
           <div className="text-right">
-            <div className="font-body text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-700">
-              {card.productName}
-            </div>
             <div className="mt-[4px] text-xs tracking-[0.06em] text-neutral-600 tabular-nums">
-              {card.maskedNumber}
+              {showDetails ? (card?.card_number ?? "—") : "•••• •••• •••• ••••"}
             </div>
           </div>
         </div>
@@ -38,11 +93,9 @@ export function CreditCardPanel({ card }: Props) {
             Available limit
           </div>
           <div className="flex items-baseline gap-[5px]">
-            <span className="font-heading text-[15px] font-extrabold text-neutral-700">
-              {card.currencySymbol}
-            </span>
+            <span className="font-heading text-[15px] font-extrabold text-neutral-700">$</span>
             <span className="font-heading text-[32px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">
-              {formatCents(card.availableLimitCents, "")}
+              {showDetails ? formatCents(availableCentsValue, "") : "••••••"}
             </span>
           </div>
         </div>
@@ -52,8 +105,8 @@ export function CreditCardPanel({ card }: Props) {
         </div>
 
         <div className="flex items-center justify-between text-xs text-neutral-600 tabular-nums">
-          <span>{formatCents(card.usedCents, card.currencySymbol)} used</span>
-          <span>of {formatCents(card.totalLimitCents, card.currencySymbol)}</span>
+          <span>{showDetails ? `${formatCents(usedCents)} used` : "•••• used"}</span>
+          <span>{showDetails ? `of ${formatCents(totalCents)}` : "of ••••"}</span>
         </div>
       </div>
     </section>

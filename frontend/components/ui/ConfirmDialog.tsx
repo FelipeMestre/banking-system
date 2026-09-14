@@ -17,9 +17,9 @@ interface Props {
 /**
  * The yes/no counterpart to composing `Dialog` with a form: same chrome,
  * same submitting/error handling around a single async action, just a plain
- * message instead of an input. `DeleteLocationDialog` is the thin per-entity
- * wrapper around this — the same pattern LocationSaveDialog established for
- * create/edit.
+ * message instead of an input. A per-entity delete-confirmation dialog is
+ * the thin wrapper around this — the same pattern a create/edit save dialog
+ * establishes for its own form.
  */
 export function ConfirmDialog({
   title,
