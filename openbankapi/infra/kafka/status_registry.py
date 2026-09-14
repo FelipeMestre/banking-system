@@ -92,3 +92,13 @@ DepositStatusRegistry = StatusRegistry
 
 # Withdrawal alias — reuse same class, separate instance (distinct from transfer/purchase/deposit)
 WithdrawalStatusRegistry = StatusRegistry
+
+# Card payment settlement alias — reuse same class, separate instance from
+# `card_payment_status_registry`. That one carries the authorization verdict
+# (published the instant account-service debits the paying account); this one
+# is resolved in-process by `CardMovementConsumer` itself, only once the
+# `payment_applied` movement is actually durable in Postgres — the two are
+# deliberately never merged into one event so a payment's UI-visible data
+# (movements/current-cycle/statements) never has to wait on anything but its
+# own confirmation.
+CardPaymentSettlementRegistry = StatusRegistry

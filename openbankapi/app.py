@@ -39,6 +39,7 @@ def create_app(
     status_registry: StatusRegistry,
     purchase_status_registry: Optional[StatusRegistry] = None,
     card_payment_status_registry: Optional[StatusRegistry] = None,
+    card_payment_settlement_registry: Optional[StatusRegistry] = None,
     deposit_status_registry: Optional[StatusRegistry] = None,
     withdrawal_status_registry: Optional[StatusRegistry] = None,
     auth0: Optional[Auth0FastAPI] = None,
@@ -51,6 +52,7 @@ def create_app(
     # `request_id` is only unique within its own domain's Kafka topic.
     resolved_purchase_status_registry = purchase_status_registry or StatusRegistry()
     resolved_card_payment_status_registry = card_payment_status_registry or StatusRegistry()
+    resolved_card_payment_settlement_registry = card_payment_settlement_registry or StatusRegistry()
     resolved_deposit_status_registry = deposit_status_registry or StatusRegistry()
     resolved_withdrawal_status_registry = withdrawal_status_registry or StatusRegistry()
 
@@ -60,6 +62,7 @@ def create_app(
         status_registry.bind_loop(loop)
         resolved_purchase_status_registry.bind_loop(loop)
         resolved_card_payment_status_registry.bind_loop(loop)
+        resolved_card_payment_settlement_registry.bind_loop(loop)
         resolved_deposit_status_registry.bind_loop(loop)
         resolved_withdrawal_status_registry.bind_loop(loop)
         if on_start is not None:
@@ -83,6 +86,7 @@ def create_app(
     app.state.status_registry = status_registry
     app.state.purchase_status_registry = resolved_purchase_status_registry
     app.state.card_payment_status_registry = resolved_card_payment_status_registry
+    app.state.card_payment_settlement_registry = resolved_card_payment_settlement_registry
     app.state.deposit_status_registry = resolved_deposit_status_registry
     app.state.withdrawal_status_registry = resolved_withdrawal_status_registry
     app.state.auth0 = auth0

@@ -13,33 +13,12 @@ With these features, there is enough challenges to use stream and batch processi
 docker compose up --build -d
 ```
 
-Seed some balances (the ledger has no deposit concept — a balance is whatever
-the account's event log says):
-
-```bash
-docker compose exec openbankapi python -m openbankapi.seed 1234567890123456=500000
-```
-
-Send a transfer:
-
-```bash
-curl -s -X POST localhost:8000/transfer -H 'content-type: application/json' -d '{"source_account":"acc-123","destination_account":"acc-456","amount":1100}'
-```
-
-Then poll `GET localhost:8000/transfer/<request_id>/status`, or hold
-`ws://localhost:8000/ws/transfer/<request_id>`.
-
-Or use the UI. The frontend is deliberately **not** in Compose (§8) — run it on
-the host for fast iteration:
-
 ```bash
 cd frontend && npm install && npm run dev
 ```
 
 It talks to `http://localhost:8000` by default; override with
-`NEXT_PUBLIC_GATEWAY_URL` in `frontend/.env.local`. The browser calls the
-gateway directly, with no Route Handler or Server Action in between, because
-the gateway already is the HTTP boundary (§7).
+`NEXT_PUBLIC_GATEWAY_URL` in `frontend/.env.local`.
 
 
 | Surface           | URL                                                              |
@@ -48,8 +27,6 @@ the gateway already is the HTTP boundary (§7).
 | Flink dashboard   | [http://localhost:8081](http://localhost:8081)                   |
 | AKHQ (Kafka UI)   | [http://localhost:8080](http://localhost:8080)                   |
 | Kafka (from host) | `localhost:9092`                                                 |
-
-
 
 
 ## Tests

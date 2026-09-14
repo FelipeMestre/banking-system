@@ -7,7 +7,14 @@ export function parsePaymentStatus(payload: unknown): CardPaymentStatus | null {
   const candidate = payload as Record<string, unknown>;
   const { request_id: requestId, status } = candidate;
   if (typeof requestId !== "string") return null;
-  if (status !== "pending" && status !== "approved" && status !== "declined") return null;
+  if (
+    status !== "pending" &&
+    status !== "approved" &&
+    status !== "declined" &&
+    status !== "settled"
+  ) {
+    return null;
+  }
   return {
     request_id: requestId,
     status,

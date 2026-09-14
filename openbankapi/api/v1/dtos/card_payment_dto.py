@@ -31,10 +31,20 @@ class CardPaymentAcceptedDTO(BaseModel):
 
 
 class CardPaymentStatusDTO(BaseModel):
-    """Mirrors `PurchaseStatusDTO`'s shape: only `approved` is ever published
-    to `card-payment-status` (spec: kafka-topics) — an insufficient-funds
-    decline surfaces solely as the account-side `declined_payment`, never
-    here."""
+    """Mirrors `PurchaseStatusDTO`'s shape, extended with one more state:
+
+    - `pending`: not yet resolved.
+    - `approved`/`declined`: the authorization verdict, published to
+      `card-payment-status` (spec: kafka-topics) the instant account-service
+      debits (or rejects debiting) the paying account. An insufficient-funds
+      decline surfaces solely as the account-side `declined_payment`, never a
+      separate publish here.
+    - `settled`: `approved`, AND the resulting `payment_applied` movement is
+      now durable in Postgres — resolved separately, in-process, by
+      `CardMovementConsumer` (never over Kafka). This is the point at which a
+      client's movements/current-cycle/statements are actually safe to
+      reload; a decline never reaches this state.
+    """
 
     request_id: str
     status: str

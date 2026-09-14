@@ -93,6 +93,7 @@ publisher = KafkaEventPublisherRepository(settings)
 status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 purchase_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 card_payment_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
+card_payment_settlement_registry = StatusRegistry(max_cached=settings.status_cache_size)
 deposit_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 withdrawal_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
 status_consumer = TransferStatusConsumer(settings, status_registry)
@@ -110,7 +111,11 @@ transaction_consumer = TransactionConsumer(
 )
 
 card_movement_consumer = CardMovementConsumer(
-    settings, card_movement_writer, installment_writer, applied_rate_writer
+    settings,
+    card_movement_writer,
+    installment_writer,
+    applied_rate_writer,
+    settlement_registry=card_payment_settlement_registry,
 )
 
 # None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
@@ -161,6 +166,7 @@ app = create_app(
     status_registry=status_registry,
     purchase_status_registry=purchase_status_registry,
     card_payment_status_registry=card_payment_status_registry,
+    card_payment_settlement_registry=card_payment_settlement_registry,
     deposit_status_registry=deposit_status_registry,
     withdrawal_status_registry=withdrawal_status_registry,
     auth0=auth0,

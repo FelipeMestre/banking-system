@@ -130,7 +130,7 @@ describe("CreditCardsPageScreen", () => {
     }
   });
 
-  it("refreshes the movements list once a payment is approved, not just the card balance", async () => {
+  it("refreshes the movements list once a payment settles, not on the intermediate approved verdict", async () => {
     vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
     vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
     vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
@@ -140,8 +140,10 @@ describe("CreditCardsPageScreen", () => {
     });
     vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
     let deliverApproved: (() => void) | undefined;
+    let deliverSettled: (() => void) | undefined;
     vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
       deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+      deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
       return () => {};
     });
 
@@ -156,11 +158,15 @@ describe("CreditCardsPageScreen", () => {
     await screen.findByText("pending");
 
     act(() => deliverApproved?.());
+    await screen.findByText("approved");
+    expect(movementsModule.getMovements).toHaveBeenCalledTimes(1);
+
+    act(() => deliverSettled?.());
 
     await waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(2));
   });
 
-  it("refreshes movements a second time shortly after approval, to catch the async movement-consumer write", async () => {
+  it("refreshes movements exactly once on settlement, with no artificial retry afterward", async () => {
     vi.useFakeTimers();
     try {
       vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
@@ -171,9 +177,9 @@ describe("CreditCardsPageScreen", () => {
         card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
       });
       vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
-      let deliverApproved: (() => void) | undefined;
+      let deliverSettled: (() => void) | undefined;
       vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
-        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
         return () => {};
       });
 
@@ -192,22 +198,20 @@ describe("CreditCardsPageScreen", () => {
         await vi.advanceTimersByTimeAsync(0);
       });
 
-      act(() => deliverApproved?.());
+      act(() => deliverSettled?.());
       await vi.waitFor(() => expect(movementsModule.getMovements).toHaveBeenCalledTimes(2));
-
-      expect(movementsModule.getMovements).toHaveBeenCalledTimes(2);
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
 
-      expect(movementsModule.getMovements).toHaveBeenCalledTimes(3);
+      expect(movementsModule.getMovements).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("dual-refetches card-accounts on PayDialog approved: 2x immediate, 3x after 1500ms", async () => {
+  it("dual-refetches card-accounts on PayDialog settled: 2x immediate, 3x after 1500ms", async () => {
     vi.useFakeTimers();
     try {
       vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
@@ -218,9 +222,9 @@ describe("CreditCardsPageScreen", () => {
         card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
       });
       vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
-      let deliverApproved: (() => void) | undefined;
+      let deliverSettled: (() => void) | undefined;
       vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
-        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
         return () => {};
       });
 
@@ -238,7 +242,7 @@ describe("CreditCardsPageScreen", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      act(() => deliverApproved?.());
+      act(() => deliverSettled?.());
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -255,7 +259,69 @@ describe("CreditCardsPageScreen", () => {
     }
   });
 
-  it("prevents card-accounts timer stacking on rapid second approved", async () => {
+  it("refreshes the current-cycle projection and statements exactly once on settlement", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
+      vi.spyOn(cardAccountsModule, "getCardAccounts").mockResolvedValue(CARD_ACCOUNTS_PAGE);
+      vi.spyOn(movementsModule, "getMovements").mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
+      const getStatementsSpy = vi.spyOn(statementsModule, "getStatements").mockResolvedValue([]);
+      vi.spyOn(payoffModule, "getInstallmentPayoff").mockResolvedValue({
+        card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
+      });
+      const getCurrentCycleSpy = vi.spyOn(currentCycleModule, "getCurrentCycle").mockResolvedValue({
+        period_start: "2026-08-21",
+        projected_period_end: "2026-09-20",
+        overdue_from_previous_cycle: null,
+        interest_on_overdue: null,
+        new_purchases_this_cycle: "0.00",
+        total_to_pay: "0.00",
+        payable: true,
+      });
+      vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
+      let deliverSettled: (() => void) | undefined;
+      vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
+        deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
+        return () => {};
+      });
+
+      render(<CreditCardsPageScreen />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await vi.waitFor(() => expect(screen.getByText("•••• •••• •••• 1234")).toBeInTheDocument());
+      const callsBeforePayment = getCurrentCycleSpy.mock.calls.length;
+      expect(getStatementsSpy.mock.calls.length).toBe(callsBeforePayment);
+
+      fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+      await vi.waitFor(() => expect(screen.getByLabelText("Pay from")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100.00" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => deliverSettled?.());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const callsAfterSettlement = callsBeforePayment + 1;
+      expect(getCurrentCycleSpy.mock.calls.length).toBe(callsAfterSettlement);
+      expect(getStatementsSpy.mock.calls.length).toBe(callsAfterSettlement);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+
+      // No artificial retry: settlement is a durable-write confirmation, not a guess.
+      expect(getCurrentCycleSpy.mock.calls.length).toBe(callsAfterSettlement);
+      expect(getStatementsSpy.mock.calls.length).toBe(callsAfterSettlement);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("prevents card-accounts timer stacking on rapid second settled", async () => {
     vi.useFakeTimers();
     try {
       vi.spyOn(customerModule, "getCurrentCustomer").mockResolvedValue({ id: "cust-1" });
@@ -266,9 +332,9 @@ describe("CreditCardsPageScreen", () => {
         card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
       });
       vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
-      let deliverApproved: (() => void) | undefined;
+      let deliverSettled: (() => void) | undefined;
       vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
-        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
         return () => {};
       });
 
@@ -285,7 +351,7 @@ describe("CreditCardsPageScreen", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      act(() => deliverApproved?.());
+      act(() => deliverSettled?.());
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -295,7 +361,7 @@ describe("CreditCardsPageScreen", () => {
         await vi.advanceTimersByTimeAsync(700);
       });
       expect(getCardAccountsSpy).toHaveBeenCalledTimes(2);
-      act(() => deliverApproved?.());
+      act(() => deliverSettled?.());
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -321,9 +387,9 @@ describe("CreditCardsPageScreen", () => {
         card_account_id: "ca-1", payoff_amount: "0.00", currency: "USD",
       });
       vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({ request_id: "r1", status: "pending" });
-      let deliverApproved: (() => void) | undefined;
+      let deliverSettled: (() => void) | undefined;
       vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
-        deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+        deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
         return () => {};
       });
 
@@ -340,7 +406,7 @@ describe("CreditCardsPageScreen", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      act(() => deliverApproved?.());
+      act(() => deliverSettled?.());
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });

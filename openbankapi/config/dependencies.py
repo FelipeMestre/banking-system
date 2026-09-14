@@ -125,6 +125,20 @@ def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
 CardPaymentStatusRegistryDep = Annotated[StatusRegistry, Depends(get_card_payment_status_registry)]
 
 
+def get_card_payment_settlement_registry(conn: HTTPConnection) -> StatusRegistry:
+    # Deliberately separate from `card_payment_status_registry`: that one
+    # carries the authorization verdict (published by account-service the
+    # instant it debits the paying account); this one is resolved in-process
+    # by `CardMovementConsumer`, only once the `payment_applied` movement is
+    # actually durable in Postgres.
+    return conn.app.state.card_payment_settlement_registry
+
+
+CardPaymentSettlementRegistryDep = Annotated[
+    StatusRegistry, Depends(get_card_payment_settlement_registry)
+]
+
+
 def get_deposit_status_registry(conn: HTTPConnection) -> StatusRegistry:
     # A FOURTH separate instance: `request_id` is only unique within its own
     # domain's Kafka topic.

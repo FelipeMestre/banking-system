@@ -104,7 +104,9 @@ class AccountService:
         """
         return await self._repository.create(currency=currency, customer_id=customer_id)
 
-    def credit_opening_balance(self, account_number: str, amount: int) -> Dict[str, Any]:
+    def credit_opening_balance(
+        self, account_number: str, amount: int, *, request_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Give an account a non-zero opening balance the event-sourced way.
 
         Never a direct UPDATE on `accounts.balance` (spec §3.5). The credit takes
@@ -112,10 +114,19 @@ class AccountService:
         on `account-events`, which Flink applies and then announces back through
         `account-balances`. The read model updates as a consequence, not as a
         separate write.
+
+        `request_id` defaults to a fresh random one (the normal "first-ever
+        opening balance" case). A caller reconciling Flink's keyed state back
+        to an ALREADY-STORED Postgres balance — e.g. the seed script, after a
+        restart that wiped Flink's state but not Postgres's, breaking the "they
+        agree at t=0 for free" invariant `open_account` describes above — must
+        pass a stable, deterministic one instead, so a harmless re-run recognises
+        it as already-processed (`dedup_key`/`is_processed` in `domain.py`)
+        instead of crediting the same amount twice.
         """
         event = {
             "type": "incoming_payment",
-            "request_id": f"seed-{uuid.uuid4()}",
+            "request_id": request_id or f"seed-{uuid.uuid4()}",
             "account_id": account_number,
             "amount": amount,
             "leg": "credit:seed",

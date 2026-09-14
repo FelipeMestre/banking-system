@@ -13,6 +13,7 @@ import { getMovements } from "../api/get-movements";
 import { getStatements } from "../api/get-statements";
 import { CardList } from "./CardList";
 import { CurrentCycleProjection } from "./CurrentCycleProjection";
+import { CurrentCycleTotalsSidebar } from "./CurrentCycleTotalsSidebar";
 import { MovementsList } from "./MovementsList";
 import { PayDialog } from "./PayDialog";
 import { SelectedStatementSummary } from "./SelectedStatementSummary";
@@ -173,28 +174,30 @@ export function CreditCardsPageScreen() {
 
   useEffect(() => loadMovements(), [loadMovements]);
 
-  const pendingMovementsRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCardsRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
-      if (pendingMovementsRefreshRef.current !== null) {
-        clearTimeout(pendingMovementsRefreshRef.current);
-      }
       if (pendingCardsRefreshRef.current !== null) {
         clearTimeout(pendingCardsRefreshRef.current);
       }
     };
   }, []);
 
-  const refreshMovementsAfterPayment = useCallback(() => {
-    loadMovements();
-    if (pendingMovementsRefreshRef.current !== null) {
-      clearTimeout(pendingMovementsRefreshRef.current);
-    }
-    pendingMovementsRefreshRef.current = setTimeout(loadMovements, 1500);
-  }, [loadMovements]);
+  // `onPaid` (below) fires only once PayDialog's WS watcher receives
+  // "settled" — the point at which `CardMovementConsumer` has already
+  // committed the payment's movement row to Postgres. A single reload here
+  // is correct by construction, not a guess: there is no pipeline left to
+  // race against, unlike the used-credit bar below (see refreshCardsAfterPayment).
+  const refreshMovementsAfterPayment = loadMovements;
+  const refreshDetailAfterPayment = refreshDetail;
 
+  // Unlike movements/detail above, the card list's used_credit comes from
+  // `CardBalanceConsumer`, off the compacted `card-balances` topic — which
+  // deliberately carries no `request_id` (a snapshot topic, not a ledger of
+  // facts), so there is no per-payment signal to await here. This timer-based
+  // best-effort retry is the accepted, deliberate exception for that one
+  // display value, not an oversight.
   const refreshCardsAfterPayment = useCallback(() => {
     refreshCards();
     if (pendingCardsRefreshRef.current !== null) {
@@ -209,6 +212,15 @@ export function CreditCardsPageScreen() {
 
   const isCurrentCycleSelected = selectedStatementId === null;
   const selectedStatement = statements.find((row) => row.id === selectedStatementId) ?? null;
+
+  // The exact same rows the movements table renders for the current cycle —
+  // real movements plus the synthetic carried-balance/interest rows — shared
+  // with `CurrentCycleTotalsSidebar` so its "current values" are always
+  // computed from what the table actually shows, never a separate fetch.
+  // `null` (not `[]`) while the projection hasn't resolved yet, so the totals
+  // panel can tell "still loading" apart from "genuinely no movements".
+  const currentCycleDisplayedMovements =
+    isCurrentCycleSelected && projection ? [...buildCarryForwardMovements(projection), ...movements] : null;
 
   const handleDownloadStatement = useCallback(
     (statement: Statement) => {
@@ -311,13 +323,7 @@ export function CreditCardsPageScreen() {
                 data-testid="movements-scroll-container"
                 className="scrollbar-app-bg max-h-[160px] overflow-y-auto pr-ds-1 sm:max-h-[190px] lg:max-h-[260px]"
               >
-                <MovementsList
-                  items={
-                    isCurrentCycleSelected && projection
-                      ? [...buildCarryForwardMovements(projection), ...movements]
-                      : movements
-                  }
-                />
+                <MovementsList items={currentCycleDisplayedMovements ?? movements} />
               </div>
             </section>
             <section className="flex flex-col gap-ds-2">
@@ -326,10 +332,13 @@ export function CreditCardsPageScreen() {
                 {isCurrentCycleSelected ? " — current cycle" : selectedStatement ? ` — ${selectedStatement.period_end}` : ""}
               </h6>
               {isCurrentCycleSelected ? (
-                <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
-                  See the current-cycle figures above — this panel only breaks down a closed
-                  billing cycle's movements.
-                </p>
+                currentCycleDisplayedMovements ? (
+                  <CurrentCycleTotalsSidebar movements={currentCycleDisplayedMovements} />
+                ) : (
+                  <p className="m-0 border-2 border-divider p-ds-4 text-sm text-neutral-600">
+                    Loading the current cycle…
+                  </p>
+                )
               ) : selectedStatement ? (
                 <StatementTotalsSidebar statement={selectedStatement} cycleMovements={movements} />
               ) : (
@@ -346,7 +355,7 @@ export function CreditCardsPageScreen() {
           cardAccountId={selectedCardAccountId}
           onClose={() => setPayDialogOpen(false)}
           onPaid={() => {
-            refreshDetail();
+            refreshDetailAfterPayment();
             refreshMovementsAfterPayment();
             refreshCardsAfterPayment();
           }}

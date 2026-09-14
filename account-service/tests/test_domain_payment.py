@@ -144,6 +144,41 @@ def test_insufficient_funds_emits_zero_balance_events():
     assert decision.balance_events == ()
 
 
+def test_declined_payment_carries_card_account_id_for_the_loopback_to_route_on():
+    """The ONLY signal `decide`'s `declined_payment` loopback branch has to
+    tell a card payment's decline apart from a transfer's — must survive onto
+    the wire event `_declined` produces (spec: account-service-payment-handling)."""
+    decision = decide(
+        "acc-pay", payment_requested(card_account_id="card-acct-9", amount=20000), empty(balance=100), now=TS
+    )
+    assert decision.account_events[0]["card_account_id"] == "card-acct-9"
+
+
+# --- declined_payment loopback: card payment vs transfer routing ------------
+
+
+def test_declined_card_payment_loopback_routes_to_card_status_events_not_transfer():
+    """The exact bug this fix closes: a card payment's decline confirmation
+    must reach `card_status_events` (-> card-payment-status), never
+    `status_events` (-> transfer-status) — or the frontend's payment WS never
+    learns the payment was declined and hangs at "pending" forever."""
+    event = {
+        "type": "declined_payment",
+        "request_id": "pay-1",
+        "account_id": "acc-payer",
+        "card_account_id": "card-acct-1",
+        "reason": "insufficient_funds",
+        "ts": TS,
+    }
+    decision = decide("acc-payer", event, empty(balance=10), now=TS)
+
+    assert decision.status_events == ()
+    assert [(s["status"], s["reason"]) for s in decision.card_status_events] == [
+        ("declined", "insufficient_funds")
+    ]
+    assert decision.card_status_events[0]["request_id"] == "pay-1"
+
+
 # --- dedup / idempotency -------------------------------------------------------
 
 

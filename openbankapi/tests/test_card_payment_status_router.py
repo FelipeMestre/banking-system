@@ -73,3 +73,83 @@ def test_websocket_times_out_to_pending_when_never_resolved():
         message = websocket.receive_json()
 
     assert message == {"request_id": request_id, "status": "pending"}
+
+
+def test_get_status_prefers_settlement_over_the_authorization_verdict():
+    """Once `CardMovementConsumer` has settled a payment, GET must report
+    `settled` — never fall back to the (now-stale) `approved` verdict."""
+    harness = conftest.build()
+    request_id = str(uuid.uuid4())
+    harness.client.app.state.card_payment_status_registry.resolve(
+        {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
+    )
+    harness.client.app.state.card_payment_settlement_registry.resolve(
+        {"request_id": request_id, "status": "settled", "ts": "2026-01-01T00:00:01Z"}
+    )
+
+    response = harness.client.get(f"/payments/{request_id}/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "settled"
+
+
+def test_get_status_is_approved_when_not_yet_settled():
+    harness = conftest.build()
+    request_id = str(uuid.uuid4())
+    harness.client.app.state.card_payment_status_registry.resolve(
+        {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
+    )
+
+    response = harness.client.get(f"/payments/{request_id}/status")
+
+    assert response.json()["status"] == "approved"
+
+
+def test_websocket_sends_the_settled_message_after_the_approved_verdict():
+    harness = conftest.build()
+    request_id = str(uuid.uuid4())
+    harness.client.app.state.card_payment_status_registry.resolve(
+        {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
+    )
+    harness.client.app.state.card_payment_settlement_registry.resolve(
+        {"request_id": request_id, "status": "settled", "ts": "2026-01-01T00:00:01Z"}
+    )
+
+    with harness.client.websocket_connect(f"/ws/payments/{request_id}") as websocket:
+        first = websocket.receive_json()
+        second = websocket.receive_json()
+
+    assert first["status"] == "approved"
+    assert second["status"] == "settled"
+
+
+def test_websocket_sends_only_the_declined_verdict_never_waits_on_settlement():
+    """A decline never reaches `CardMovementConsumer` — waiting on the
+    settlement registry here would just burn the timeout for nothing."""
+    harness = conftest.build()
+    request_id = str(uuid.uuid4())
+    harness.client.app.state.card_payment_status_registry.resolve(
+        {"request_id": request_id, "status": "declined", "reason": "insufficient_funds", "ts": "2026-01-01T00:00:00Z"}
+    )
+
+    with harness.client.websocket_connect(f"/ws/payments/{request_id}") as websocket:
+        message = websocket.receive_json()
+        websocket.close()
+
+    assert message["status"] == "declined"
+
+
+def test_websocket_closes_after_approved_alone_when_settlement_never_arrives():
+    """Mirrors the existing pending-timeout behavior: an approved payment that
+    never settles within the timeout still closes cleanly after delivering
+    what it has, rather than hanging forever."""
+    harness = conftest.build()
+    request_id = str(uuid.uuid4())
+    harness.client.app.state.card_payment_status_registry.resolve(
+        {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
+    )
+
+    with harness.client.websocket_connect(f"/ws/payments/{request_id}") as websocket:
+        message = websocket.receive_json()
+
+    assert message["status"] == "approved"

@@ -9,7 +9,7 @@ import pytest
 
 from openbankapi.seed.catalog import CYCLE_PURCHASE_COUNT, purchases_for_cycle
 from openbankapi.seed.cycles import _cycle_bounds
-from openbankapi.seed.run import _parse_args, _seed_identification_number
+from openbankapi.seed.run import _parse_args, _reconcile_balances_with_flink, _seed_identification_number
 
 
 def test_parse_args_requires_auth0_sub():
@@ -150,6 +150,85 @@ def test_publish_payment_skips_zero_amount():
 
     settings = Settings()
     assert _publish_payment(settings, MagicMock(), MagicMock(), MagicMock(), amount_cents=0, skip_kafka=False) is None
+
+
+class _FakePublisher:
+    def __init__(self, sink: list[dict]):
+        self._sink = sink
+
+    def publish(self, topic, key, value):
+        self._sink.append({"topic": topic, "key": key, "value": value})
+
+    def close(self):
+        pass
+
+
+def _account(account_number: str, balance: int) -> MagicMock:
+    account = MagicMock()
+    account.account_number = account_number
+    account.balance = balance
+    return account
+
+
+def test_reconcile_balances_with_flink_reuses_the_stored_postgres_balance():
+    """The exact bug this closes: a reused account's CURRENT Postgres balance
+    — not a hardcoded seed amount — must be what gets re-credited into Flink."""
+    from openbankapi.config import Settings
+
+    published: list[dict] = []
+    with patch("openbankapi.seed.run.KafkaEventPublisherRepository", return_value=_FakePublisher(published)):
+        _reconcile_balances_with_flink(
+            Settings(), [_account("1111222233334444", 98_154_62)], skip_kafka=False
+        )
+
+    assert len(published) == 1
+    wire = published[0]["value"]
+    assert wire["type"] == "incoming_payment"
+    assert wire["account_id"] == "1111222233334444"
+    assert wire["amount"] == 98_154_62
+    assert wire["leg"] == "credit:seed"
+    assert published[0]["key"] == "1111222233334444"
+
+
+def test_reconcile_balances_with_flink_uses_a_deterministic_request_id():
+    """Never the random `credit_opening_balance` default — a harmless re-run
+    of this exact reconciliation must be recognised by Flink's own dedup
+    (`is_processed`) as already-applied, not double-credited."""
+    from openbankapi.config import Settings
+
+    published: list[dict] = []
+    with patch("openbankapi.seed.run.KafkaEventPublisherRepository", return_value=_FakePublisher(published)):
+        _reconcile_balances_with_flink(Settings(), [_account("1111222233334444", 500)], skip_kafka=False)
+        first_request_id = published[0]["value"]["request_id"]
+        published.clear()
+        _reconcile_balances_with_flink(Settings(), [_account("1111222233334444", 500)], skip_kafka=False)
+        second_request_id = published[0]["value"]["request_id"]
+
+    assert first_request_id == second_request_id
+
+
+def test_reconcile_balances_with_flink_skips_zero_and_negative_balances():
+    """Nothing to reconcile at $0 — Flink already initializes an unseen
+    account's keyed state to 0 for free (see `open_account`'s own comment)."""
+    from openbankapi.config import Settings
+
+    published: list[dict] = []
+    with patch("openbankapi.seed.run.KafkaEventPublisherRepository", return_value=_FakePublisher(published)):
+        _reconcile_balances_with_flink(
+            Settings(), [_account("1111222233334444", 0), _account("5555666677778888", -50)], skip_kafka=False
+        )
+
+    assert published == []
+
+
+def test_reconcile_balances_with_flink_respects_skip_kafka():
+    from openbankapi.config import Settings
+
+    published: list[dict] = []
+    with patch("openbankapi.seed.run.KafkaEventPublisherRepository", return_value=_FakePublisher(published)):
+        _reconcile_balances_with_flink(Settings(), [_account("1111222233334444", 500)], skip_kafka=True)
+
+    assert published == []
 
 
 @pytest.mark.asyncio
