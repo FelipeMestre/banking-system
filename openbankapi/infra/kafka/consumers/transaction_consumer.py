@@ -152,7 +152,9 @@ class TransactionConsumer:
         if row_type == "debit":
             counterparty = event["destination_account"]
         elif row_type == "credit":
-            counterparty = event["source_account"]
+            # Optional: a cash deposit (seed's opening-balance credit, or any
+            # future cash-in path) has no source account to name.
+            counterparty = event.get("source_account")
         else:
             # `declined` is reached by both `declined_payment` (always carries
             # `destination_account`) and `declined_withdrawal` (never does).
