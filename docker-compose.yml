@@ -103,6 +103,12 @@ services:
     depends_on:
       - flink-taskmanager
     environment:
+      # `flink run` (this container's client) decides the job's parallelism
+      # from ITS OWN local config at submission time, not the cluster's — so
+      # this has to be repeated here, matching flink-jobmanager/-taskmanager,
+      # or the job silently submits at Flink's parallelism-1 default.
+      FLINK_PROPERTIES: |
+        parallelism.default: 3
       FLINK_JOBMANAGER: flink-jobmanager:8081
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
@@ -178,6 +184,10 @@ services:
     depends_on:
       - flink-card-taskmanager
     environment:
+      # Same reasoning as flink-job-submitter: the submitting client's own
+      # parallelism.default, not the cluster's, governs the job.
+      FLINK_PROPERTIES: |
+        parallelism.default: 3
       FLINK_JOBMANAGER: flink-card-jobmanager:8081
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       CARD_EVENTS_TOPIC: card-events
