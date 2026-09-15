@@ -242,15 +242,77 @@ services:
   openbankapi:
     build:
       context: ./openbankapi
-    container_name: openbankapi
     command: ["uvicorn", "openbankapi.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./openbankapi:/app/openbankapi
-    ports:
-      - "8000:8000"
+    # No host port here and no container_name: both are incompatible with
+    # `--scale openbankapi=N` (Docker needs to auto-assign a unique name and
+    # host port per replica). `nginx` (below) is the single entry point now,
+    # load-balancing across every replica on the internal Compose network —
+    # no need to publish this service's own port to the host at all.
+    expose:
+      - "8000"
     depends_on:
       kafka-init:
         condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # HTTP-only now (worker-http-split): `openbankapi` never starts a Kafka
+      # consumer, so it keeps only the Redis/Postgres access its routes and
+      # status-registry reads/writes need — the consumer-only env vars below
+      # moved to `openbankapi-worker`.
+      DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL_SECONDS: "300"
+      REDIS_POOL_SIZE: "50"
+      CORS_ALLOW_ORIGINS: http://localhost:3000
+      # A 16-digit number now: 'acc-fees' would fail the accounts CHECK, and this
+      # value is a Kafka partition key.
+      FEES_ACCOUNT: "0000000000000001"
+      FEE_FLAT_CENTS: "25"
+      WEBSOCKET_TIMEOUT_SECONDS: "30"
+      AUTH0_DOMAIN: dev-ekwg1eyvfjrof0to.us.auth0.com
+      # Empty until an Auth0 "API" resource exists (Applications > APIs in the
+      # dashboard, or `auth0 apis create`) — auth stays off (503 on the
+      # protected routes) rather than the app failing to start until then.
+      AUTH0_AUDIENCE: "https://openbank.api/com/auth"
+
+  # Load-balances across every `openbankapi` HTTP replica (single entry
+  # point on the host; see nginx/nginx.conf). Round-robin is safe because
+  # the horizontal-scalability change made replicas interchangeable — no
+  # sticky sessions needed.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - openbankapi
+
+  # Owns all 9 Kafka consumers `openbankapi` used to run in-process
+  # (worker-http-split, horizontal scalability). Reuses the same build
+  # context/image as `openbankapi` — `worker.py` already ships inside it
+  # (Dockerfile's own `COPY . /app/openbankapi`). No HTTP port: this process
+  # never serves a request, only consumes.
+  openbankapi-worker:
+    build:
+      context: ./openbankapi
+    container_name: openbankapi-worker
+    command: ["python", "-m", "openbankapi.worker"]
+    volumes:
+      - ./openbankapi:/app/openbankapi
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
       postgres:
@@ -263,22 +325,18 @@ services:
       TRANSFER_STATUS_TOPIC: transfer-status
       ACCOUNT_BALANCES_TOPIC: account-balances
       DEPOSIT_STATUS_TOPIC: deposit-status
+      WITHDRAWAL_STATUS_TOPIC: withdrawal-status
       BALANCE_CONSUMER_GROUP: openbankapi-balances
+      CARD_EVENTS_TOPIC: card-events
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       CARD_BALANCES_TOPIC: card-balances
+      # Both DB and Redis: the 9 consumers write through Postgres writers
+      # (`composition.py`) and resolve verdicts through the same Redis-backed
+      # status registries `openbankapi` reads from.
       DATABASE_DSN: postgresql+asyncpg://openbank:openbank@postgres:5432/openbank
       REDIS_URL: redis://redis:6379/0
-      CACHE_TTL_SECONDS: "300"
-      CORS_ALLOW_ORIGINS: http://localhost:3000
-      # A 16-digit number now: 'acc-fees' would fail the accounts CHECK, and this
-      # value is a Kafka partition key.
-      FEES_ACCOUNT: "0000000000000001"
-      FEE_FLAT_CENTS: "25"
-      WEBSOCKET_TIMEOUT_SECONDS: "30"
-      AUTH0_DOMAIN: dev-ekwg1eyvfjrof0to.us.auth0.com
-      # Empty until an Auth0 "API" resource exists (Applications > APIs in the
-      # dashboard, or `auth0 apis create`) — auth stays off (503 on the
-      # protected routes) rather than the app failing to start until then.
-      AUTH0_AUDIENCE: "https://openbank.api/com/auth"
+      REDIS_POOL_SIZE: "50"
 
   batch-worker:
     # Reuses the exact same image/build context as `openbankapi` — the
