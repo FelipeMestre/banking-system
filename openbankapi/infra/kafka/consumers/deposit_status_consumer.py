@@ -48,7 +48,7 @@ class DepositStatusConsumer:
                 "bootstrap.servers": self._settings.bootstrap_servers,
                 "group.id": self._group_id(),
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": True,
             }
         )
         consumer.subscribe([self._settings.deposit_status_topic])
