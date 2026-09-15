@@ -14,7 +14,9 @@ from decimal import Decimal
 
 from openbankapi.config import Settings
 from openbankapi.infra.kafka.consumers.card_movement_consumer import CardMovementConsumer
-from openbankapi.infra.kafka.status_registry import StatusRegistry
+from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+    FakeStatusRegistry,
+)
 
 from .fakes import FakeAppliedRateRepository, FakeCardMovementRepository, FakeInstallmentRepository
 
@@ -139,12 +141,11 @@ def test_payment_applied_resolves_the_settlement_registry_once_persisted():
     request_id = str(uuid.uuid4())
 
     async def scenario():
-        registry = StatusRegistry()
+        registry = FakeStatusRegistry()
         await _consumer(settlement_registry=registry)._apply(_payment_applied(request_id))
-        return registry
+        return await registry.get(request_id)
 
-    registry = asyncio.run(scenario())
-    resolved = registry.get(request_id)
+    resolved = asyncio.run(scenario())
     assert resolved is not None
     assert resolved["status"] == "settled"
     assert resolved["request_id"] == request_id
@@ -156,12 +157,12 @@ def test_purchase_approved_never_resolves_the_settlement_registry():
     request_id = str(uuid.uuid4())
 
     async def scenario():
-        registry = StatusRegistry()
+        registry = FakeStatusRegistry()
         await _consumer(settlement_registry=registry)._apply(_approved(request_id))
-        return registry
+        return await registry.get(request_id)
 
-    registry = asyncio.run(scenario())
-    assert registry.get(request_id) is None
+    resolved = asyncio.run(scenario())
+    assert resolved is None
 
 
 def test_settlement_registry_is_optional():
@@ -182,15 +183,15 @@ def test_redelivered_payment_applied_resolves_settlement_only_once():
     request_id = str(uuid.uuid4())
 
     async def scenario():
-        registry = StatusRegistry()
+        registry = FakeStatusRegistry()
         consumer = _consumer(settlement_registry=registry)
         payload = _payment_applied(request_id)
         for _ in range(3):
             await consumer._apply(payload)
-        return registry
+        return await registry.get(request_id)
 
-    registry = asyncio.run(scenario())
-    assert registry.get(request_id)["status"] == "settled"
+    resolved = asyncio.run(scenario())
+    assert resolved["status"] == "settled"
 
 
 def test_purchase_requested_is_never_dispatched():

@@ -1,6 +1,7 @@
 """Builds the real app with fake ports — no broker, no Postgres, no Redis."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 import pytest
@@ -21,7 +22,18 @@ from openbankapi.config.dependencies import (
     get_statement_repository,
     get_transaction_repository,
 )
-from openbankapi.infra.kafka.status_registry import StatusRegistry
+from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+    FakeStatusRegistry,
+)
+
+def resolve_sync(registry, event: dict) -> None:
+    """Drives `registry.resolve(event)` from an ordinary (non-async) test
+    body. Every `IStatusRegistry.resolve` is async now (the Redis-backed
+    implementation does real I/O) — this is the sync-test equivalent of
+    `await registry.resolve(event)` for tests that pre-seed a verdict before
+    calling the synchronous `TestClient`."""
+    asyncio.run(registry.resolve(event))
+
 
 _DEFAULT_ADMIN_CLAIMS = {
     "sub": "test-admin",
@@ -97,7 +109,12 @@ def build(
     settings = Settings(fee_flat_cents=25, websocket_timeout_seconds=0.2, cache_ttl_seconds=300)
     publisher = FakePublisher()
     cache = cache or FakeCache()
-    registry = StatusRegistry()
+    registry = FakeStatusRegistry()
+    purchase_status_registry = FakeStatusRegistry()
+    card_payment_status_registry = FakeStatusRegistry()
+    card_payment_settlement_registry = FakeStatusRegistry()
+    deposit_status_registry = FakeStatusRegistry()
+    withdrawal_status_registry = FakeStatusRegistry()
 
     customers = FakeCustomerRepository()
     accounts = accounts or FakeAccountRepository()
@@ -114,25 +131,19 @@ def build(
     statements = statements or FakeStatementRepository()
     admin_actions = admin_actions or FakeCardAccountAdminActionRepository()
 
-    try:
-        app = create_app(
-            settings=settings,
-            cache=cache,
-            publisher=publisher,
-            sessionmaker=None,  # unused: every repository dependency is overridden below
-            status_registry=registry,
-            foreign_exchange_cache_service=fx_cache_service,  # type: ignore[call-arg]
-        )
-    except TypeError:
-        # Work unit 2 runs before app.py gains the param — fall back to direct state injection
-        app = create_app(
-            settings=settings,
-            cache=cache,
-            publisher=publisher,
-            sessionmaker=None,
-            status_registry=registry,
-        )
-        app.state.foreign_exchange_cache_service = fx_cache_service  # type: ignore[attr-defined]
+    app = create_app(
+        settings=settings,
+        cache=cache,
+        publisher=publisher,
+        sessionmaker=None,  # unused: every repository dependency is overridden below
+        status_registry=registry,
+        purchase_status_registry=purchase_status_registry,
+        card_payment_status_registry=card_payment_status_registry,
+        card_payment_settlement_registry=card_payment_settlement_registry,
+        deposit_status_registry=deposit_status_registry,
+        withdrawal_status_registry=withdrawal_status_registry,
+        foreign_exchange_cache_service=fx_cache_service,  # type: ignore[call-arg]
+    )
     app.dependency_overrides[get_customer_repository] = lambda: customers
     app.dependency_overrides[get_account_repository] = lambda: accounts
     app.dependency_overrides[get_transaction_repository] = lambda: transactions

@@ -5,6 +5,8 @@ import pytest
 
 from openbankapi.domain.service import compute_fee
 
+from .conftest import resolve_sync
+
 SOURCE = "1234567890123456"
 DEST = "6543210987654321"
 
@@ -81,13 +83,13 @@ def test_status_is_pending_until_the_ledger_answers(harness):
 
 
 def test_status_reflects_a_resolved_transfer(harness):
-    harness.registry.resolve({"request_id": "r1", "status": "approved", "account_id": SOURCE})
+    resolve_sync(harness.registry, {"request_id": "r1", "status": "approved", "account_id": SOURCE})
     assert harness.client.get("/transfer/r1/status").json()["status"] == "approved"
 
 
 def test_websocket_pushes_a_resolved_verdict(harness):
-    harness.registry.resolve(
-        {"request_id": "r1", "status": "declined", "reason": "insufficient_funds"}
+    resolve_sync(
+        harness.registry, {"request_id": "r1", "status": "declined", "reason": "insufficient_funds"}
     )
     with harness.client.websocket_connect("/ws/transfer/r1") as ws:
         message = ws.receive_json()

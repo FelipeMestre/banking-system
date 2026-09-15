@@ -26,8 +26,8 @@ router = APIRouter(tags=["purchase"])
     response_model=PurchaseStatusDTO,
     response_model_exclude_none=True,
 )
-def purchase_status(request_id: str, registry: PurchaseStatusRegistryDep):
-    resolved = registry.get(request_id)
+async def purchase_status(request_id: str, registry: PurchaseStatusRegistryDep):
+    resolved = await registry.get(request_id)
     if resolved is None:
         return PurchaseStatusDTO(request_id=request_id, status="pending")
     return PurchaseStatusDTO(**resolved)

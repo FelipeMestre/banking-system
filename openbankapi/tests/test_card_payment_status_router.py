@@ -22,7 +22,7 @@ def test_unresolved_request_is_pending_not_404():
 def test_resolved_approval_is_returned():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -40,10 +40,10 @@ def test_card_payment_status_registry_is_isolated_from_purchase_and_transfer():
     isolation, no cross-talk)."""
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.registry.resolve(
+    conftest.resolve_sync(harness.registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
-    harness.client.app.state.purchase_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.purchase_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -55,7 +55,7 @@ def test_card_payment_status_registry_is_isolated_from_purchase_and_transfer():
 def test_websocket_receives_an_already_resolved_verdict_immediately():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -80,10 +80,10 @@ def test_get_status_prefers_settlement_over_the_authorization_verdict():
     `settled` — never fall back to the (now-stale) `approved` verdict."""
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
-    harness.client.app.state.card_payment_settlement_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_settlement_registry, 
         {"request_id": request_id, "status": "settled", "ts": "2026-01-01T00:00:01Z"}
     )
 
@@ -96,7 +96,7 @@ def test_get_status_prefers_settlement_over_the_authorization_verdict():
 def test_get_status_is_approved_when_not_yet_settled():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -108,10 +108,10 @@ def test_get_status_is_approved_when_not_yet_settled():
 def test_websocket_sends_the_settled_message_after_the_approved_verdict():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
-    harness.client.app.state.card_payment_settlement_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_settlement_registry, 
         {"request_id": request_id, "status": "settled", "ts": "2026-01-01T00:00:01Z"}
     )
 
@@ -128,7 +128,7 @@ def test_websocket_sends_only_the_declined_verdict_never_waits_on_settlement():
     settlement registry here would just burn the timeout for nothing."""
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "declined", "reason": "insufficient_funds", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -145,7 +145,7 @@ def test_websocket_closes_after_approved_alone_when_settlement_never_arrives():
     what it has, rather than hanging forever."""
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.card_payment_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 

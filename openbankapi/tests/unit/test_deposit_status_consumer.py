@@ -8,11 +8,13 @@ def test_deposit_status_consumer_dispatch_resolves_registry():
 
     from openbankapi.config import Settings
     from openbankapi.infra.kafka.consumers.deposit_status_consumer import DepositStatusConsumer
-    from openbankapi.infra.kafka.status_registry import StatusRegistry
+    from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+        FakeStatusRegistry,
+    )
 
     async def scenario():
         settings = Settings(deposit_status_topic="deposit-status", deposit_status_consumer_group="test-group")
-        registry = StatusRegistry(max_cached=10_000)
+        registry = FakeStatusRegistry()
         loop = asyncio.get_running_loop()
         registry.bind_loop(loop)
         consumer = DepositStatusConsumer(settings, registry)

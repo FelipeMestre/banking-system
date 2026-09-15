@@ -41,15 +41,15 @@ router = APIRouter(tags=["card-payments"])
     response_model=CardPaymentStatusDTO,
     response_model_exclude_none=True,
 )
-def card_payment_status(
+async def card_payment_status(
     request_id: str,
     registry: CardPaymentStatusRegistryDep,
     settlement_registry: CardPaymentSettlementRegistryDep,
 ):
-    settled = settlement_registry.get(request_id)
+    settled = await settlement_registry.get(request_id)
     if settled is not None:
         return CardPaymentStatusDTO(**settled)
-    resolved = registry.get(request_id)
+    resolved = await registry.get(request_id)
     if resolved is None:
         return CardPaymentStatusDTO(request_id=request_id, status="pending")
     return CardPaymentStatusDTO(**resolved)
