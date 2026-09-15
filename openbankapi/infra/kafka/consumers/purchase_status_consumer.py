@@ -2,7 +2,7 @@
 
 Mirrors `TransferStatusConsumer` exactly: one consumer per process fans out
 in-process to every waiting WebSocket/poll, rather than one consumer per
-connection. Uses its own `StatusRegistry` instance (never the transfer one) —
+connection. Uses its own `IStatusRegistry` instance (never the transfer one) —
 `request_id` is only unique within its own domain's Kafka topic, and a card
 purchase and a transfer could coincidentally share one.
 """
@@ -18,13 +18,13 @@ from typing import Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.purchase_status")
 
 
 class PurchaseStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()

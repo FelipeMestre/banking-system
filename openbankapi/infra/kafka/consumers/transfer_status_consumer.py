@@ -15,13 +15,13 @@ from typing import Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.status")
 
 
 class TransferStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()

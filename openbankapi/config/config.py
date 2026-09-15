@@ -45,6 +45,11 @@ class Settings:
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
     redis_url: str = "redis://redis:6379/0"
     cache_ttl_seconds: int = 300
+    # Horizontal scalability: bounded pool for the Redis-backed status
+    # registry's connections (separate from the cache's own client). Fails
+    # fast once exhausted rather than queueing forever.
+    redis_pool_size: int = 50
+    status_ttl_seconds: int = 240
 
     # --- Payments ---
     # The fees account is now a real 16-digit number: 'acc-fees' would fail the
@@ -113,6 +118,8 @@ class Settings:
             ),
             redis_url=os.getenv("REDIS_URL", "redis://redis:6379/0"),
             cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "300")),
+            redis_pool_size=int(os.getenv("REDIS_POOL_SIZE", "50")),
+            status_ttl_seconds=int(os.getenv("STATUS_TTL_SECONDS", "240")),
             fees_account=os.getenv("FEES_ACCOUNT", "0000000000000001"),
             fee_flat_cents=int(os.getenv("FEE_FLAT_CENTS", "25")),
             credit_card_apr=Decimal(os.getenv("CREDIT_CARD_APR", "0.24")),

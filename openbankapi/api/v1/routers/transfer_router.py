@@ -57,9 +57,9 @@ async def request_transfer(body: TransferRequestDTO, service: TransferServiceDep
     response_model=TransferStatusDTO,
     response_model_exclude_none=True,
 )
-def transfer_status(request_id: str, registry: StatusRegistryDep, _claims: ReadAdminDep):
+async def transfer_status(request_id: str, registry: StatusRegistryDep, _claims: ReadAdminDep):
     """REST-only read; WS /ws/transfer/{id} intentionally left out of RBAC (deferred)."""
-    resolved = registry.get(request_id)
+    resolved = await registry.get(request_id)
     if resolved is None:
         return TransferStatusDTO(request_id=request_id, status="pending")
     return TransferStatusDTO(**resolved)

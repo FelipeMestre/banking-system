@@ -41,7 +41,7 @@ from ....domain.service.installment_service import split_into_installments
 from ...database.interfaces.applied_rate_repository import IAppliedRateRepository
 from ...database.interfaces.card_movement_repository import ICardMovementRepository
 from ...database.interfaces.installment_repository import IInstallmentRepository
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.card_movements")
 
@@ -64,7 +64,7 @@ class CardMovementConsumer:
         movement_repository: ICardMovementRepository,
         installment_repository: IInstallmentRepository,
         applied_rate_repository: Optional[IAppliedRateRepository] = None,
-        settlement_registry: Optional[StatusRegistry] = None,
+        settlement_registry: Optional[IStatusRegistry] = None,
     ):
         self._settings = settings
         self._movement_repository = movement_repository
@@ -180,8 +180,8 @@ class CardMovementConsumer:
             # (movements list, current-cycle total, billing-cycle totals) are
             # actually safe to reload: `insert` above just committed. Redelivery
             # of the same `payment_applied` event resolves again harmlessly —
-            # `StatusRegistry.resolve` already ignores a request_id it has seen.
-            self._settlement_registry.resolve(
+            # `resolve` already ignores a request_id it has seen (SET NX under Redis).
+            await self._settlement_registry.resolve(
                 {"request_id": event["request_id"], "status": "settled", "ts": event.get("ts")}
             )
 

@@ -71,7 +71,7 @@ from ..infra.database.repositories import (
 )
 from ..infra.database.config.session import DbSession
 from ..infra.kafka.interfaces.event_publisher import IEventPublisher
-from ..infra.kafka.status_registry import StatusRegistry
+from ..infra.status_registry.interfaces.status_registry import IStatusRegistry
 
 # --- process-wide singletons, read back off app.state -----------------------
 
@@ -97,24 +97,24 @@ def get_publisher(conn: HTTPConnection) -> IEventPublisher:
 PublisherDep = Annotated[IEventPublisher, Depends(get_publisher)]
 
 
-def get_status_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_status_registry(conn: HTTPConnection) -> IStatusRegistry:
     return conn.app.state.status_registry
 
 
-StatusRegistryDep = Annotated[StatusRegistry, Depends(get_status_registry)]
+StatusRegistryDep = Annotated[IStatusRegistry, Depends(get_status_registry)]
 
 
-def get_purchase_status_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_purchase_status_registry(conn: HTTPConnection) -> IStatusRegistry:
     # A separate instance from `status_registry` (transfers): `request_id`
     # is only unique within its own domain's Kafka topic, and a card
     # purchase and a transfer could coincidentally share one.
     return conn.app.state.purchase_status_registry
 
 
-PurchaseStatusRegistryDep = Annotated[StatusRegistry, Depends(get_purchase_status_registry)]
+PurchaseStatusRegistryDep = Annotated[IStatusRegistry, Depends(get_purchase_status_registry)]
 
 
-def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_card_payment_status_registry(conn: HTTPConnection) -> IStatusRegistry:
     # A THIRD separate instance (never `status_registry` or
     # `purchase_status_registry`): `request_id` is only unique within its own
     # domain's Kafka topic, and a card payment could coincidentally share one
@@ -122,10 +122,10 @@ def get_card_payment_status_registry(conn: HTTPConnection) -> StatusRegistry:
     return conn.app.state.card_payment_status_registry
 
 
-CardPaymentStatusRegistryDep = Annotated[StatusRegistry, Depends(get_card_payment_status_registry)]
+CardPaymentStatusRegistryDep = Annotated[IStatusRegistry, Depends(get_card_payment_status_registry)]
 
 
-def get_card_payment_settlement_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_card_payment_settlement_registry(conn: HTTPConnection) -> IStatusRegistry:
     # Deliberately separate from `card_payment_status_registry`: that one
     # carries the authorization verdict (published by account-service the
     # instant it debits the paying account); this one is resolved in-process
@@ -135,26 +135,26 @@ def get_card_payment_settlement_registry(conn: HTTPConnection) -> StatusRegistry
 
 
 CardPaymentSettlementRegistryDep = Annotated[
-    StatusRegistry, Depends(get_card_payment_settlement_registry)
+    IStatusRegistry, Depends(get_card_payment_settlement_registry)
 ]
 
 
-def get_deposit_status_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_deposit_status_registry(conn: HTTPConnection) -> IStatusRegistry:
     # A FOURTH separate instance: `request_id` is only unique within its own
     # domain's Kafka topic.
     return conn.app.state.deposit_status_registry
 
 
-DepositStatusRegistryDep = Annotated[StatusRegistry, Depends(get_deposit_status_registry)]
+DepositStatusRegistryDep = Annotated[IStatusRegistry, Depends(get_deposit_status_registry)]
 
 
-def get_withdrawal_status_registry(conn: HTTPConnection) -> StatusRegistry:
+def get_withdrawal_status_registry(conn: HTTPConnection) -> IStatusRegistry:
     # A FIFTH separate instance: `request_id` is only unique within its own
     # domain's Kafka topic.
     return conn.app.state.withdrawal_status_registry
 
 
-WithdrawalStatusRegistryDep = Annotated[StatusRegistry, Depends(get_withdrawal_status_registry)]
+WithdrawalStatusRegistryDep = Annotated[IStatusRegistry, Depends(get_withdrawal_status_registry)]
 
 
 def get_foreign_exchange_cache_service(conn: HTTPConnection):

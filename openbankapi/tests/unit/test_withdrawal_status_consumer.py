@@ -10,14 +10,16 @@ def test_withdrawal_status_consumer_dispatch_resolves_registry():
     from openbankapi.infra.kafka.consumers.withdrawal_status_consumer import (
         WithdrawalStatusConsumer,
     )
-    from openbankapi.infra.kafka.status_registry import StatusRegistry
+    from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+        FakeStatusRegistry,
+    )
 
     async def scenario():
         settings = Settings(
             withdrawal_status_topic="withdrawal-status",
             withdrawal_status_consumer_group="test-group",
         )
-        registry = StatusRegistry(max_cached=10_000)
+        registry = FakeStatusRegistry()
         loop = asyncio.get_running_loop()
         registry.bind_loop(loop)
         consumer = WithdrawalStatusConsumer(settings, registry)

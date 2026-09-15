@@ -2,7 +2,7 @@
 
 Mirrors `DepositStatusConsumer` exactly: one consumer per process fans out
 in-process to every waiting waiter, rather than one consumer per request.
-Uses its own `StatusRegistry` instance (never transfer/purchase/deposit) —
+Uses its own `IStatusRegistry` instance (never transfer/purchase/deposit) —
 `request_id` is only unique within its own domain's Kafka topic.
 """
 from __future__ import annotations
@@ -17,13 +17,13 @@ from typing import Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.withdrawal_status")
 
 
 class WithdrawalStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()

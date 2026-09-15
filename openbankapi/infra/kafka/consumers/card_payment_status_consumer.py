@@ -1,7 +1,7 @@
 """The single long-lived consumer on `card-payment-status` (Credit Cards
 Phase 3). Mirrors `PurchaseStatusConsumer` exactly: one consumer per process
 fans out in-process to every waiting WebSocket/poll. Uses its OWN
-`StatusRegistry` instance (never `transfer`'s or `purchase`'s) — `request_id`
+`IStatusRegistry` instance (never `transfer`'s or `purchase`'s) — `request_id`
 is only unique within its own domain's Kafka topic, and a card payment and a
 purchase (or a transfer) could coincidentally share one.
 """
@@ -17,13 +17,13 @@ from typing import Optional
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.card_payment_status")
 
 
 class CardPaymentStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()
