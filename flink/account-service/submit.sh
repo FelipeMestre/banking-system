@@ -13,9 +13,17 @@ until curl -sf "http://${JOBMANAGER}/overview" \
 done
 
 # Resubmitting on top of a live job would run two ledgers over one topic.
+# Matched by name, not "any job RUNNING": jobmanager is now a cluster shared
+# with card-service's job (see docker-compose.yml), so a naive "any" check
+# would see card-service running and wrongly skip submitting this one.
+JOB_NAME="account-service"
 if curl -sf "http://${JOBMANAGER}/jobs/overview" \
-  | python3 -c "import sys, json; sys.exit(0 if any(j['state'] == 'RUNNING' for j in json.load(sys.stdin)['jobs']) else 1)" 2>/dev/null; then
-  echo "a job is already RUNNING; nothing to submit"
+  | python3 -c "
+import sys, json
+jobs = json.load(sys.stdin)['jobs']
+sys.exit(0 if any(j['name'] == '${JOB_NAME}' and j['state'] == 'RUNNING' for j in jobs) else 1)
+" 2>/dev/null; then
+  echo "${JOB_NAME} is already RUNNING; nothing to submit"
   exit 0
 fi
 

@@ -2,7 +2,7 @@
 # Submits the PyFlink job once the cluster can actually run it.
 set -euo pipefail
 
-JOBMANAGER="${FLINK_JOBMANAGER:-flink-card-jobmanager:8081}"
+JOBMANAGER="${FLINK_JOBMANAGER:-flink-jobmanager:8081}"
 
 # Waiting for the JobManager alone is not enough: a job submitted before any
 # TaskManager has registered sits without slots until Flink gives up on it.
@@ -13,10 +13,18 @@ until curl -sf "http://${JOBMANAGER}/overview" \
 done
 
 # Resubmitting on top of a live job would run two authorization ledgers over
-# one topic.
+# one topic. Matched by name, not "any job RUNNING": jobmanager is now a
+# cluster shared with account-service's job (see docker-compose.yml), so a
+# naive "any" check would see account-service running and wrongly skip
+# submitting this one.
+JOB_NAME="card-service"
 if curl -sf "http://${JOBMANAGER}/jobs/overview" \
-  | python3 -c "import sys, json; sys.exit(0 if any(j['state'] == 'RUNNING' for j in json.load(sys.stdin)['jobs']) else 1)" 2>/dev/null; then
-  echo "a job is already RUNNING; nothing to submit"
+  | python3 -c "
+import sys, json
+jobs = json.load(sys.stdin)['jobs']
+sys.exit(0 if any(j['name'] == '${JOB_NAME}' and j['state'] == 'RUNNING' for j in jobs) else 1)
+" 2>/dev/null; then
+  echo "${JOB_NAME} is already RUNNING; nothing to submit"
   exit 0
 fi
 
