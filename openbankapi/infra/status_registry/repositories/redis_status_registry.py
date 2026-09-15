@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 from typing import Optional
 
 from ..interfaces.status_registry import IStatusRegistry, StatusEvent
@@ -20,39 +21,66 @@ from ..interfaces.status_registry_client import IStatusRegistryClient
 LOG = logging.getLogger("openbankapi.status_registry")
 
 _POLL_INTERVAL_SECONDS = 0.25
+_DEFAULT_MAX_IN_FLIGHT = 50
 
 
 class _RedisStatusRegistry:
-    def __init__(self, client: IStatusRegistryClient, domain: str, ttl_seconds: int):
+    def __init__(
+        self,
+        client: IStatusRegistryClient,
+        domain: str,
+        ttl_seconds: int,
+        max_in_flight: Optional[threading.Semaphore] = None,
+    ):
         self._client = client
         self._domain = domain
         self._ttl_seconds = ttl_seconds
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._pending = 0
+        # Bounds how many `resolve()` tasks may be scheduled onto the loop at
+        # once. Without this, a Kafka consumer thread keeps calling
+        # `resolve_threadsafe` at full poll speed regardless of how fast the
+        # loop can drain Redis writes — under sustained load that piles up an
+        # unbounded backlog of pending tasks with no thread ever slowing down
+        # to match. Acquiring here blocks the *consumer* thread once the
+        # limit is hit, which is the actual back-pressure signal: Kafka
+        # naturally holds those messages until a slot frees up, instead of
+        # the process building an ever-growing in-memory queue.
+        self._in_flight = max_in_flight or threading.Semaphore(_DEFAULT_MAX_IN_FLIGHT)
 
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
 
     def resolve_threadsafe(self, event: StatusEvent) -> None:
-        """Fire-and-forget scheduling onto the bound loop from a Kafka
-        consumer thread. Deliberately not `run_coroutine_threadsafe(...).result()`
-        (design's explicit rejection): a consumer thread must keep polling
-        Kafka regardless of Redis latency, never block on this round-trip.
+        """Bounded-concurrency scheduling onto the bound loop from a Kafka
+        consumer thread. Still deliberately not `run_coroutine_threadsafe(...).result()`
+        (design's explicit rejection) — a consumer thread must not block on
+        an individual Redis round-trip. What it does do now is block on the
+        `_in_flight` semaphore once too many resolves are already pending,
+        so the thread naturally slows to the rate Redis can actually sustain
+        instead of scheduling work faster than the loop can drain it.
 
         A `Task` created by `ensure_future` silently swallows a raised
         exception until something awaits it or reads `.exception()` — nothing
         here ever would, so a failed Redis write would otherwise vanish. The
-        `add_done_callback` below is what makes that failure visible instead.
+        `add_done_callback` below is what makes that failure visible instead
+        (and is also what releases the semaphore slot).
         """
         if self._loop is None:
             LOG.warning("status registry has no loop bound; dropping %r", event)
             return
 
+        self._in_flight.acquire()
+
         def _schedule() -> None:
             task = asyncio.ensure_future(self.resolve(event))
-            task.add_done_callback(self._log_if_failed)
+            task.add_done_callback(self._release_and_log)
 
         self._loop.call_soon_threadsafe(_schedule)
+
+    def _release_and_log(self, task: "asyncio.Task") -> None:
+        self._in_flight.release()
+        self._log_if_failed(task)
 
     @staticmethod
     def _log_if_failed(task: "asyncio.Task") -> None:
@@ -123,6 +151,9 @@ class _RedisStatusRegistry:
 
 
 def get_redis_status_registry(
-    client: IStatusRegistryClient, domain: str, ttl_seconds: int
+    client: IStatusRegistryClient,
+    domain: str,
+    ttl_seconds: int,
+    max_in_flight: Optional[threading.Semaphore] = None,
 ) -> IStatusRegistry:
-    return _RedisStatusRegistry(client, domain, ttl_seconds)
+    return _RedisStatusRegistry(client, domain, ttl_seconds, max_in_flight)
