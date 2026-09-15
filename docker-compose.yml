@@ -314,7 +314,12 @@ services:
   openbankapi-worker:
     build:
       context: ./openbankapi
-    container_name: openbankapi-worker
+    # No fixed container_name: incompatible with `--scale openbankapi-worker=N`
+    # for the same reason as `openbankapi` above — Docker needs to assign a
+    # unique name per replica. Kafka's consumer-group rebalancing is what
+    # actually splits the load across replicas once this is >1 (see the
+    # group.id fix in config.py — a shared group.id per topic, not a random
+    # one per process).
     command: ["python", "-m", "openbankapi.worker"]
     volumes:
       - ./openbankapi:/app/openbankapi
