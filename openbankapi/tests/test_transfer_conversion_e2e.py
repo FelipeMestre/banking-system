@@ -36,7 +36,7 @@ from openbankapi.infra.kafka.consumers.transaction_consumer import TransactionCo
 from openbankapi.tests.db_fixtures import rollback_session
 from openbankapi.tests.fakes import FakePublisher
 
-_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "account-service"
+_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "flink" / "account-service"
 if str(_ACCOUNT_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_ACCOUNT_SERVICE_DIR))
 

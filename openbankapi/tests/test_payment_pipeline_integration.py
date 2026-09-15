@@ -10,9 +10,9 @@ pipeline end to end by composing the real pieces directly:
 
     router logic (real repos, real `convert()`)
       -> account-service `domain.decide()` (real, imported from
-         `account-service/domain.py`)
+         `flink/account-service/domain.py`)
       -> card-service `domain.decide()` (real, imported from
-         `card-service/domain.py`)
+         `flink/card-service/domain.py`)
       -> `CardMovementConsumer._apply()` (real, backed by real Postgres)
       -> `TransactionConsumer._apply()` (real, backed by real Postgres)
 """
@@ -56,14 +56,14 @@ from openbankapi.infra.kafka.consumers.card_movement_consumer import CardMovemen
 from openbankapi.infra.kafka.consumers.transaction_consumer import TransactionConsumer
 from openbankapi.tests.db_fixtures import rollback_session
 
-_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "account-service"
+_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "flink" / "account-service"
 if str(_ACCOUNT_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_ACCOUNT_SERVICE_DIR))
 
 from domain import LedgerState  # noqa: E402
 from domain import decide as account_decide  # noqa: E402
 
-_CARD_SERVICE_DOMAIN_PATH = Path(__file__).resolve().parents[2] / "card-service" / "domain.py"
+_CARD_SERVICE_DOMAIN_PATH = Path(__file__).resolve().parents[2] / "flink" / "card-service" / "domain.py"
 _card_spec = importlib.util.spec_from_file_location("card_domain_integration", _CARD_SERVICE_DOMAIN_PATH)
 card_domain = importlib.util.module_from_spec(_card_spec)
 sys.modules["card_domain_integration"] = card_domain

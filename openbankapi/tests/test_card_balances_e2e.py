@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 
-_card_domain_path = Path(__file__).resolve().parents[2] / "card-service" / "domain.py"
+_card_domain_path = Path(__file__).resolve().parents[2] / "flink" / "card-service" / "domain.py"
 _spec = importlib.util.spec_from_file_location("card_domain_e2e", _card_domain_path)
 _domain_mod = importlib.util.module_from_spec(_spec)
 import sys
