@@ -6,7 +6,7 @@ __pycache__/
 venv/
 *.egg-info/
 
-# --- Java (account-service/java is built inside Docker, but not always) ---
+# --- Java (flink/account-service/java is built inside Docker, but not always) ---
 target/
 
 # --- Node / Next.js ---
@@ -27,7 +27,7 @@ node_modules/
 .atl/
 
 # --- Docker bind-mounted runtime state ---
-# account-service/card-service Flink checkpoints, bind-mounted onto the host
+# flink/account-service and flink/card-service checkpoints, bind-mounted onto the host
 # (docker-compose.yml) so they survive a container/volume wipe — binary RocksDB
 # state, never source.
 .data/

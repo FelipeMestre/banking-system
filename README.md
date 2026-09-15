@@ -44,16 +44,17 @@ parsing are pure too.
 
 ```
 docker-compose.yml          Kafka (KRaft) + topic init + Flink jobs + Postgres + gateway + AKHQ
-account-service/
-  domain.py                 Pure ledger rules — no Flink imports
-  job.py                    PyFlink wiring: source, keyed state, sinks
-  java/                     One class: the field-extracting serialization schema
-  submit.sh                 Waits for a task slot, then submits the job
-  tests/                    Ledger rules and routing edge cases
-card-service/
-  domain.py                 Pure credit-card balance and authorization rules
-  job.py                    PyFlink wiring, mirroring account-service
-  tests/                    Card balance and authorization rules
+flink/                      Both PyFlink jobs, sharing one jobmanager/taskmanager cluster
+  account-service/
+    domain.py                 Pure ledger rules — no Flink imports
+    job.py                    PyFlink wiring: source, keyed state, sinks
+    java/                     One class: the field-extracting serialization schema
+    submit.sh                 Waits for a task slot, then submits the job
+    tests/                    Ledger rules and routing edge cases
+  card-service/
+    domain.py                 Pure credit-card balance and authorization rules
+    job.py                    PyFlink wiring, mirroring account-service
+    tests/                    Card balance and authorization rules
 openbankapi/                FastAPI gateway, Domain-Driven Design layout
   domain/model/             Entities: account, customer, card, card_account, card_movement, statement, installment
   domain/events/            Domain events, independent of any wire format
