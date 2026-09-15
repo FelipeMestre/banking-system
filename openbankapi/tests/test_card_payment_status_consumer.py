@@ -37,14 +37,13 @@ def test_dispatch_resolves_the_payment_registry_only():
     assert leaked is None
 
 
-def test_group_id_defaults_to_a_unique_value_when_unconfigured():
-    consumer = CardPaymentStatusConsumer(Settings(card_payment_status_consumer_group=""), FakeStatusRegistry())
-    first = consumer._group_id()
-    second = CardPaymentStatusConsumer(
-        Settings(card_payment_status_consumer_group=""), FakeStatusRegistry()
-    )._group_id()
-    assert first != second
-    assert first.startswith("openbankapi-card-payment-status-")
+def test_group_id_defaults_to_a_fixed_shared_value():
+    # Fixed and shared across every worker instance (horizontal scalability):
+    # two instances must land in the same consumer group, or Kafka would hand
+    # each one a full duplicate copy of the topic instead of splitting it.
+    first = CardPaymentStatusConsumer(Settings(), FakeStatusRegistry())._group_id()
+    second = CardPaymentStatusConsumer(Settings(), FakeStatusRegistry())._group_id()
+    assert first == second == "openbankapi-card-payment-status"
 
 
 def test_group_id_uses_the_configured_value_when_present():

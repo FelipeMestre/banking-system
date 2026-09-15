@@ -9,7 +9,6 @@ import asyncio
 import json
 import logging
 import threading
-import uuid
 from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
@@ -37,10 +36,12 @@ class TransferStatusConsumer:
             self._thread.join(timeout=10)
 
     def _group_id(self) -> str:
-        # Unique per process: every instance must see every partition, or a
-        # socket waiting here would never learn a verdict delivered elsewhere.
-        configured = self._settings.status_consumer_group
-        return configured or f"openbankapi-status-{uuid.uuid4()}"
+        # Fixed, shared across every worker instance: the status registry is
+        # Redis-backed now (horizontal scalability), so any instance that
+        # sees the resolving event can make it visible to every replica —
+        # a shared group.id lets Kafka split partitions across instances
+        # instead of handing each one a full duplicate copy of the topic.
+        return self._settings.status_consumer_group
 
     def _run(self) -> None:
         consumer = Consumer(

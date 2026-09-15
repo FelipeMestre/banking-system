@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import threading
-import uuid
 from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
@@ -39,10 +38,8 @@ class CardPaymentStatusConsumer:
             self._thread.join(timeout=10)
 
     def _group_id(self) -> str:
-        # Unique per process: every instance must see every partition, or a
-        # socket waiting here would never learn a verdict delivered elsewhere.
-        configured = self._settings.card_payment_status_consumer_group
-        return configured or f"openbankapi-card-payment-status-{uuid.uuid4()}"
+        # Fixed, shared across every worker instance — see transfer_status_consumer.py.
+        return self._settings.card_payment_status_consumer_group
 
     def _run(self) -> None:
         consumer = Consumer(
