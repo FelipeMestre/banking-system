@@ -25,21 +25,26 @@ class Settings:
     account_events_topic: str = "account-events"
     transfer_status_topic: str = "transfer-status"
     account_balances_topic: str = "account-balances"
-    status_consumer_group: str = ""          # empty -> unique per process
+    # Fixed, shared group.id: with the status registries now backed by Redis
+    # (horizontal scalability), any worker instance can resolve any waiter,
+    # so these no longer need "every instance sees every partition" fan-out —
+    # a shared group.id lets Kafka split partitions across worker replicas
+    # instead of handing each replica a full duplicate copy of the topic.
+    status_consumer_group: str = "openbankapi-transfer-status"
     balance_consumer_group: str = "openbankapi-balances"
     transaction_consumer_group: str = "openbankapi-transactions"
     card_events_topic: str = "card-events"
     purchase_status_topic: str = "purchase-status"
     card_movement_consumer_group: str = "openbankapi-card-movements"
-    purchase_status_consumer_group: str = ""  # empty -> unique per process
+    purchase_status_consumer_group: str = "openbankapi-purchase-status"
     card_payment_status_topic: str = "card-payment-status"
-    card_payment_status_consumer_group: str = ""  # empty -> unique per process
+    card_payment_status_consumer_group: str = "openbankapi-card-payment-status"
     card_balances_topic: str = "card-balances"
     card_balance_consumer_group: str = "openbankapi-card-balances"
     deposit_status_topic: str = "deposit-status"
-    deposit_status_consumer_group: str = ""  # empty -> unique per process
+    deposit_status_consumer_group: str = "openbankapi-deposit-status"
     withdrawal_status_topic: str = "withdrawal-status"
-    withdrawal_status_consumer_group: str = ""  # empty -> unique per process
+    withdrawal_status_consumer_group: str = "openbankapi-withdrawal-status"
 
     # --- Postgres / Redis ---
     database_dsn: str = "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
@@ -94,7 +99,7 @@ class Settings:
             account_events_topic=os.getenv("ACCOUNT_EVENTS_TOPIC", "account-events"),
             transfer_status_topic=os.getenv("TRANSFER_STATUS_TOPIC", "transfer-status"),
             account_balances_topic=os.getenv("ACCOUNT_BALANCES_TOPIC", "account-balances"),
-            status_consumer_group=os.getenv("STATUS_CONSUMER_GROUP", ""),
+            status_consumer_group=os.getenv("STATUS_CONSUMER_GROUP", "openbankapi-transfer-status"),
             balance_consumer_group=os.getenv("BALANCE_CONSUMER_GROUP", "openbankapi-balances"),
             transaction_consumer_group=os.getenv(
                 "TRANSACTION_CONSUMER_GROUP", "openbankapi-transactions"
@@ -104,15 +109,23 @@ class Settings:
             card_movement_consumer_group=os.getenv(
                 "CARD_MOVEMENT_CONSUMER_GROUP", "openbankapi-card-movements"
             ),
-            purchase_status_consumer_group=os.getenv("PURCHASE_STATUS_CONSUMER_GROUP", ""),
+            purchase_status_consumer_group=os.getenv(
+                "PURCHASE_STATUS_CONSUMER_GROUP", "openbankapi-purchase-status"
+            ),
             card_payment_status_topic=os.getenv("CARD_PAYMENT_STATUS_TOPIC", "card-payment-status"),
-            card_payment_status_consumer_group=os.getenv("CARD_PAYMENT_STATUS_CONSUMER_GROUP", ""),
+            card_payment_status_consumer_group=os.getenv(
+                "CARD_PAYMENT_STATUS_CONSUMER_GROUP", "openbankapi-card-payment-status"
+            ),
             card_balances_topic=os.getenv("CARD_BALANCES_TOPIC", "card-balances"),
             card_balance_consumer_group=os.getenv("CARD_BALANCE_CONSUMER_GROUP", "openbankapi-card-balances"),
             deposit_status_topic=os.getenv("DEPOSIT_STATUS_TOPIC", "deposit-status"),
-            deposit_status_consumer_group=os.getenv("DEPOSIT_STATUS_CONSUMER_GROUP", ""),
+            deposit_status_consumer_group=os.getenv(
+                "DEPOSIT_STATUS_CONSUMER_GROUP", "openbankapi-deposit-status"
+            ),
             withdrawal_status_topic=os.getenv("WITHDRAWAL_STATUS_TOPIC", "withdrawal-status"),
-            withdrawal_status_consumer_group=os.getenv("WITHDRAWAL_STATUS_CONSUMER_GROUP", ""),
+            withdrawal_status_consumer_group=os.getenv(
+                "WITHDRAWAL_STATUS_CONSUMER_GROUP", "openbankapi-withdrawal-status"
+            ),
             database_dsn=os.getenv(
                 "DATABASE_DSN", "postgresql+asyncpg://openbank:openbank@postgres:5432/openbank"
             ),

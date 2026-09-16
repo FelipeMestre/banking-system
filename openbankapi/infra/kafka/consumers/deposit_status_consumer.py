@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 import threading
-import uuid
 from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
@@ -40,8 +39,8 @@ class DepositStatusConsumer:
             self._thread.join(timeout=10)
 
     def _group_id(self) -> str:
-        configured = self._settings.deposit_status_consumer_group
-        return configured or f"openbankapi-deposit-status-{uuid.uuid4()}"
+        # Fixed, shared across every worker instance — see transfer_status_consumer.py.
+        return self._settings.deposit_status_consumer_group
 
     def _run(self) -> None:
         consumer = Consumer(
@@ -49,7 +48,7 @@ class DepositStatusConsumer:
                 "bootstrap.servers": self._settings.bootstrap_servers,
                 "group.id": self._group_id(),
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": True,
             }
         )
         consumer.subscribe([self._settings.deposit_status_topic])

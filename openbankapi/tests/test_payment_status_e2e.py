@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import conftest
 
-_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "account-service"
+_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "flink" / "account-service"
 if str(_ACCOUNT_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_ACCOUNT_SERVICE_DIR))
 

@@ -38,9 +38,20 @@ services:
     restart: "no"
     command: bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic transfer-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic account-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-events --partitions 6 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic purchase-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-payment-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic deposit-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic withdrawal-status --partitions 3 --replication-factor 1 --config cleanup.policy=delete --config retention.ms=-1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic card-balances --partitions 6 --replication-factor 1 --config cleanup.policy=compact && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"
 
+  # Single shared cluster for both PyFlink jobs (account-service and
+  # card-service). They used to run as two fully separate jobmanager +
+  # taskmanager pairs — four JVMs total — which is what actually OOM-killed
+  # flink-jobmanager during load testing on this laptop (docs/stress-testing-
+  # report.md §20). `flink run --pyFiles ... -py ...` in each submitter's
+  # submit.sh ships that job's code to the cluster AT SUBMISSION TIME, so the
+  # jobmanager/taskmanager themselves never needed the job-specific domain
+  # code baked in — only the submitter images differ, which is why this
+  # consolidation is safe. The image below is account-service's, chosen
+  # arbitrarily: both Dockerfiles and requirements.txt are identical except
+  # for the destination path, so either would do.
   flink-jobmanager:
     build:
-      context: ./account-service
+      context: ./flink/account-service
     image: banking-system/account-service:latest
     container_name: flink-jobmanager
     platform: linux/amd64
@@ -61,6 +72,8 @@ services:
       CARD_EVENTS_TOPIC: card-events
       CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       DEPOSIT_STATUS_TOPIC: deposit-status
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
@@ -68,7 +81,7 @@ services:
 
   flink-taskmanager:
     build:
-      context: ./account-service
+      context: ./flink/account-service
     image: banking-system/account-service:latest
     container_name: flink-taskmanager
     platform: linux/amd64
@@ -78,7 +91,10 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.numberOfTaskSlots: 6
+        # 12, not 6: this taskmanager now runs both jobs' subtasks at once
+        # (parallelism 3 each, 2 slots per subtask — same per-job ratio as
+        # before, just doubled to cover both).
+        taskmanager.numberOfTaskSlots: 12
         parallelism.default: 3
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
@@ -87,15 +103,18 @@ services:
       CARD_EVENTS_TOPIC: card-events
       CARD_PAYMENT_STATUS_TOPIC: card-payment-status
       DEPOSIT_STATUS_TOPIC: deposit-status
+      PURCHASE_STATUS_TOPIC: purchase-status
+      CARD_BALANCES_TOPIC: card-balances
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
       - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints
 
-  # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
+  # One-shot submitter: pushes the account-service PyFlink job to the shared
+  # cluster once it is up.
   flink-job-submitter:
     build:
-      context: ./account-service
+      context: ./flink/account-service
     image: banking-system/account-service:latest
     container_name: flink-job-submitter
     platform: linux/amd64
@@ -103,6 +122,12 @@ services:
     depends_on:
       - flink-taskmanager
     environment:
+      # `flink run` (this container's client) decides the job's parallelism
+      # from ITS OWN local config at submission time, not the cluster's — so
+      # this has to be repeated here, matching flink-jobmanager/-taskmanager,
+      # or the job silently submits at Flink's parallelism-1 default.
+      FLINK_PROPERTIES: |
+        parallelism.default: 3
       FLINK_JOBMANAGER: flink-jobmanager:8081
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       ACCOUNT_EVENTS_TOPIC: account-events
@@ -117,68 +142,34 @@ services:
       - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints:ro
     command: ["/opt/account_service/submit.sh"]
 
-  flink-card-jobmanager:
-    build:
-      context: ./card-service
-    image: banking-system/card-service:latest
-    container_name: flink-card-jobmanager
-    platform: linux/amd64
-    command: jobmanager
-    ports:
-      - "8082:8081"
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-    environment:
-      FLINK_PROPERTIES: |
-        jobmanager.rpc.address: flink-card-jobmanager
-        parallelism.default: 3
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
-      CARD_EVENTS_TOPIC: card-events
-      PURCHASE_STATUS_TOPIC: purchase-status
-      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
-      CARD_BALANCES_TOPIC: card-balances
-      PROCESSED_IDS_TTL_DAYS: "7"
-      CHECKPOINT_INTERVAL_MS: "5000"
-    volumes:
-      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints
-
-  flink-card-taskmanager:
-    build:
-      context: ./card-service
-    image: banking-system/card-service:latest
-    container_name: flink-card-taskmanager
-    platform: linux/amd64
-    command: taskmanager
-    depends_on:
-      - flink-card-jobmanager
-    environment:
-      FLINK_PROPERTIES: |
-        jobmanager.rpc.address: flink-card-jobmanager
-        taskmanager.numberOfTaskSlots: 6
-        parallelism.default: 3
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
-      CARD_EVENTS_TOPIC: card-events
-      PURCHASE_STATUS_TOPIC: purchase-status
-      CARD_PAYMENT_STATUS_TOPIC: card-payment-status
-      CARD_BALANCES_TOPIC: card-balances
-      PROCESSED_IDS_TTL_DAYS: "7"
-      CHECKPOINT_INTERVAL_MS: "5000"
-    volumes:
-      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints
-
-  # One-shot submitter: pushes the PyFlink job to the cluster once it is up.
+  # One-shot submitter: pushes the card-service PyFlink job to the SAME
+  # shared cluster as flink-job-submitter above (no dedicated card cluster
+  # anymore). Flink namespaces checkpoints by job-id under the checkpoint
+  # root, so sharing account-service's checkpoint directory with this job is
+  # safe — no collision.
   flink-card-job-submitter:
     build:
-      context: ./card-service
+      context: ./flink/card-service
     image: banking-system/card-service:latest
     container_name: flink-card-job-submitter
     platform: linux/amd64
     restart: "no"
     depends_on:
-      - flink-card-taskmanager
+      - flink-taskmanager
     environment:
-      FLINK_JOBMANAGER: flink-card-jobmanager:8081
+      # Same reasoning as flink-job-submitter: the submitting client's own
+      # parallelism.default, not the cluster's, governs the job.
+      FLINK_PROPERTIES: |
+        parallelism.default: 3
+      FLINK_JOBMANAGER: flink-jobmanager:8081
+      # A subdirectory of the shared mount below, not its root: account-
+      # service's own checkpoints already live directly at the mount root
+      # (CHECKPOINT_DIR left at its default there), and this job's
+      # checkpoint-resume glob (submit.sh) only ever looks under its own
+      # CHECKPOINT_DIR — giving each job a distinct path is what keeps the
+      # two jobs' checkpoint histories from mixing now that they share one
+      # volume.
+      CHECKPOINT_DIR: file:///tmp/flink-checkpoints/card
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       CARD_EVENTS_TOPIC: card-events
       PURCHASE_STATUS_TOPIC: purchase-status
@@ -187,7 +178,7 @@ services:
       PROCESSED_IDS_TTL_DAYS: "7"
       CHECKPOINT_INTERVAL_MS: "5000"
     volumes:
-      - ./.data/flink-checkpoints/card-service:/tmp/flink-checkpoints:ro
+      - ./.data/flink-checkpoints/account-service:/tmp/flink-checkpoints:ro
     command: ["/opt/card_service/submit.sh"]
 
   postgres:
@@ -304,7 +295,12 @@ services:
   openbankapi-worker:
     build:
       context: ./openbankapi
-    container_name: openbankapi-worker
+    # No fixed container_name: incompatible with `--scale openbankapi-worker=N`
+    # for the same reason as `openbankapi` above — Docker needs to assign a
+    # unique name per replica. Kafka's consumer-group rebalancing is what
+    # actually splits the load across replicas once this is >1 (see the
+    # group.id fix in config.py — a shared group.id per topic, not a random
+    # one per process).
     command: ["python", "-m", "openbankapi.worker"]
     volumes:
       - ./openbankapi:/app/openbankapi

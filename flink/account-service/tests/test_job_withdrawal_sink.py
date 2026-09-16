@@ -4,7 +4,7 @@ import pathlib
 
 
 def test_withdrawal_status_tag_exists():
-    text = pathlib.Path("account-service/job.py").read_text()
+    text = pathlib.Path("flink/account-service/job.py").read_text()
     assert "WITHDRAWAL_STATUS_TAG" in text
     assert "WITHDRAWAL_STATUS_TOPIC" in text
     assert "withdrawal-status" in text
@@ -13,7 +13,7 @@ def test_withdrawal_status_tag_exists():
 
 
 def test_process_element_routes_withdrawal():
-    text = pathlib.Path("account-service/job.py").read_text()
+    text = pathlib.Path("flink/account-service/job.py").read_text()
     assert "WITHDRAWAL_STATUS_TAG" in text
     assert "WITHDRAWAL_STATUS_TOPIC" in text
     assert "process_element" in text

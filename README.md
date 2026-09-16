@@ -44,16 +44,17 @@ parsing are pure too.
 
 ```
 docker-compose.yml          Kafka (KRaft) + topic init + Flink jobs + Postgres + gateway + AKHQ
-account-service/
-  domain.py                 Pure ledger rules — no Flink imports
-  job.py                    PyFlink wiring: source, keyed state, sinks
-  java/                     One class: the field-extracting serialization schema
-  submit.sh                 Waits for a task slot, then submits the job
-  tests/                    Ledger rules and routing edge cases
-card-service/
-  domain.py                 Pure credit-card balance and authorization rules
-  job.py                    PyFlink wiring, mirroring account-service
-  tests/                    Card balance and authorization rules
+flink/                      Both PyFlink jobs, sharing one jobmanager/taskmanager cluster
+  account-service/
+    domain.py                 Pure ledger rules — no Flink imports
+    job.py                    PyFlink wiring: source, keyed state, sinks
+    java/                     One class: the field-extracting serialization schema
+    submit.sh                 Waits for a task slot, then submits the job
+    tests/                    Ledger rules and routing edge cases
+  card-service/
+    domain.py                 Pure credit-card balance and authorization rules
+    job.py                    PyFlink wiring, mirroring account-service
+    tests/                    Card balance and authorization rules
 openbankapi/                FastAPI gateway, Domain-Driven Design layout
   domain/model/             Entities: account, customer, card, card_account, card_movement, statement, installment
   domain/events/            Domain events, independent of any wire format
@@ -63,11 +64,14 @@ openbankapi/                FastAPI gateway, Domain-Driven Design layout
   api/dtos/                 Request/response DTOs
   infra/database/           ORM, repository ports, Postgres implementations, Alembic migrations
   infra/cache/              ICacheService port + Redis adapter
-  infra/kafka/              Publisher port, producer, both consumers
+  infra/status_registry/    Redis-backed IStatusRegistry — cross-replica visibility for async write outcomes
+  infra/kafka/              Publisher port, producer, all 9 consumers
   infra/foreign_exchange_service/  Currency conversion for non-USD transfers and purchases
   batch/                    Scheduled statement close and due-date checks
   seed/                     Deterministic demo data (customer, accounts, cards, billing cycles)
-  main.py                   Composition root
+  composition.py            Shared composition root — everything both main.py and worker.py need
+  main.py                   HTTP process entry point: routers, no Kafka consumers
+  worker.py                 Kafka-consumer process entry point: all 9 consumers, no HTTP
   tests/                    Every layer, with fakes for every port
 frontend/                   Next.js App Router + TypeScript, feature-oriented
   app/                      Route groups only — thin, composes screens from features/
@@ -94,16 +98,17 @@ flowchart TB
         FE["Frontend<br/>Next.js"]
     end
 
-    API["OpenBankAPI<br/>FastAPI"]
+    API["OpenBankAPI (×N)<br/>FastAPI — HTTP only"]
+    WORKER["OpenBankAPI Worker (×N)<br/>all 9 Kafka consumers"]
 
-    subgraph Streaming["Event streaming"]
+    subgraph Streaming["Event streaming — one shared Flink cluster"]
         KAFKA[("Kafka<br/>KRaft mode")]
-        ACC["Account Service<br/>PyFlink"]
-        CARD["Card Service<br/>PyFlink"]
+        ACC["Account Service<br/>PyFlink job"]
+        CARD["Card Service<br/>PyFlink job"]
     end
 
     PG[("PostgreSQL<br/>reference data + projections")]
-    REDIS[("Redis<br/>cache-aside")]
+    REDIS[("Redis<br/>cache-aside + status registry")]
     BATCH["Batch Worker<br/>cron"]
     AKHQ["AKHQ<br/>monitoring"]
 
@@ -116,9 +121,13 @@ flowchart TB
     KAFKA -- "consumes" --> CARD
     ACC -- "confirmations, balances,<br/>card-events" --> KAFKA
     CARD -- "confirmations,<br/>balances" --> KAFKA
-    KAFKA -- "background consumers" --> API
+    KAFKA -- "consumes" --> WORKER
 
-    API -- "CRUD + read projections" --> PG
+    WORKER -- "read projections" --> PG
+    WORKER -- "writes outcome,<br/>publishes resolution" --> REDIS
+    API -- "waits on resolution<br/>(any replica sees it)" --> REDIS
+
+    API -- "CRUD" --> PG
     API -- "cache-aside" --> REDIS
     REDIS -. "on cache miss" .-> FX
 
@@ -133,7 +142,7 @@ flowchart TB
     classDef neutral fill:#f3f4f6,stroke:#9ca3af,stroke-width:1px
 
     class FE,AKHQ,FX neutral
-    class API api
+    class API,WORKER api
     class KAFKA stream
     class ACC,CARD,BATCH processor
     class PG,REDIS storage
@@ -150,13 +159,35 @@ The only client-facing surface. Talks to OpenBankAPI exclusively over
 HTTP/WebSocket; holds no business logic of its own.
 
 **OpenBankAPI — FastAPI (Python)**
-The single HTTP entry point. Its job is translation, not decision-making: it
-turns synchronous HTTP requests into events on the write path (producing to
-Kafka), and turns asynchronous confirmations back into synchronous-feeling
-responses on the read path (via WebSocket push or a request that waits on a
-matched confirmation). It also owns plain CRUD ("ABM") for low-contention
-reference data — customers, branches, cards' metadata — that doesn't need
-event sourcing at all.
+The single HTTP entry point, runnable as N stateless replicas behind nginx.
+Its job is translation, not decision-making: it turns synchronous HTTP
+requests into events on the write path (producing to Kafka), and turns
+asynchronous confirmations back into synchronous-feeling responses on the
+read path (via WebSocket push or a request that waits on a matched
+confirmation, using the status registry below). It also owns plain CRUD 
+for low-contention reference data — customers, branches, cards'
+metadata — that doesn't need event sourcing at all. It runs **no Kafka
+consumers of its own** — see OpenBankAPI Worker.
+
+**OpenBankAPI Worker — FastAPI's process split (Python)**
+A separate process (`python -m openbankapi.worker`, its own replica count,
+independent of the HTTP tier) running all 9 Kafka consumers: the ones that
+project Flink's decisions into Postgres read models, and the five that
+resolve async write outcomes (transfer/purchase/card-payment/deposit/
+withdrawal status). This split exists because those consumers used to run
+*inside* the same process as the HTTP server, with each resolved outcome
+held in an **in-memory** registry — the process that accepted a request was
+the only one that could ever answer "is it done yet." Once `openbankapi`
+needed more than one replica, that stopped working: a client polling
+replica B for a request replica A accepted would see `pending` forever, not
+because the system was overloaded, but because the answer lived in a
+process the poll could never reach. Splitting Kafka consumption into its
+own process and moving the status registry to Redis (SET NX + Pub/Sub, so
+any replica can see a resolution any worker wrote) fixed that — and, as a
+side effect, let the consumer tier be scaled independently of the HTTP
+tier once Kafka partitions were verified to actually split across worker
+replicas (a shared `group.id` was required for that; see the stress-testing
+report below for the fan-out bug this surfaced and fixed).
 
 **Apache Kafka (KRaft mode)**
 The shared, ordered, partitioned log at the center of the system. Two
@@ -176,6 +207,19 @@ processed sequentially by exactly one task — this sequential-per-shard
 guarantee is what replaces the need for distributed transactions or locks
 when checking "is there enough balance/credit" under concurrent requests.
 
+Both jobs run on **one shared jobmanager/taskmanager cluster**, not one
+dedicated cluster each. They used to be fully separate (four JVMs total);
+that changed after load testing showed the fixed overhead of four JVMs
+on one machine was enough to get the jobmanager OOM-killed under
+sustained load. Consolidating was safe because each job already ships its
+own code to the cluster *at submission time* (`flink run --pyFiles`), so
+the runtime itself never needed to know about either job's domain logic —
+only the code that submits a job differs, not the cluster it runs on. The
+two jobs remain fully independent otherwise: separate checkpoints, separate
+failure domains for a code-level bug in one job's logic (though not for an
+infrastructure-level failure of the shared cluster process itself — see
+the report below for that tradeoff).
+
 **PostgreSQL**
 Two distinct roles, intentionally separated: (1) reference/master data
 (customers, branches, accounts, card accounts) managed as plain CRUD, and
@@ -186,11 +230,17 @@ tables. Postgres is never the source of truth for a balance; it's always a
 derived, eventually-consistent view of what Flink already decided.
 
 **Redis**
-Cache-aside for data that's read far more often than it changes: foreign
-exchange rates (refreshed from an external API on a 24h TTL) and reference
-data lookups. Deliberately *not* used for anything Flink owns — a cache in
-front of already-fast Postgres reads was judged unnecessary complexity for
-values that already have a dedicated projection.
+Two distinct roles. (1) Cache-aside for data that's read far more often
+than it changes: foreign exchange rates (refreshed from an external API on
+a 24h TTL) and reference data lookups — deliberately *not* used for
+anything Flink owns, since a cache in front of already-fast Postgres reads
+was judged unnecessary complexity for values that already have a dedicated
+projection. (2) The **status registry**: `SET ... NX` for dedup (a
+redelivered Kafka event is a safe no-op) plus Pub/Sub for notification,
+subscribed *before* the first cache check to close a lost-wakeup race —
+this is what lets any `openbankapi` HTTP replica see a resolution written
+by any `openbankapi-worker` replica, the piece that makes both tiers safe
+to run as more than one instance.
 
 **Frankfurter API (external)**
 Source of foreign exchange mid-market rates (USD/EUR/GBP). Fetched
@@ -227,10 +277,46 @@ observable during development.
 4. Flink makes the one decision that actually requires sequencing
   (sufficient balance/credit), deterministically and idempotently, and
    emits the outcome back onto the log.
-5. Independent consumers project that outcome into whatever Postgres
-  tables the read side needs, and push a confirmation back to the client.
+5. `openbankapi-worker` — a separate process from the one that accepted
+  the request — consumes that outcome, projects it into whatever Postgres
+   tables the read side needs, and writes the resolution to Redis. Whichever
+   `openbankapi` replica the client happens to be polling reads that
+   resolution back out of Redis and returns it — not necessarily the same
+   replica that accepted the original request.
 
 
+
+### Built from load testing, not speculative design
+
+The worker split and the Flink consolidation above weren't designed
+upfront — both came out of running actual load tests against the system,
+finding where it broke, and fixing exactly that. Full experiment log,
+methodology, and root-cause analysis: [`docs/stress-testing-report.md`](docs/stress-testing-report.md).
+
+- **Why `openbankapi-worker` exists at all**: scaling `openbankapi` to
+  multiple replicas with Kafka consumers still running inside it — and an
+  in-memory status registry — meant a request accepted by one replica could
+  never be resolved by a client polling a different one. This wasn't
+  theoretical: it showed up immediately as requests timing out under load
+  the moment more than one replica was tested. Moving consumption to a
+  separate process and the registry to Redis fixed it, and was then
+  independently verified with real numbers, not just "it should work now."
+- **Was it worth it?** Yes, measurably: at the same load (2 API + 2 worker
+  replicas vs. 1 + 1, everything else held constant), 2 replicas beat 1 by
+  13–26% on throughput once load passed ~50 concurrent virtual users, with
+  the advantage *growing* as load increased — the signature of a real
+  capacity ceiling being relieved, not overhead outweighing benefit.
+- **Why the Flink jobs were consolidated onto one cluster**: four separate
+  JVM processes (two jobmanager/taskmanager pairs) sharing one Docker
+  Desktop VM's memory budget got the jobmanager OOM-killed under load — an
+  observed failure, not a hypothetical one, caught mid-experiment via
+  `docker compose ps -a` showing exit code 137 (SIGKILL).
+- **Did consolidating cost anything?** No — re-run twice for reproducibility
+  at the same topology, the single-cluster config *beat* the old four-JVM
+  setup on both throughput (+15% to +25% at every load level tested) and
+  latency (transfer accept p95 fell from ~2.3s to under a second at 200
+  concurrent VUs), on top of removing the failure mode that motivated the
+  change.
 
 ## Non-Functional Requirements Addressed
 
@@ -238,7 +324,7 @@ observable during development.
 | Requirement                                                  | How it's addressed                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Consistency without distributed transactions**             | Multi-entity operations (a transfer touching three accounts, a purchase reserving credit) achieve atomicity through a single durable log write plus deterministic, idempotent downstream processing — not two-phase commit.                                                                                                                                                                             |
-| **Horizontal scalability**                                   | Kafka partitioning and Flink's parallel task model mean throughput scales by adding partitions and worker capacity, not by making a single process faster. Sharding key choice (account number, card account id) directly determines what can be parallelized safely.                                                                                                                                   |
+| **Horizontal scalability**                                   | Kafka partitioning and Flink's parallel task model mean throughput scales by adding partitions and worker capacity, not by making a single process faster. Sharding key choice (account number, card account id) directly determines what can be parallelized safely. `openbankapi` and `openbankapi-worker` are both stateless replica sets for the same reason — no in-process state a load balancer or Kafka rebalance could strand on one instance; verified with measured throughput/latency gains as replica count increased, not just "should scale in theory" (see the load-testing section above). |
 | **Fault tolerance / crash recovery**                         | Flink checkpoints state and consumed offsets together, atomically, so a crash-and-restart resumes exactly where it left off without data loss or double-processing. Combined with idempotent handlers and end-to-end request ids, at-least-once delivery never becomes at-least-once *effect*.                                                                                                          |
 | **Low-latency reads under a write-heavy, asynchronous core** | Because the authoritative decision-making (Flink) can't be queried directly, dedicated consumers continuously project results into read-optimized Postgres tables (balances, movement history). Reads never wait on or block the write path.                                                                                                                                                            |
 | **Auditability**                                             | The event log is the immutable system of record; every account/card movement, currency conversion, and privileged admin action (deposits, limit changes, status changes) is written to an append-only table with enough context to reconstruct exactly what happened and why — not just that a number changed.                                                                                          |

@@ -1,0 +1,2 @@
+run_label,replicas,purchase_vus,transfer_vus,total_vus,iterations,http_reqs,throughput_rps,http_req_failed_rate,purchase_accept_p95_ms,purchase_accept_avg_ms,transfer_accept_p95_ms,transfer_accept_avg_ms,purchase_e2e_p95_ms,transfer_e2e_p95_ms,purchase_unresolved,transfer_unresolved
+r2_vu20,2,10,10,20,180,2229,45.88,0,57.10664999999999,19.09074545454545,339.79290000000003,86.36741428571425,3471.099999999999,4337.15,0,0

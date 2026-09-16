@@ -11,6 +11,7 @@ stack, which is the entire point of the worker-http-split.
 from __future__ import annotations
 
 import logging
+import threading
 
 from .config import Settings
 from .infra.cache.repositories import (
@@ -92,23 +93,38 @@ publisher = KafkaEventPublisherRepository(settings)
 _status_registry_client = get_redis_status_registry_client(
     settings.redis_url, settings.redis_pool_size
 )
+# Shared across all 6 registries for the same reason as the client above:
+# they draw from one connection pool, so the cap on concurrent in-flight
+# `resolve()` tasks has to be shared too — 6 independent per-domain limits
+# of `redis_pool_size` each would still let 6x the pool's actual capacity
+# pile up at once and reproduce the exhaustion this is meant to prevent.
+_status_resolve_semaphore = threading.Semaphore(settings.redis_pool_size)
 status_registry = get_redis_status_registry(
-    _status_registry_client, "transfer", settings.status_ttl_seconds
+    _status_registry_client, "transfer", settings.status_ttl_seconds, _status_resolve_semaphore
 )
 purchase_status_registry = get_redis_status_registry(
-    _status_registry_client, "purchase", settings.status_ttl_seconds
+    _status_registry_client, "purchase", settings.status_ttl_seconds, _status_resolve_semaphore
 )
 card_payment_status_registry = get_redis_status_registry(
-    _status_registry_client, "card_payment", settings.status_ttl_seconds
+    _status_registry_client,
+    "card_payment",
+    settings.status_ttl_seconds,
+    _status_resolve_semaphore,
 )
 card_payment_settlement_registry = get_redis_status_registry(
-    _status_registry_client, "card_payment_settlement", settings.status_ttl_seconds
+    _status_registry_client,
+    "card_payment_settlement",
+    settings.status_ttl_seconds,
+    _status_resolve_semaphore,
 )
 deposit_status_registry = get_redis_status_registry(
-    _status_registry_client, "deposit", settings.status_ttl_seconds
+    _status_registry_client, "deposit", settings.status_ttl_seconds, _status_resolve_semaphore
 )
 withdrawal_status_registry = get_redis_status_registry(
-    _status_registry_client, "withdrawal", settings.status_ttl_seconds
+    _status_registry_client,
+    "withdrawal",
+    settings.status_ttl_seconds,
+    _status_resolve_semaphore,
 )
 
 ALL_STATUS_REGISTRIES = (

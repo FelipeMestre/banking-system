@@ -5,7 +5,7 @@ import pathlib
 
 
 def test_deposit_status_tag_exists():
-    text = pathlib.Path("account-service/job.py").read_text()
+    text = pathlib.Path("flink/account-service/job.py").read_text()
     assert "DEPOSIT_STATUS_TAG" in text
     assert "DEPOSIT_STATUS_TOPIC" in text
     assert 'deposit-status' in text
@@ -17,7 +17,7 @@ def test_deposit_status_tag_exists():
 def test_process_element_routes_deposit():
     import pathlib
 
-    text = pathlib.Path("account-service/job.py").read_text()
+    text = pathlib.Path("flink/account-service/job.py").read_text()
     assert "DEPOSIT_STATUS_TAG" in text
     assert "DEPOSIT_STATUS_TOPIC" in text
     # process_element should yield to DEPOSIT_STATUS_TAG and handle deposit
