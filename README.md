@@ -1,4 +1,4 @@
-# OpenBankAPI — Backend
+# OpenBank Web APP
 Financial systems are a great example of a piece of software in which non-functional requirements are critically important. A concurrency issue can lead huge losses, a wrong fault recovery policy can affect the data of thousands of transactions, and, missing idempotency in requests can lead to duplicated charges for users. 
 
 Thinking about this kind of systems, I decided to implement a simulation of how banking software could avoid those issues, and, take the most out of architectural design so every component either of processing or storing data, brings the right functionality so the system can be reliable, fault-tolerant and scalable.
