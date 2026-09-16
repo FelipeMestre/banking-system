@@ -73,8 +73,12 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
     };
   }, []);
 
+  // `approved` is an intermediate state (the authorization succeeded, but the
+  // movement may not be durable yet) — keep watching through it. Only
+  // `settled` (a successful payment's true terminal state) or `declined`
+  // stop the watch.
   const watchedRequestId =
-    result && liveStatus?.status !== "approved" && liveStatus?.status !== "declined"
+    result && liveStatus?.status !== "settled" && liveStatus?.status !== "declined"
       ? result.request_id
       : null;
 
@@ -90,7 +94,10 @@ export function PayDialog({ cardAccountId, onClose, onPaid, presets }: Props) {
       // parent's refresh, which is why the used-credit bar stayed stale.
       if (result?.request_id !== requestId) return;
       setLiveStatus(status);
-      if (status.status === "approved") onPaid?.();
+      // Only `settled` means the movement is actually durable — refreshing
+      // on the earlier `approved` verdict is exactly the race this two-stage
+      // status exists to avoid.
+      if (status.status === "settled") onPaid?.();
     },
     [result, onPaid],
   );

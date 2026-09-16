@@ -1,171 +1,54 @@
-"""Composition root (spec §7.2).
+"""HTTP composition root (spec §7.2 + worker-http-split).
 
-The only module allowed to know about every concrete adapter and wire them
-together. Nothing else imports Redis, asyncpg or confluent-kafka directly.
+Owns only the FastAPI app and Auth0 wiring. Every collaborator both this
+process and `worker.py` need comes from `composition.py`. `openbankapi`
+never starts a Kafka consumer here (worker-http-split requirement) — the 6
+status registries are read/written straight through Redis, never bound to a
+consumer-fed thread in this process. `publisher` IS still used here though:
+HTTP routes (transfer/deposit/withdrawal) publish request events onto Kafka,
+they just never consume from it.
 """
 
 from __future__ import annotations
 
-import asyncio
-import logging
-
 from fastapi_plugin.fast_api_client import Auth0FastAPI
 
+from . import composition
 from .app import create_app
-from .config import Settings
-from .infra.cache.repositories import (
-    get_null_cache_repository,
-    get_redis_cache_repository,
-)
-from .infra.cache.services.foreign_exchange_cache_service import (
-    ForeignExchangeCacheService,
-)
-from .infra.database.config.session import create_engine, create_sessionmaker
-from .infra.database.repositories import (
-    PostgresAccountBalanceProjection,
-    PostgresAppliedRateWriter,
-    PostgresCardBalanceProjection,
-    PostgresCardMovementWriter,
-    PostgresDepositWriter,
-    PostgresInstallmentWriter,
-    PostgresTransactionWriter,
-    PostgresWithdrawalWriter,
-)
-from .infra.foreign_exchange_service.config.foreign_exchange_config import (
-    ForeignExchangeConfig,
-)
-from .infra.foreign_exchange_service.repository.frankfurter_repository import (
-    FrankfurterRepository,
-)
-from .infra.kafka.consumers import (
-    AccountBalanceConsumer,
-    CardBalanceConsumer,
-    CardMovementConsumer,
-    CardPaymentStatusConsumer,
-    DepositStatusConsumer,
-    PurchaseStatusConsumer,
-    TransactionConsumer,
-    TransferStatusConsumer,
-    WithdrawalStatusConsumer,
-)
-from .infra.kafka.repositories import KafkaEventPublisherRepository
-from .infra.kafka.status_registry import StatusRegistry
-
-logging.basicConfig(level=logging.INFO)
-LOG = logging.getLogger("openbankapi")
-
-settings = Settings.from_env()
-
-engine = create_engine(settings.database_dsn)
-sessionmaker = create_sessionmaker(engine)
-
-# The balance writer is built separately and handed ONLY to the consumer below.
-# Nothing that serves an HTTP request ever holds one (spec §3.5). Every other
-balance_projection = PostgresAccountBalanceProjection(sessionmaker)
-card_balance_projection = PostgresCardBalanceProjection(sessionmaker)
-# Same reasoning applies to the transactions writer: it is driven by a Kafka
-# thread, not an HTTP request, so it keeps its own sessionmaker rather than
-# sharing the request-scoped session `TransactionRepositoryDep` uses.
-transaction_writer = PostgresTransactionWriter(sessionmaker)
-# Same reasoning again, FX-19: the applied-rate audit row a converted leg
-# links to is written off the same Kafka thread, not a request.
-applied_rate_writer = PostgresAppliedRateWriter(sessionmaker)
-deposit_writer = PostgresDepositWriter(sessionmaker)
-withdrawal_writer = PostgresWithdrawalWriter(sessionmaker)
-# Credit Cards Phase 2: `CardMovementConsumer` is driven by a Kafka thread
-# too, same reasoning as `transaction_writer`/`applied_rate_writer` above.
-card_movement_writer = PostgresCardMovementWriter(sessionmaker)
-installment_writer = PostgresInstallmentWriter(sessionmaker)
-
-cache = (
-    get_redis_cache_repository(settings.redis_url)
-    if settings.redis_url
-    else get_null_cache_repository()
-)
-
-foreign_exchange_config = ForeignExchangeConfig()
-foreign_exchange_repository = FrankfurterRepository(foreign_exchange_config)
-foreign_exchange_cache_service = ForeignExchangeCacheService(
-    cache, foreign_exchange_repository
-)
-
-publisher = KafkaEventPublisherRepository(settings)
-status_registry = StatusRegistry(max_cached=settings.status_cache_size)
-purchase_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
-card_payment_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
-deposit_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
-withdrawal_status_registry = StatusRegistry(max_cached=settings.status_cache_size)
-status_consumer = TransferStatusConsumer(settings, status_registry)
-purchase_status_consumer = PurchaseStatusConsumer(settings, purchase_status_registry)
-card_payment_status_consumer = CardPaymentStatusConsumer(
-    settings, card_payment_status_registry
-)
-deposit_status_consumer = DepositStatusConsumer(settings, deposit_status_registry)
-withdrawal_status_consumer = WithdrawalStatusConsumer(settings, withdrawal_status_registry)
-balance_consumer = AccountBalanceConsumer(settings, balance_projection, cache)
-
-card_balance_consumer = CardBalanceConsumer(settings, card_balance_projection, cache)
-transaction_consumer = TransactionConsumer(
-    settings, transaction_writer, applied_rate_writer, deposit_writer, withdrawal_writer
-)
-
-card_movement_consumer = CardMovementConsumer(
-    settings, card_movement_writer, installment_writer, applied_rate_writer
-)
 
 # None until AUTH0_DOMAIN/AUTH0_AUDIENCE are set (an Auth0 "API" resource has
 # to exist first — see config/dependencies.py for how routes degrade to a
 # clear 503 instead of crashing the whole app when this is unset).
 auth0 = (
-    Auth0FastAPI(domain=settings.auth0_domain, audience=settings.auth0_audience)
-    if settings.auth0_domain and settings.auth0_audience
+    Auth0FastAPI(domain=composition.settings.auth0_domain, audience=composition.settings.auth0_audience)
+    if composition.settings.auth0_domain and composition.settings.auth0_audience
     else None
 )
 
 
-def _start(loop: asyncio.AbstractEventLoop) -> None:
-    status_consumer.start(loop)
-    purchase_status_consumer.start(loop)
-    card_payment_status_consumer.start(loop)
-    deposit_status_consumer.start(loop)
-    withdrawal_status_consumer.start(loop)
-    balance_consumer.start(loop)
-    card_balance_consumer.start(loop)
-    transaction_consumer.start(loop)
-    card_movement_consumer.start(loop)
-
-
 def _stop() -> None:
-    status_consumer.stop()
-    purchase_status_consumer.stop()
-    card_payment_status_consumer.stop()
-    deposit_status_consumer.stop()
-    withdrawal_status_consumer.stop()
-    balance_consumer.stop()
-    card_balance_consumer.stop()
-    transaction_consumer.stop()
-    card_movement_consumer.stop()
-    publisher.close()
+    composition.publisher.close()
 
 
 async def _stop_async() -> None:
-    await cache.close()
-    await engine.dispose()
+    await composition.cache.close()
+    await composition.close_status_registry_client()
+    await composition.engine.dispose()
 
 
 app = create_app(
-    settings=settings,
-    cache=cache,
-    publisher=publisher,
-    sessionmaker=sessionmaker,
-    status_registry=status_registry,
-    purchase_status_registry=purchase_status_registry,
-    card_payment_status_registry=card_payment_status_registry,
-    deposit_status_registry=deposit_status_registry,
-    withdrawal_status_registry=withdrawal_status_registry,
+    settings=composition.settings,
+    cache=composition.cache,
+    publisher=composition.publisher,
+    sessionmaker=composition.sessionmaker,
+    status_registry=composition.status_registry,
+    purchase_status_registry=composition.purchase_status_registry,
+    card_payment_status_registry=composition.card_payment_status_registry,
+    card_payment_settlement_registry=composition.card_payment_settlement_registry,
+    deposit_status_registry=composition.deposit_status_registry,
+    withdrawal_status_registry=composition.withdrawal_status_registry,
     auth0=auth0,
-    on_start=_start,
     on_stop=_stop,
     on_stop_async=_stop_async,
-    foreign_exchange_cache_service=foreign_exchange_cache_service,
+    foreign_exchange_cache_service=composition.foreign_exchange_cache_service,
 )

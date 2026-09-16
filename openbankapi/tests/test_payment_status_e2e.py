@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import conftest
 
-_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "account-service"
+_ACCOUNT_SERVICE_DIR = Path(__file__).resolve().parents[2] / "flink" / "account-service"
 if str(_ACCOUNT_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_ACCOUNT_SERVICE_DIR))
 
@@ -52,7 +52,7 @@ def test_approved_payment_resolves_pending_to_approved_over_the_real_status_surf
 
     # The real domain output feeds the real registry the way
     # `CardPaymentStatusConsumer._dispatch` would in production.
-    harness.client.app.state.card_payment_status_registry.resolve(decision.card_status_events[0])
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, decision.card_status_events[0])
 
     resolved_response = harness.client.get(f"/payments/{request_id}/status")
     assert resolved_response.json()["status"] == "approved"
@@ -84,7 +84,7 @@ def test_websocket_resolves_immediately_once_the_real_decision_is_applied():
     decision = account_decide(
         "acc-pay", _payment_requested(request_id, amount=5000), LedgerState(balance=50000, processed=frozenset()), now=TS
     )
-    harness.client.app.state.card_payment_status_registry.resolve(decision.card_status_events[0])
+    conftest.resolve_sync(harness.client.app.state.card_payment_status_registry, decision.card_status_events[0])
 
     with harness.client.websocket_connect(f"/ws/payments/{request_id}") as websocket:
         message = websocket.receive_json()

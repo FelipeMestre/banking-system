@@ -41,6 +41,7 @@ from ....domain.service.installment_service import split_into_installments
 from ...database.interfaces.applied_rate_repository import IAppliedRateRepository
 from ...database.interfaces.card_movement_repository import ICardMovementRepository
 from ...database.interfaces.installment_repository import IInstallmentRepository
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.card_movements")
 
@@ -63,6 +64,7 @@ class CardMovementConsumer:
         movement_repository: ICardMovementRepository,
         installment_repository: IInstallmentRepository,
         applied_rate_repository: Optional[IAppliedRateRepository] = None,
+        settlement_registry: Optional[IStatusRegistry] = None,
     ):
         self._settings = settings
         self._movement_repository = movement_repository
@@ -70,6 +72,12 @@ class CardMovementConsumer:
         # Optional, default None: mirrors `TransactionConsumer` — a caller
         # that never wires one just never links an applied-rate row.
         self._applied_rate_repository = applied_rate_repository
+        # Optional, default None: a caller that never wires one just never
+        # gets a "settled" WS notification — the movement is still written
+        # either way. Resolved directly (never `resolve_threadsafe`): `_apply`
+        # already runs ON the bound event loop via `run_coroutine_threadsafe`,
+        # so this method body IS the event-loop thread.
+        self._settlement_registry = settlement_registry
         self._stopping = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -166,6 +174,16 @@ class CardMovementConsumer:
 
         if movement_type == CardMovementType.PURCHASE and event.get("installments", 1) > 1:
             await self._split_installments(inserted, event["installments"])
+
+        if movement_type == CardMovementType.PAYMENT and self._settlement_registry is not None:
+            # The single moment the frontend's three payment-derived figures
+            # (movements list, current-cycle total, billing-cycle totals) are
+            # actually safe to reload: `insert` above just committed. Redelivery
+            # of the same `payment_applied` event resolves again harmlessly —
+            # `resolve` already ignores a request_id it has seen (SET NX under Redis).
+            await self._settlement_registry.resolve(
+                {"request_id": event["request_id"], "status": "settled", "ts": event.get("ts")}
+            )
 
     async def _split_installments(self, movement: CardMovement, count: int) -> None:
         # A redelivered `purchase_approved` re-runs this method; `insert`'s

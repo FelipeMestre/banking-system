@@ -175,6 +175,43 @@ def _publish_opening_balances(settings: Settings, accounts, skip_kafka: bool) ->
     print("[balances] Flink will project balances within ~5s (checkpoint interval)")
 
 
+def _reconcile_balances_with_flink(settings: Settings, accounts, skip_kafka: bool) -> None:
+    """Re-establish each account's Postgres balance in Flink's own keyed state
+    (Credit Cards Phase 3 postmortem: reused accounts, empty ledger).
+
+    `account_service.open_account`'s own comment assumes Postgres and Flink
+    "agree at t=0 for free" — true only when BOTH start fresh together. This
+    seed script's "already seeded" path (below) reuses EXISTING Postgres rows
+    without recreating them, but a `docker compose down`/`up --build` cycle
+    that loses Kafka/Flink's checkpoint state (this project's dev compose has
+    no persisted checkpoint volume) while Postgres's own volume survives
+    breaks that invariant: Postgres still shows the old balance, but Flink's
+    ledger — the thing that actually authorizes future transfers/withdrawals —
+    restarts blank. Every future debit would then be checked against a balance
+    Flink never really has.
+
+    Uses a stable, per-account `request_id` (not the random one a genuine
+    first-time opening balance gets) so a harmless re-run of this same script
+    — Flink's own dedup memory still intact from a prior run in this same
+    process lifetime — is recognised as already-processed and never double-
+    credits. Skipped for a $0 balance: nothing to reconcile, and Flink already
+    initializes an unseen account's keyed state to 0 for free.
+    """
+    if skip_kafka:
+        print("[balances] skip-kafka: not reconciling incoming_payment")
+        return
+    publisher = KafkaEventPublisherRepository(settings)
+    service = AccountService(settings, repository=None, publisher=publisher)
+    for acct in accounts:
+        if acct.balance <= 0:
+            continue
+        service.credit_opening_balance(
+            acct.account_number, acct.balance, request_id=f"seed-balance-sync-{acct.account_number}"
+        )
+        print(f"[balances] reconciled {acct.account_number} -> {acct.balance} cents in Flink")
+    publisher.close()
+
+
 async def _ensure_card_accounts(sessionmaker, customer_id: UUID, paying_account_id: UUID):
     async with sessionmaker() as session:
         repo = PostgresCardAccountRepository(session)
@@ -276,7 +313,8 @@ async def _seed_demo(auth0_sub: str, reset: bool, no_backdate: bool, skip_kafka:
         accounts = await _ensure_accounts(sessionmaker, customer.id)
 
         if already_seeded:
-            print("[seed] already seeded (2 card_accounts exist) — skipping publishes (use --reset to force).")
+            print("[seed] already seeded (2 card_accounts exist) — skipping catalog publishes (use --reset to force).")
+            _reconcile_balances_with_flink(settings, accounts, skip_kafka)
             print("[verify] GET /accounts?customer_id=..., GET /cards, GET /transactions")
             return 0
 

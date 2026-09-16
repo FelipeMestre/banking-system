@@ -41,6 +41,8 @@ from openbankapi.config.dependencies import (
     WriteAdminDep,
 )
 from openbankapi.domain.exceptions import (
+    AccountAccessForbiddenError,
+    AccountNotFoundError,
     CardAccountNotCloseableError,
     CardAccountNotFoundError,
     InvalidCardStatusError,
@@ -205,9 +207,11 @@ async def request_payment(
     if active_card is None:
         raise InvalidCardStatusError("none", "payment")
 
-    paying_account = await accounts.get_by_id(card_account.paying_account_id)
+    paying_account = await accounts.get_by_account_number(body.source_account)
     if paying_account is None:
-        raise CardAccountNotFoundError(card_account.paying_account_id)
+        raise AccountNotFoundError(body.source_account)
+    if paying_account.customer_id != card_account.customer_id:
+        raise AccountAccessForbiddenError(body.source_account)
 
     amount_usd = body.amount
     conversion = None

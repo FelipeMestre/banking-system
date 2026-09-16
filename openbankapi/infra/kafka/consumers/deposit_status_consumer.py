@@ -2,7 +2,7 @@
 
 Mirrors `TransferStatusConsumer`/`PurchaseStatusConsumer` exactly: one consumer
 per process fans out in-process to every waiting waiter, rather than one
-consumer per request. Uses its own `StatusRegistry` instance (never the
+consumer per request. Uses its own `IStatusRegistry` instance (never the
 transfer or purchase one) — `request_id` is only unique within its own domain's
 Kafka topic.
 """
@@ -12,19 +12,18 @@ import asyncio
 import json
 import logging
 import threading
-import uuid
 from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.deposit_status")
 
 
 class DepositStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()
@@ -40,8 +39,8 @@ class DepositStatusConsumer:
             self._thread.join(timeout=10)
 
     def _group_id(self) -> str:
-        configured = self._settings.deposit_status_consumer_group
-        return configured or f"openbankapi-deposit-status-{uuid.uuid4()}"
+        # Fixed, shared across every worker instance — see transfer_status_consumer.py.
+        return self._settings.deposit_status_consumer_group
 
     def _run(self) -> None:
         consumer = Consumer(
@@ -49,7 +48,7 @@ class DepositStatusConsumer:
                 "bootstrap.servers": self._settings.bootstrap_servers,
                 "group.id": self._group_id(),
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": True,
             }
         )
         consumer.subscribe([self._settings.deposit_status_topic])

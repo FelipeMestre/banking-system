@@ -16,6 +16,7 @@ export { StatementCycleTabs } from "./components/StatementCycleTabs";
 export { SelectedStatementSummary } from "./components/SelectedStatementSummary";
 export { CurrentCycleProjection } from "./components/CurrentCycleProjection";
 export { StatementTotalsSidebar } from "./components/StatementTotalsSidebar";
+export { CurrentCycleTotalsSidebar } from "./components/CurrentCycleTotalsSidebar";
 export { CreditCardsPageScreen } from "./components/CreditCardsPageScreen";
 export { getCurrentCycle } from "./api/get-current-cycle";
 export { deriveStatementStatusLabel, statementStatusBadgeVariant } from "./statement-status";

@@ -8,17 +8,17 @@ import { updateCardAccountStatus } from "../api/update-card-account-status";
 import { ReasonField } from "./ReasonField";
 
 const TITLE: Record<CardAccount["status"], string> = {
-  active: "Unblock card account",
+  active: "Reactivate card account",
   blocked: "Block card account",
   closed: "Close card account",
 };
 
 /**
- * `POST /card-accounts/{id}/status` — block/unblock/close the account.
- * Closing is balance-guarded server-side: a 409 `CardAccountNotCloseableError`
- * carries a human-readable message (via `error.message`, already surfaced by
- * `describeFailure`) that this dialog shows verbatim rather than a generic
- * "failed" — closed is also terminal, so the copy warns it can't be undone.
+ * `POST /card-accounts/{id}/status` — block/unblock/close/reactivate the
+ * account. Closing is balance-guarded server-side: a 409
+ * `CardAccountNotCloseableError` carries a human-readable message (via
+ * `error.message`, already surfaced by `describeFailure`) that this dialog
+ * shows verbatim rather than a generic "failed".
  */
 export function UpdateCardAccountStatusDialog({
   cardAccount,
@@ -60,10 +60,7 @@ export function UpdateCardAccountStatusDialog({
     >
       <div className="flex flex-col gap-ds-3">
         {targetStatus === "closed" ? (
-          <p className="m-0">
-            Closing is permanent — a closed account cannot be reopened. Closing fails if the
-            account still carries a balance.
-          </p>
+          <p className="m-0">Closing fails if the account still carries a balance.</p>
         ) : null}
         <ReasonField value={reason} onChange={setReason} id="account-status-reason" />
         {error ? <ErrorMessage message={error} /> : null}

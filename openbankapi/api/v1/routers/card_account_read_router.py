@@ -44,7 +44,7 @@ from openbankapi.domain.exceptions import (
     CardAccountNotFoundError,
     StatementNotFoundError,
 )
-from openbankapi.domain.model import CardMovement, CardMovementType, Statement
+from openbankapi.domain.model import CardMovement, CardMovementType, Installment, Statement
 from openbankapi.infra.pdf.statement_pdf_generator import render as render_statement_pdf
 
 router = APIRouter(prefix="/card-accounts", tags=["card-accounts"])
@@ -67,15 +67,6 @@ def _masked_view(card_account, active_card) -> dict:
         "card_account": CardAccountResponseDTO.model_validate(card_account).model_dump(mode="json"),
         "card": CardMaskedDTO.model_validate(active_card).model_dump(mode="json") if active_card else None,
     }
-
-
-def _masked_listing_view(card_account, active_card) -> dict:
-    """Same as `_masked_view`, minus `used_credit` — B1 requires the admin
-    listing to never expose it (design: keep the bulk listing off the
-    per-account Flink projection read, unlike the single-account `GET`)."""
-    view = _masked_view(card_account, active_card)
-    view["card_account"].pop("used_credit", None)
-    return view
 
 
 @router.get("/{card_account_id}")
@@ -101,7 +92,7 @@ async def list_by_customer(
     items = []
     for card_account in result.items:
         active_card = await cards.get_active_for_account(card_account.id)
-        items.append(_masked_listing_view(card_account, active_card))
+        items.append(_masked_view(card_account, active_card))
     return {"items": items, "total": result.total, "limit": result.limit, "offset": result.offset}
 
 
@@ -193,8 +184,32 @@ async def _billed_installment_dtos(
     applied_rates: AppliedRateRepositoryDep,
 ) -> List[CardMovementDTO]:
     billed = await installments.get_by_statement_id(statement.id)
+    return await _installment_dtos(billed, rows_by_id, installments, applied_rates)
+
+
+async def _due_this_cycle_installment_dtos(
+    card_account_id: UUID,
+    rows_by_id: dict,
+    installments: InstallmentRepositoryDep,
+    applied_rates: AppliedRateRepositoryDep,
+) -> List[CardMovementDTO]:
+    """The still-open cycle's counterpart to `_billed_installment_dtos`: the
+    open cycle has no Statement row to bill onto yet, so `since=`'s movements
+    list must surface the same next-due-per-plan installment
+    (`get_next_due_per_plan` — the exact call `CurrentCycleProjectionService`
+    already uses for this cycle's purchases total) instead of a billed one."""
+    due = await installments.get_next_due_per_plan(card_account_id)
+    return await _installment_dtos(due, rows_by_id, installments, applied_rates)
+
+
+async def _installment_dtos(
+    entries: List[Installment],
+    rows_by_id: dict,
+    installments: InstallmentRepositoryDep,
+    applied_rates: AppliedRateRepositoryDep,
+) -> List[CardMovementDTO]:
     dtos = []
-    for installment in billed:
+    for installment in entries:
         parent = rows_by_id.get(installment.card_movement_id)
         total_installments = await installments.get_total_installments(installment.card_movement_id)
         rate = (
@@ -281,16 +296,20 @@ async def list_movements(
         return PageResponse(items=page_items, total=total, limit=page.limit, offset=page.offset)
 
     if since is not None:
+        rows_by_id = {row.id: row for row in all_rows}
         plan_ids = await _installment_plan_movement_ids(all_rows, installments)
         since_rows = [
             row for row in all_rows
             if row.id not in plan_ids and (row.occurred_at or row.created_at).date() >= since
         ]
-        since_rows.sort(key=lambda row: row.occurred_at or row.created_at, reverse=True)
-        total = len(since_rows)
-        page_rows = since_rows[page.offset : page.offset + page.limit]
-        items = [await _movement_dto(row, applied_rates, installments) for row in page_rows]
-        return PageResponse(items=items, total=total, limit=page.limit, offset=page.offset)
+        items = [await _movement_dto(row, applied_rates, installments) for row in since_rows]
+        items += await _due_this_cycle_installment_dtos(
+            card_account_id, rows_by_id, installments, applied_rates
+        )
+        items.sort(key=lambda dto: dto.occurred_at, reverse=True)
+        total = len(items)
+        page_items = items[page.offset : page.offset + page.limit]
+        return PageResponse(items=page_items, total=total, limit=page.limit, offset=page.offset)
 
     total = len(all_rows)
     page_rows = all_rows[page.offset : page.offset + page.limit]

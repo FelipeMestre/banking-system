@@ -2,7 +2,7 @@
 
 Mirrors `TransferStatusConsumer` exactly: one consumer per process fans out
 in-process to every waiting WebSocket/poll, rather than one consumer per
-connection. Uses its own `StatusRegistry` instance (never the transfer one) —
+connection. Uses its own `IStatusRegistry` instance (never the transfer one) —
 `request_id` is only unique within its own domain's Kafka topic, and a card
 purchase and a transfer could coincidentally share one.
 """
@@ -12,19 +12,18 @@ import asyncio
 import json
 import logging
 import threading
-import uuid
 from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
 
 from ....config import Settings
-from ..status_registry import StatusRegistry
+from ...status_registry.interfaces.status_registry import IStatusRegistry
 
 LOG = logging.getLogger("openbankapi.kafka.purchase_status")
 
 
 class PurchaseStatusConsumer:
-    def __init__(self, settings: Settings, registry: StatusRegistry):
+    def __init__(self, settings: Settings, registry: IStatusRegistry):
         self._settings = settings
         self._registry = registry
         self._stopping = threading.Event()
@@ -40,10 +39,8 @@ class PurchaseStatusConsumer:
             self._thread.join(timeout=10)
 
     def _group_id(self) -> str:
-        # Unique per process: every instance must see every partition, or a
-        # socket waiting here would never learn a verdict delivered elsewhere.
-        configured = self._settings.purchase_status_consumer_group
-        return configured or f"openbankapi-purchase-status-{uuid.uuid4()}"
+        # Fixed, shared across every worker instance — see transfer_status_consumer.py.
+        return self._settings.purchase_status_consumer_group
 
     def _run(self) -> None:
         consumer = Consumer(
@@ -51,7 +48,7 @@ class PurchaseStatusConsumer:
                 "bootstrap.servers": self._settings.bootstrap_servers,
                 "group.id": self._group_id(),
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": True,
             }
         )
         consumer.subscribe([self._settings.purchase_status_topic])

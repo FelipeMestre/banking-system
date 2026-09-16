@@ -141,6 +141,19 @@ def decide(account: str, event: Dict[str, Any], state: LedgerState, now: str) ->
         # client-facing confirmation.
         return Decision(status_events=(_status(event, STATUS_APPROVED, account, now),))
     if event_type == DECLINED_PAYMENT:
+        # `declined_payment` is shared: `_on_transfer_requested`'s own decline
+        # branch (below) and `_on_payment_requested`'s (Credit Cards Phase 3)
+        # both loop back through this exact type. `card_account_id` is only
+        # ever present when `_declined` was called for a card payment (see
+        # `_declined` below) — its absence means an ordinary transfer decline,
+        # which must keep going to `status_events`/`transfer-status`, never
+        # `card-payment-status`.
+        if event.get("card_account_id") is not None:
+            return Decision(
+                card_status_events=(
+                    _status(event, STATUS_DECLINED, account, now, reason=event.get("reason")),
+                )
+            )
         return Decision(
             status_events=(
                 _status(event, STATUS_DECLINED, account, now, reason=event.get("reason")),
@@ -375,6 +388,13 @@ def _declined(
     description = event.get("description")
     if description is not None:
         payload["description"] = description
+    # Only present when `event` is a `payment_requested` (Credit Cards Phase
+    # 3) — never a `transfer_requested`. This is the loopback's ONLY way to
+    # tell a card payment's decline apart from a transfer's (see `decide`'s
+    # `DECLINED_PAYMENT` branch above), since both share this exact type.
+    card_account_id = event.get("card_account_id")
+    if card_account_id is not None:
+        payload["card_account_id"] = card_account_id
     return payload
 
 

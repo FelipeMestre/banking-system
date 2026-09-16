@@ -85,10 +85,15 @@ export interface CardPaymentAccepted {
   status: string;
 }
 
-/** Mirrors `CardPaymentStatusDTO`, off `GET/WS /payments/{request_id}/status`. */
+/** Mirrors `CardPaymentStatusDTO`, off `GET/WS /payments/{request_id}/status`.
+ * `settled` is the final, terminal state for a successful payment: it means
+ * the resulting movement is already durable in Postgres, and only then is it
+ * safe to reload movements/current-cycle/statements. `approved` is an
+ * intermediate state — the authorization succeeded, but the movement may not
+ * have landed yet. */
 export interface CardPaymentStatus {
   request_id: string;
-  status: "pending" | "approved" | "declined";
+  status: "pending" | "approved" | "declined" | "settled";
   reason?: string;
   ts?: string;
 }

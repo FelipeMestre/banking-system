@@ -10,15 +10,20 @@ interface StatusWatcher {
 
 /**
  * Watches one card payment over a native WebSocket (`/ws/payments/{request_id}`,
- * Credit Cards Phase 3 — mirrors `watchTransferStatus`/`watchPurchaseStatus`
- * exactly).
+ * Credit Cards Phase 3 — mirrors `watchTransferStatus`/`watchPurchaseStatus`,
+ * extended for a two-stage verdict).
  *
- * The gateway sends a single message and closes, so a close is only a problem
- * when nothing arrived first. Returns a cleanup function.
+ * The gateway can send up to TWO messages before closing: the authorization
+ * verdict (`approved`/`declined`), then — only for an approved payment, and
+ * only once `CardMovementConsumer` actually persists it — `settled`. A close
+ * is only a problem if it happens before a TERMINAL status (`settled` or
+ * `declined`) arrived; closing right after `approved` alone is the expected
+ * shape while settlement is still in flight server-side, not a dropped
+ * connection. Returns a cleanup function.
  */
 export function watchPaymentStatus(requestId: string, watcher: StatusWatcher): () => void {
   const url = toWebSocketUrl(gatewayOrigin(), `/ws/payments/${encodeURIComponent(requestId)}`);
-  let delivered = false;
+  let lastStatus: CardPaymentStatus["status"] | null = null;
   let disposed = false;
 
   const socket = new WebSocket(url);
@@ -27,12 +32,13 @@ export function watchPaymentStatus(requestId: string, watcher: StatusWatcher): (
     const parsed = safeParse(event.data);
     const status = parsed === undefined ? null : parsePaymentStatus(parsed);
     if (status === null) return;
-    delivered = true;
+    lastStatus = status.status;
     if (!disposed) watcher.onStatus(status);
   };
 
   socket.onclose = () => {
-    if (!delivered && !disposed) watcher.onUnavailable();
+    const isTerminal = lastStatus === "settled" || lastStatus === "declined";
+    if (!isTerminal && !disposed) watcher.onUnavailable();
   };
 
   // An error is always followed by a close, so let onclose do the reporting.

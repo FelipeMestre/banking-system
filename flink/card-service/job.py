@@ -35,7 +35,11 @@ from datetime import datetime, timezone
 from pyflink.common import Row, Types, WatermarkStrategy
 from pyflink.common.serialization import SerializationSchema, SimpleStringSchema
 from pyflink.common.time import Time
-from pyflink.datastream import CheckpointingMode, StreamExecutionEnvironment
+from pyflink.datastream import (
+    CheckpointingMode,
+    ExternalizedCheckpointCleanup,
+    StreamExecutionEnvironment,
+)
 from pyflink.datastream.connectors.base import DeliveryGuarantee
 from pyflink.datastream.connectors.kafka import (
     KafkaOffsetsInitializer,
@@ -227,7 +231,16 @@ def build_job():
     # at-least-once delivery guarantee, which domain.py's dedup already
     # makes safe.
     env.enable_checkpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE)
-    env.get_checkpoint_config().set_checkpoint_storage_dir(CHECKPOINT_DIR)
+    checkpoint_config = env.get_checkpoint_config()
+    checkpoint_config.set_checkpoint_storage_dir(CHECKPOINT_DIR)
+    # Flink's default deletes the last checkpoint on a clean cancel — exactly
+    # the moment `submit.sh` needs it to resume from on the next run. Without
+    # this, a deliberate restart erases the very state the checkpoint volume
+    # exists to survive (only an ungraceful container kill happened to leave
+    # it behind before this was set).
+    checkpoint_config.enable_externalized_checkpoints(
+        ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION
+    )
     env.set_state_backend(EmbeddedRocksDBStateBackend())
 
     source = (

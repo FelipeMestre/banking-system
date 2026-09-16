@@ -137,13 +137,15 @@ describe("PayDialog", () => {
     expect(screen.getByRole("button", { name: "Submit payment" })).toBeDisabled();
   });
 
-  it("submits the amount as integer cents and transitions pending -> approved via the live watcher", async () => {
+  it("submits the amount as integer cents and transitions pending -> approved -> settled via the live watcher", async () => {
     vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({
       request_id: "r1", status: "pending",
     });
     let deliverApproved: (() => void) | undefined;
+    let deliverSettled: (() => void) | undefined;
     vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
       deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+      deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
       return () => {};
     });
 
@@ -160,17 +162,21 @@ describe("PayDialog", () => {
     expect(await screen.findByText("pending")).toBeInTheDocument();
 
     act(() => deliverApproved?.());
-
     expect(await screen.findByText("approved")).toBeInTheDocument();
+
+    act(() => deliverSettled?.());
+    expect(await screen.findByText("settled")).toBeInTheDocument();
   });
 
-  it("calls onPaid once the live status resolves to approved", async () => {
+  it("does not call onPaid on the intermediate approved verdict, only once settled arrives", async () => {
     vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({
       request_id: "r1", status: "pending",
     });
     let deliverApproved: (() => void) | undefined;
+    let deliverSettled: (() => void) | undefined;
     vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
       deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+      deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
       return () => {};
     });
     const onPaid = vi.fn();
@@ -182,6 +188,11 @@ describe("PayDialog", () => {
 
     expect(await screen.findByText("pending")).toBeInTheDocument();
     act(() => deliverApproved?.());
+    await screen.findByText("approved");
+
+    expect(onPaid).not.toHaveBeenCalled();
+
+    act(() => deliverSettled?.());
 
     await waitFor(() => expect(onPaid).toHaveBeenCalledOnce());
   });
@@ -210,9 +221,9 @@ describe("PayDialog", () => {
     vi.spyOn(requestPaymentModule, "requestPayment").mockResolvedValue({
       request_id: "r1", status: "pending",
     });
-    let deliverApproved: (() => void) | undefined;
+    let deliverSettled: (() => void) | undefined;
     vi.spyOn(watchModule, "watchPaymentStatus").mockImplementation((_requestId, watcher) => {
-      deliverApproved = () => watcher.onStatus({ request_id: "r1", status: "approved" });
+      deliverSettled = () => watcher.onStatus({ request_id: "r1", status: "settled" });
       return () => {};
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -223,7 +234,7 @@ describe("PayDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit payment" }));
     await screen.findByText("pending");
 
-    act(() => deliverApproved?.());
+    act(() => deliverSettled?.());
 
     await waitFor(() => expect(screen.getByText("Refreshed 1 times")).toBeInTheDocument());
     const renderPhaseViolation = consoleError.mock.calls.some((call) =>

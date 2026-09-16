@@ -133,6 +133,22 @@ def test_close_succeeds_when_balance_is_exactly_zero_and_audits(cards_harness):
     assert len(audit_rows) == 1
 
 
+def test_reactivate_closed_account_succeeds_and_audits(cards_harness):
+    issued = _issue(cards_harness).json()
+    card_account_id = issued["card_account"]["id"]
+    cards_harness.client.post(f"/card-accounts/{card_account_id}/status", json={"status": "closed"})
+
+    response = cards_harness.client.post(
+        f"/card-accounts/{card_account_id}/status", json={"status": "active"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "active"
+    audit_rows = [r for r in cards_harness.admin_actions.rows if r.action == "update_status"]
+    assert len(audit_rows) == 2
+    assert audit_rows[-1].details == {"from_status": "closed", "to_status": "active"}
+
+
 def test_close_compares_balance_against_zero_not_credit_limit(cards_harness):
     issued = _issue(cards_harness).json()
     card_account_id = issued["card_account"]["id"]
@@ -169,14 +185,6 @@ def test_listing_default_limit_is_20(cards_harness):
     response = cards_harness.client.get(f"/card-accounts?customer_id={cards_harness.customer_id}")
     assert response.status_code == 200
     assert response.json()["limit"] == 20
-
-
-def test_listing_items_never_contain_used_credit(cards_harness):
-    _issue(cards_harness)
-    response = cards_harness.client.get(f"/card-accounts?customer_id={cards_harness.customer_id}")
-    assert response.status_code == 200
-    for item in response.json()["items"]:
-        assert "used_credit" not in item["card_account"]
 
 
 # --- Reason DTOs and the audit trail ------------------------------------------

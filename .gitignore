@@ -6,7 +6,7 @@ __pycache__/
 venv/
 *.egg-info/
 
-# --- Java (account-service/java is built inside Docker, but not always) ---
+# --- Java (flink/account-service/java is built inside Docker, but not always) ---
 target/
 
 # --- Node / Next.js ---
@@ -25,6 +25,12 @@ node_modules/
 # --- Local tooling output ---
 # gentle-ai regenerates this skill registry cache; it is machine state, not source.
 .atl/
+
+# --- Docker bind-mounted runtime state ---
+# flink/account-service and flink/card-service checkpoints, bind-mounted onto the host
+# (docker-compose.yml) so they survive a container/volume wipe — binary RocksDB
+# state, never source.
+.data/
 
 # --- Claude Code ---
 # launch.json describes how to run the app and is worth committing; the local

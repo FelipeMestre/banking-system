@@ -22,7 +22,9 @@ from openbankapi.config import Settings
 from openbankapi.config.dependencies import get_current_user
 from openbankapi.domain.exceptions import RateNotAvailableError
 from openbankapi.domain.service.conversion_service import get_mid_rate
-from openbankapi.infra.kafka.status_registry import StatusRegistry
+from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+    FakeStatusRegistry,
+)
 from openbankapi.tests.db_fixtures import rollback_session
 
 RATES = {"EUR": 0.86, "GBP": 0.74}
@@ -72,7 +74,12 @@ def _build_app(*, rates=None, raise_error=None):
         cache=_FakeCache(),
         publisher=_FakePublisher(),
         sessionmaker=None,
-        status_registry=StatusRegistry(),
+        status_registry=FakeStatusRegistry(),
+        purchase_status_registry=FakeStatusRegistry(),
+        card_payment_status_registry=FakeStatusRegistry(),
+        card_payment_settlement_registry=FakeStatusRegistry(),
+        deposit_status_registry=FakeStatusRegistry(),
+        withdrawal_status_registry=FakeStatusRegistry(),
         foreign_exchange_cache_service=fx_cache_service,
     )
 

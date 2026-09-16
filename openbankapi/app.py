@@ -27,7 +27,7 @@ from .api.v1.services import error_handlers
 from .api.v1 import main as main_controller
 from .infra.cache.interfaces.cache_service import ICacheService
 from .infra.kafka.interfaces.event_publisher import IEventPublisher
-from .infra.kafka.status_registry import StatusRegistry
+from .infra.status_registry.interfaces.status_registry import IStatusRegistry
 
 
 def create_app(
@@ -36,23 +36,28 @@ def create_app(
     cache: ICacheService,
     publisher: IEventPublisher,
     sessionmaker: async_sessionmaker[AsyncSession],
-    status_registry: StatusRegistry,
-    purchase_status_registry: Optional[StatusRegistry] = None,
-    card_payment_status_registry: Optional[StatusRegistry] = None,
-    deposit_status_registry: Optional[StatusRegistry] = None,
-    withdrawal_status_registry: Optional[StatusRegistry] = None,
+    status_registry: IStatusRegistry,
+    purchase_status_registry: IStatusRegistry,
+    card_payment_status_registry: IStatusRegistry,
+    card_payment_settlement_registry: IStatusRegistry,
+    deposit_status_registry: IStatusRegistry,
+    withdrawal_status_registry: IStatusRegistry,
     auth0: Optional[Auth0FastAPI] = None,
     on_start: Optional[Callable[[asyncio.AbstractEventLoop], None]] = None,
     on_stop: Optional[Callable[[], None]] = None,
     on_stop_async: Optional[Callable[[], Awaitable[None]]] = None,
     foreign_exchange_cache_service: Optional[object] = None,
 ) -> FastAPI:
-    # A separate instance from `status_registry` (transfers) by default:
-    # `request_id` is only unique within its own domain's Kafka topic.
-    resolved_purchase_status_registry = purchase_status_registry or StatusRegistry()
-    resolved_card_payment_status_registry = card_payment_status_registry or StatusRegistry()
-    resolved_deposit_status_registry = deposit_status_registry or StatusRegistry()
-    resolved_withdrawal_status_registry = withdrawal_status_registry or StatusRegistry()
+    # All 6 registries are now always supplied by the caller (`composition.py`
+    # in production, `Harness.build()` in tests) — no default-construction
+    # fallback. A Redis-backed registry needs a client/domain/TTL to build,
+    # so this factory cannot conjure one on its own the way the old
+    # in-memory `StatusRegistry()` could.
+    resolved_purchase_status_registry = purchase_status_registry
+    resolved_card_payment_status_registry = card_payment_status_registry
+    resolved_card_payment_settlement_registry = card_payment_settlement_registry
+    resolved_deposit_status_registry = deposit_status_registry
+    resolved_withdrawal_status_registry = withdrawal_status_registry
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -60,6 +65,7 @@ def create_app(
         status_registry.bind_loop(loop)
         resolved_purchase_status_registry.bind_loop(loop)
         resolved_card_payment_status_registry.bind_loop(loop)
+        resolved_card_payment_settlement_registry.bind_loop(loop)
         resolved_deposit_status_registry.bind_loop(loop)
         resolved_withdrawal_status_registry.bind_loop(loop)
         if on_start is not None:
@@ -83,6 +89,7 @@ def create_app(
     app.state.status_registry = status_registry
     app.state.purchase_status_registry = resolved_purchase_status_registry
     app.state.card_payment_status_registry = resolved_card_payment_status_registry
+    app.state.card_payment_settlement_registry = resolved_card_payment_settlement_registry
     app.state.deposit_status_registry = resolved_deposit_status_registry
     app.state.withdrawal_status_registry = resolved_withdrawal_status_registry
     app.state.auth0 = auth0

@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 from openbankapi.app import create_app
 from openbankapi.config import Settings
 from openbankapi.config.dependencies import get_current_user, get_account_repository
-from openbankapi.infra.kafka.status_registry import StatusRegistry
+from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+    FakeStatusRegistry,
+)
 from openbankapi.tests.fakes import FakeAccountRepository, FakeCache, FakePublisher
 
 
@@ -17,7 +19,7 @@ def _make_app_with_fakes(account_repo=None, registry=None, publisher=None, fx_ca
     settings = Settings(deposit_status_topic="deposit-status")
     publisher = publisher or FakePublisher()
     cache = FakeCache()
-    registry = registry or StatusRegistry()
+    registry = registry or FakeStatusRegistry()
     account_repo = account_repo or FakeAccountRepository(known_customers={uuid.uuid4()})
     # need a customer for account creation? but we will directly insert account via Fake
     from openbankapi.infra.cache.services.foreign_exchange_cache_service import ForeignExchangeCacheService
@@ -31,8 +33,12 @@ def _make_app_with_fakes(account_repo=None, registry=None, publisher=None, fx_ca
         cache=cache,
         publisher=publisher,
         sessionmaker=None,  # type: ignore
-        status_registry=StatusRegistry(),
+        status_registry=FakeStatusRegistry(),
+        purchase_status_registry=FakeStatusRegistry(),
+        card_payment_status_registry=FakeStatusRegistry(),
+        card_payment_settlement_registry=FakeStatusRegistry(),
         deposit_status_registry=registry,
+        withdrawal_status_registry=FakeStatusRegistry(),
         foreign_exchange_cache_service=fx_cache,  # type: ignore
     )
     # override account repo
@@ -101,7 +107,7 @@ def test_happy_same_currency_returns_200():
     )
     account_repo.rows[acc.account_number] = acc
 
-    registry = StatusRegistry()
+    registry = FakeStatusRegistry()
     app, publisher, registry, _, _, _ = _make_app_with_fakes(account_repo=account_repo, registry=registry)
 
     # Need to simulate Flink resolving: run waiter in background? For this test, we will manually resolve after a short delay
@@ -161,7 +167,7 @@ def test_timeout_returns_504_zero_rows():
         updated_at=dt.datetime.now(dt.timezone.utc),
     )
     account_repo.rows[acc.account_number] = acc
-    registry = StatusRegistry()
+    registry = FakeStatusRegistry()
 
     async def never_resolves(request_id, timeout=10.0):
         # simulate timeout by returning None after short wait
@@ -210,7 +216,7 @@ def test_cross_currency_converts():
         updated_at=dt.datetime.now(dt.timezone.utc),
     )
     account_repo.rows[acc.account_number] = acc
-    registry = StatusRegistry()
+    registry = FakeStatusRegistry()
 
     async def fake_wait(request_id, timeout=10.0):
         # amount_applied 45540 for USD->EUR

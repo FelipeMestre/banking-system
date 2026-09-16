@@ -14,6 +14,9 @@ from decimal import Decimal
 
 from openbankapi.config import Settings
 from openbankapi.infra.kafka.consumers.card_movement_consumer import CardMovementConsumer
+from openbankapi.infra.status_registry.repositories.fake_status_registry import (
+    FakeStatusRegistry,
+)
 
 from .fakes import FakeAppliedRateRepository, FakeCardMovementRepository, FakeInstallmentRepository
 
@@ -21,12 +24,13 @@ CARD_ID = str(uuid.uuid4())
 CARD_ACCOUNT_ID = str(uuid.uuid4())
 
 
-def _consumer(movement_repo=None, installment_repo=None, applied_rate_repo=None):
+def _consumer(movement_repo=None, installment_repo=None, applied_rate_repo=None, settlement_registry=None):
     return CardMovementConsumer(
         Settings(),
         movement_repo or FakeCardMovementRepository(),
         installment_repo or FakeInstallmentRepository(),
         applied_rate_repo,
+        settlement_registry=settlement_registry,
     )
 
 
@@ -128,6 +132,66 @@ def test_payment_applied_movement_has_no_installment_or_applied_rate_linkage():
     assert movement_rows[0].applied_rate_id is None
     assert installment_rows == []
     assert applied_rate_rows == []
+
+
+def test_payment_applied_resolves_the_settlement_registry_once_persisted():
+    """The signal `CreditCardsPageScreen`'s WS watcher waits for: a
+    `payment_applied` movement resolves `settled` on the settlement registry
+    only AFTER `insert` has already committed the row — not before."""
+    request_id = str(uuid.uuid4())
+
+    async def scenario():
+        registry = FakeStatusRegistry()
+        await _consumer(settlement_registry=registry)._apply(_payment_applied(request_id))
+        return await registry.get(request_id)
+
+    resolved = asyncio.run(scenario())
+    assert resolved is not None
+    assert resolved["status"] == "settled"
+    assert resolved["request_id"] == request_id
+
+
+def test_purchase_approved_never_resolves_the_settlement_registry():
+    """Only a payment settles — a purchase's own confirmation flows entirely
+    through `purchase-status` (`purchase_status_router.py`), never here."""
+    request_id = str(uuid.uuid4())
+
+    async def scenario():
+        registry = FakeStatusRegistry()
+        await _consumer(settlement_registry=registry)._apply(_approved(request_id))
+        return await registry.get(request_id)
+
+    resolved = asyncio.run(scenario())
+    assert resolved is None
+
+
+def test_settlement_registry_is_optional():
+    """A caller that never wires one (e.g. existing tests above) must not
+    crash — the movement is still written either way."""
+    async def scenario():
+        repo = FakeCardMovementRepository()
+        await _consumer(repo)._apply(_payment_applied(str(uuid.uuid4())))
+        return repo.rows
+
+    rows = asyncio.run(scenario())
+    assert len(rows) == 1
+
+
+def test_redelivered_payment_applied_resolves_settlement_only_once():
+    """`StatusRegistry.resolve` already ignores a request_id it has already
+    seen — redelivery of the same event must not raise or overwrite it."""
+    request_id = str(uuid.uuid4())
+
+    async def scenario():
+        registry = FakeStatusRegistry()
+        consumer = _consumer(settlement_registry=registry)
+        payload = _payment_applied(request_id)
+        for _ in range(3):
+            await consumer._apply(payload)
+        return await registry.get(request_id)
+
+    resolved = asyncio.run(scenario())
+    assert resolved["status"] == "settled"
 
 
 def test_purchase_requested_is_never_dispatched():

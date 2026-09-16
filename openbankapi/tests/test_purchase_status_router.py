@@ -25,7 +25,7 @@ def test_unresolved_request_is_pending_not_404():
 def test_resolved_approval_is_returned():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.purchase_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.purchase_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -40,7 +40,7 @@ def test_resolved_approval_is_returned():
 def test_resolved_decline_carries_a_reason():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.purchase_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.purchase_status_registry, 
         {
             "request_id": request_id, "status": "declined",
             "reason": "insufficient_credit", "ts": "2026-01-01T00:00:00Z",
@@ -56,7 +56,7 @@ def test_purchase_status_registry_is_separate_from_transfer_status_registry():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
     # Resolving on the TRANSFER registry must never leak into the purchase one.
-    harness.registry.resolve(
+    conftest.resolve_sync(harness.registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 
@@ -68,7 +68,7 @@ def test_purchase_status_registry_is_separate_from_transfer_status_registry():
 def test_websocket_receives_an_already_resolved_verdict_immediately():
     harness = conftest.build()
     request_id = str(uuid.uuid4())
-    harness.client.app.state.purchase_status_registry.resolve(
+    conftest.resolve_sync(harness.client.app.state.purchase_status_registry, 
         {"request_id": request_id, "status": "approved", "ts": "2026-01-01T00:00:00Z"}
     )
 

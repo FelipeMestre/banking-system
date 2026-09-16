@@ -170,6 +170,22 @@ def test_declined_payment_loopback_emits_declined_status_with_reason():
     ]
 
 
+def test_declined_transfer_loopback_never_touches_card_status_events():
+    """A transfer's own decline (no `card_account_id` — see
+    `test_domain_payment.py`'s card-payment counterpart) must keep routing to
+    `status_events`/`transfer-status` exclusively."""
+    event = {
+        "type": "declined_payment",
+        "request_id": "req-1",
+        "account_id": "acc-src",
+        "reason": "insufficient_funds",
+        "ts": TS,
+    }
+    decision = decide("acc-src", event, empty(balance=10), now=TS)
+
+    assert decision.card_status_events == ()
+
+
 def test_unseeded_account_declines_instead_of_crashing():
     decision = decide("acc-new", transfer_requested(), LedgerState(balance=None, processed=frozenset()), now=TS)
     assert [e["type"] for e in decision.account_events] == ["declined_payment"]
