@@ -164,8 +164,8 @@ Its job is translation, not decision-making: it turns synchronous HTTP
 requests into events on the write path (producing to Kafka), and turns
 asynchronous confirmations back into synchronous-feeling responses on the
 read path (via WebSocket push or a request that waits on a matched
-confirmation, using the status registry below). It also owns plain CRUD
-("ABM") for low-contention reference data — customers, branches, cards'
+confirmation, using the status registry below). It also owns plain CRUD 
+for low-contention reference data — customers, branches, cards'
 metadata — that doesn't need event sourcing at all. It runs **no Kafka
 consumers of its own** — see OpenBankAPI Worker.
 
